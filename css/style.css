@@ -1543,16 +1543,16 @@ select:focus {
         display: none;
     }
 
-    .nav-links {
+    /* .nav-links {
         display: flex;
         flex-direction: row;
         width: 100%;
         justify-content: space-around;
         margin: 0;
         padding: 0;
-    }
+    } */
 
-    .nav-links li {
+    /* .nav-links li {
         flex: 1;
         padding: 15px 5px;
         font-size: 11px;
@@ -1562,14 +1562,48 @@ select:focus {
         display: flex;
         justify-content: center;
         align-items: center;
-        white-space: nowrap; /* منع نزول النص لسطرين */
-    }
+        white-space: nowrap;
+    } */
 
     .nav-links li:hover,
     .nav-links li.active {
         border-right: none;
         border-bottom: 3px solid var(--gold-primary);
         background-color: rgba(168, 85, 247, 0.1);
+    }
+
+    /* 1. تعديل حاوية الروابط لتسمح بالسحب الجانبي (Swipe) */
+    .nav-links {
+        display: flex;
+        flex-direction: row;
+        width: 100%;
+        justify-content: flex-start; /* إلغاء التوزيع المتساوي */
+        overflow-x: auto; /* تفعيل السحب الجانبي */
+        overflow-y: hidden;
+        scroll-behavior: smooth;
+        -webkit-overflow-scrolling: touch; /* سحب ناعم جداً في الآيفون */
+        margin: 0;
+        padding: 0 10px; /* مسافة بسيطة من الأطراف */
+        gap: 5px; /* مسافة تنفس بين كل زر والآخر */
+    }
+
+    /* إخفاء شريط التمرير (Scrollbar) المزعج لشكل نظيف */
+    .nav-links::-webkit-scrollbar {
+        display: none;
+    }
+
+    /* 2. تحرير العناصر من الانضغاط الإجباري */
+    .nav-links li {
+        flex: 0 0 auto; /* هذا السطر السحري يمنع انكماش الزر ويحافظ على حجمه الطبيعي */
+        padding: 15px 15px;
+        font-size: 13px; /* حجم خط مقروء */
+        text-align: center;
+        border-right: none;
+        border-bottom: 3px solid transparent;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        white-space: nowrap; /* يمنع انكسار الكلمة لسطرين نهائياً */
     }
 
     /* 2. ضبط مساحة المحتوى الرئيسي لكي لا يغطيه الشريط السفلي */
@@ -1774,29 +1808,23 @@ select:focus {
     display: inline-flex;
     justify-content: center;
     align-items: center;
-    margin: 5px 2px;
+    margin: 10px 2px -10px 2px;
     direction: ltr;
     width: 80px;
     padding: 3px 10px !important;
     font-size: 16px !important;
     height: 35px !important;
-    color: var(--gold-primary);
-    border: 1px solid var(--gold-primary);
+    /* color: var(--gold-primary);*/
+    /* border: 1px solid var(--gold-primary); */
     /* box-shadow: 0 0 10px rgba(168, 85, 247, 0.4); */
-    text-shadow: 0 0 5px rgba(168, 85, 247, 0.6);
+    /* text-shadow: 0 0 5px rgba(168, 85, 247, 0.6); */
 }
-/* 
-.xp {
+
+/* .xp {
     color: var(--gold-primary);
-    border: 1px solid var(--gold-primary);
-    box-shadow: 0 0 10px rgba(168, 85, 247, 0.4);
-    text-shadow: 0 0 5px rgba(168, 85, 247, 0.6);
 }
 .coins {
     color: #feca57;
-    border: 1px solid #fec957b1;
-    box-shadow: 0 0 10px rgba(254, 202, 87, 0.4);
-    text-shadow: 0 0 5px rgba(254, 202, 87, 0.6);
 } */
 
 /* تنسيق اللقب في قائمة المتصدرين */
@@ -1916,4 +1944,97 @@ select:focus {
     .leaderboard-user-info {
         gap: 10px !important;
     }
+}
+
+/* ==========================================
+   نظام التبديل المزدوج (Leaderboard Toggle)
+   ========================================== */
+.leaderboard-toggle-wrapper {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 35px;
+    margin-top: -5px;
+}
+
+.leaderboard-toggle {
+    position: relative;
+    display: flex;
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid var(--border-color);
+    border-radius: 30px;
+    padding: 5px;
+    width: 100%;
+    max-width: 400px;
+    box-shadow: inset 0 4px 10px rgba(0, 0, 0, 0.5);
+}
+
+.toggle-bg {
+    position: absolute;
+    top: 5px;
+    bottom: 5px;
+    right: 5px; /* البداية من اليمين لأن الموقع عربي */
+    width: calc(50% - 5px);
+    background: var(--gold-gradient);
+    border-radius: 25px;
+    transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+    z-index: 1;
+    box-shadow: 0 0 15px var(--gold-glow);
+}
+
+/* حركة الانزلاق لليسار عند تفعيل المعسكر */
+.leaderboard-toggle.global-active .toggle-bg {
+    right: 50%;
+}
+
+.toggle-btn {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-weight: 800;
+    font-size: 14px;
+    padding: 10px 0;
+    cursor: pointer;
+    z-index: 2;
+    transition: color 0.3s ease;
+    font-family: "Cairo", sans-serif;
+}
+
+.toggle-btn.active {
+    color: #fff;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
+}
+
+@media (max-width: 768px) {
+    .toggle-btn {
+        font-size: 12px;
+        padding: 8px 0;
+    }
+    .leaderboard-toggle {
+        max-width: 280px;
+    }
+}
+
+/* ==========================================
+   دعم السحب الأفقي للمخططات (Scrollable Charts)
+   ========================================== */
+.chart-scroll-wrapper {
+    width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-bottom: 10px;
+    -webkit-overflow-scrolling: touch; /* سحب ناعم جداً في الآيفون */
+}
+
+/* تخصيص شكل شريط التمرير */
+.chart-scroll-wrapper::-webkit-scrollbar {
+    height: 6px;
+}
+.chart-scroll-wrapper::-webkit-scrollbar-thumb {
+    background: var(--gold-primary);
+    border-radius: 10px;
+}
+.chart-scroll-wrapper::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 10px;
 }

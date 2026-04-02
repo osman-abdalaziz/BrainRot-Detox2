@@ -1445,10 +1445,10 @@ document
 async function loadAnalytics() {
     if (!currentUser) return;
     try {
-        // 1. جلب المهام لبناء مرجع وحساب الحد الأقصى الممكن لكل قسم ديناميكياً
+        // 1. جلب المهام لبناء مرجع (Dictionary) وحساب الحد الأقصى الممكن لكل قسم ديناميكياً
         const tasksSnap = await getDocs(collection(db, "tasks"));
         const tasksMap = {};
-        const maxDailyPointsPerCategory = {};
+        const maxDailyPointsPerCategory = {}; // لتخزين الحد الأقصى اليومي لكل قسم
 
         tasksSnap.forEach((doc) => {
             const taskData = doc.data();
@@ -1461,21 +1461,10 @@ async function loadAnalytics() {
                 taskData.options.length > 0
             ) {
                 const cat = taskData.category || "مهام عامة";
-                let maxPointsForThisTask = 0;
-
-                // --- الإصلاح الأول: التفرقة بين المهام العادية والمتعددة في حساب الحد الأقصى ---
-                if (taskData.isMultiSelect) {
-                    // إذا كانت مهمة متعددة، الحد الأقصى هو مجموع نقاط كل الخيارات
-                    taskData.options.forEach((opt) => {
-                        if (opt.points > 0) maxPointsForThisTask += opt.points;
-                    });
-                } else {
-                    // إذا كانت قائمة عادية، الحد الأقصى هو أعلى خيار فقط
-                    maxPointsForThisTask = Math.max(
-                        ...taskData.options.map((opt) => opt.points || 0),
-                    );
-                }
-
+                // استخراج أعلى قيمة نقاط من بين خيارات هذه المهمة
+                const maxPointsForThisTask = Math.max(
+                    ...taskData.options.map((opt) => opt.points || 0),
+                );
                 maxDailyPointsPerCategory[cat] =
                     (maxDailyPointsPerCategory[cat] || 0) +
                     maxPointsForThisTask;
@@ -1491,41 +1480,32 @@ async function loadAnalytics() {
             dates = [],
             points = [];
         let logsArray = [];
-        let categoryPoints = {};
+        let categoryPoints = {}; // لتخزين مجموع النقاط المكتسبة لكل قسم
 
         logsSnap.forEach((doc) => logsArray.push(doc.data()));
         logsArray.sort((a, b) => new Date(a.date) - new Date(b.date));
 
         logsArray.forEach((log) => {
+            // --- إصلاح القلتش: تجاهل اليوم الحالي في حسابات النجاح/التعثر إذا لم يتم اعتماده ---
             if (log.isFinalized === true) {
                 if (log.passed) passedCount++;
                 else failedCount++;
             }
 
+            // الاستمرار في رسم نقاط اليوم الحالي على المخطط ليرى تقدمه الحي
             dates.push(log.date);
             points.push(log.pointsEarned || 0);
 
-            // --- الإصلاح الثاني: حساب النقاط المكتسبة للـ Checklists والـ Select ---
+            // حساب نقاط الأقسام المكتسبة من اختيارات هذا اليوم
             if (log.selections) {
-                for (const [taskId, selectionData] of Object.entries(
+                for (const [taskId, optionIndex] of Object.entries(
                     log.selections,
                 )) {
                     const task = tasksMap[taskId];
-                    if (task && task.options) {
+                    if (task && task.options && task.options[optionIndex]) {
                         const cat = task.category || "مهام عامة";
-
-                        // تحويل الاختيار المفرد إلى مصفوفة لتوحيد المعاملة البرمجية
-                        const selectedIndices = Array.isArray(selectionData)
-                            ? selectionData
-                            : [selectionData];
-
-                        selectedIndices.forEach((idx) => {
-                            if (task.options[idx]) {
-                                const pts = task.options[idx].points || 0;
-                                categoryPoints[cat] =
-                                    (categoryPoints[cat] || 0) + pts;
-                            }
-                        });
+                        const pts = task.options[optionIndex].points;
+                        categoryPoints[cat] = (categoryPoints[cat] || 0) + pts;
                     }
                 }
             }
@@ -1541,18 +1521,20 @@ async function loadAnalytics() {
             .getElementById("progressChart")
             .getContext("2d");
         if (window.myProgressChart) window.myProgressChart.destroy();
-
+        // --- التمدد الديناميكي للسحب ---
         const chartContainer = document.getElementById(
             "progress-chart-container",
         );
         if (chartContainer) {
+            // إعطاء كل نقطة (يوم) 45 بكسل مساحة ليأخذ راحته
             const calculatedWidth = dates.length * 45;
+            // إذا كانت المساحة المطلوبة أكبر من الشاشة، نمدد الحاوية، وإلا تبقى 100%
             chartContainer.style.minWidth =
                 calculatedWidth > window.innerWidth
                     ? `${calculatedWidth}px`
                     : "100%";
         }
-
+        // -------------------------------
         window.myProgressChart = new Chart(ctxProgress, {
             type: "line",
             data: {
@@ -1593,54 +1575,26 @@ async function loadAnalytics() {
         });
 
         // ==========================================
-        // المخطط الثاني: تحليل الأقسام (Radar Chart) - مبرمج لآخر 7 أيام
+        // المخطط الثاني: تحليل الأقسام (Radar Chart) - التعديل الجديد بالنسبة المئوية
         // ==========================================
         const ctxCategory = document
             .getElementById("categoryChart")
             .getContext("2d");
         if (window.myCategoryChart) window.myCategoryChart.destroy();
 
-        // عزل بيانات آخر 7 أيام فقط لمنع الماضي من تدمير النسبة الحالية
-        const recentLogs = logsArray.slice(-7);
-        const recentTotalDays = recentLogs.length > 0 ? recentLogs.length : 1;
-        let recentCategoryPoints = {};
-
-        // حساب النقاط المكتسبة في هذه الأيام السبعة فقط
-        recentLogs.forEach((log) => {
-            if (log.selections) {
-                for (const [taskId, selectionData] of Object.entries(
-                    log.selections,
-                )) {
-                    const task = tasksMap[taskId];
-                    if (task && task.options) {
-                        const cat = task.category || "مهام عامة";
-                        const selectedIndices = Array.isArray(selectionData)
-                            ? selectionData
-                            : [selectionData];
-                        selectedIndices.forEach((idx) => {
-                            if (task.options[idx]) {
-                                recentCategoryPoints[cat] =
-                                    (recentCategoryPoints[cat] || 0) +
-                                    (task.options[idx].points || 0);
-                            }
-                        });
-                    }
-                }
-            }
-        });
-
-        // تحويل النقاط المكتسبة حديثاً إلى نسبة مئوية
-        const catLabels = Object.keys(maxDailyPointsPerCategory);
+        // 3. تحويل النقاط المكتسبة إلى نسبة مئوية
+        const totalLoggedDays = logsArray.length > 0 ? logsArray.length : 1;
+        const catLabels = Object.keys(categoryPoints); // سيأخذ الأسماء العربية كما هي من الداتا بيز
         const catDataPercentages = [];
 
         catLabels.forEach((cat) => {
-            const earnedPoints = recentCategoryPoints[cat] || 0;
-            const maxDaily = maxDailyPointsPerCategory[cat] || 1;
-            const maxTotalPossible = maxDaily * recentTotalDays;
+            const earnedPoints = categoryPoints[cat];
+            const maxDaily = maxDailyPointsPerCategory[cat] || 1; // لتجنب القسمة على صفر
+            const maxTotalPossible = maxDaily * totalLoggedDays;
 
             let percentage =
                 Math.round((earnedPoints / maxTotalPossible) * 100) || 0;
-            if (percentage > 100) percentage = 100;
+            if (percentage > 100) percentage = 100; // منع تجاوز 100%
 
             catDataPercentages.push(percentage);
         });
@@ -1652,8 +1606,8 @@ async function loadAnalytics() {
                     labels: catLabels,
                     datasets: [
                         {
-                            label: "نسبة الإنجاز (آخر 7 أيام)",
-                            data: catDataPercentages,
+                            label: "نسبة الإنجاز",
+                            data: catDataPercentages, // استخدام النسب المئوية بدلاً من النقاط الخام
                             backgroundColor: "rgba(217, 70, 239, 0.12)",
                             borderColor: "#9ca3af",
                             pointBackgroundColor: "#9ca3af",
@@ -1672,7 +1626,7 @@ async function loadAnalytics() {
                         tooltip: {
                             callbacks: {
                                 label: function (context) {
-                                    return context.raw + "%";
+                                    return context.raw + "%"; // إضافة علامة % عند الوقوف بالماوس
                                 },
                             },
                         },
@@ -1680,14 +1634,17 @@ async function loadAnalytics() {
                     scales: {
                         r: {
                             min: 0,
-                            max: 100,
+                            max: 100, // تثبيت المقياس حتى 100% ليكون دقيقاً بصرياً
                             angleLines: { color: "rgba(255, 255, 255, 0.1)" },
                             grid: { color: "rgba(255, 255, 255, 0.1)" },
                             pointLabels: {
                                 color: "#f3f4f6",
                                 font: { family: "Cairo", size: 12 },
                             },
-                            ticks: { stepSize: 20, display: false },
+                            ticks: {
+                                stepSize: 20,
+                                display: false, // مخفية لشكل أنظف، ولكن المقياس سيعمل بدقة
+                            },
                         },
                     },
                 },
@@ -1696,6 +1653,8 @@ async function loadAnalytics() {
     } catch (e) {
         console.error("خطأ في تحميل الإحصائيات:", e);
     }
+    // تشغيل جلب سجلات الذكاء الاصطناعي
+    // await loadAIReflections();
 }
 
 function getRankFrameClass(points) {

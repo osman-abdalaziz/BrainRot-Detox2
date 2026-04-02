@@ -24,6 +24,7 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/driver.js@1.0.1/dist/driver.css" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
 
     <script>
         // نظام طوارئ لآيفون: إذا علقت الشاشة لأكثر من 6 ثوانٍ، قم بإجبار المتصفح على عمل ريفريش نظيف
@@ -65,11 +66,13 @@
                 <h2 id="welcome-text">مرحباً...</h2>
                 <div class="info-div" style="display: flex; justify-content: center; align-items: center; gap: 10px;">
                     <div class="info-div points-div-info" style="display: flex; gap: 10px; justify-content: center;">
-                        <span id="nav-user-points" class="points-badge">0 <i
-                                class="fa-solid fa-wallet fa-fw"></i></span>
-                        <span id="nav-user-streak" class="streak-badge" style="display:none;">0 <i
+                        <span id="nav-user-points" style="justify-content: center; align-items: center; gap: 3px;"
+                            class="points-badge">0 <i class="fa-solid fa-wallet fa-fw"></i></span>
+                        <span id="nav-user-streak" class="streak-badge"
+                            style="display:none; justify-content: center; align-items: center; gap: 3px;">0 <i
                                 class="fa-solid fa-fire fa-fw"></i></span>
-                        <span id="nav-user-freeze" class="freeze-badge" style="display:none;">1 <i
+                        <span id="nav-user-freeze" class="freeze-badge"
+                            style="display:none; justify-content: center; align-items: center; gap: 3px;">1 <i
                                 class="fa-solid fa-snowflake fa-fw"></i></span>
                     </div>
                     <div class="nav-divider"
@@ -144,7 +147,7 @@
                 </div>
             </section>
 
-            <section id="leaderboard-page" class="page-section">
+            <!-- <section id="leaderboard-page" class="page-section">
                 <h2 class="gold-text leaderboard-title">🏆 قاعة العظماء</h2>
 
                 <div class="glass-card">
@@ -152,7 +155,28 @@
                         <p style="text-align: center; color: var(--text-muted);">جاري تحميل المتصدرين...</p>
                     </div>
                 </div>
+            </section> -->
+            <section id="leaderboard-page" class="page-section">
+                <h2 class="gold-text leaderboard-title">🏆 قاعة العظماء</h2>
+
+                <div class="leaderboard-toggle-wrapper">
+                    <div class="leaderboard-toggle" id="lb-toggle-container">
+                        <div class="toggle-bg"></div>
+                        <button class="toggle-btn active" data-type="challenge">ساحة المعركة (الحالي)</button>
+                        <button class="toggle-btn" data-type="global">المعسكر</button>
+                    </div>
+                </div>
+
+                <div id="podium-container" class="podium-wrapper" style="display: none;">
+                </div>
+
+                <div class="glass-card">
+                    <div id="leaderboard-list">
+                        <p style="text-align: center; color: var(--text-muted);">جاري تحميل المتصدرين...</p>
+                    </div>
+                </div>
             </section>
+
 
             <section id="analytics-page" class="page-section">
                 <h2 class="gold-text analytics-title">تحليل التقدم</h2>
@@ -170,13 +194,16 @@
 
                 <div class="glass-card">
                     <h3 style="margin-bottom: 15px; font-size: 16px; color: var(--text-muted);">معدل النقاط اليومي</h3>
-                    <div style="position: relative; height: 300px; width: 100%;">
-                        <canvas id="progressChart"></canvas>
+                    <div class="chart-scroll-wrapper">
+                        <div id="progress-chart-container" style="position: relative; height: 300px; min-width: 100%;">
+                            <canvas id="progressChart"></canvas>
+                        </div>
                     </div>
                 </div>
                 <div class="glass-card" style="margin-top: 20px;">
-                    <h3 style="margin-bottom: 15px; font-size: 16px; color: var(--text-muted);">تحليل التوازن (نقاط
-                        القوة والضعف)</h3>
+                    <h3 style="margin-bottom: 15px; font-size: 16px; color: var(--text-muted); max-width: 70%;">تحليل
+                        التوازن ( نقاط
+                        القوة ونقاط الضعف ) لاخر 7 ايام</h3>
                     <div
                         style="position: relative; height: 300px; width: 100%; max-width: 100%; display: flex; justify-content: center;">
                         <canvas style="width: 100%;" id="categoryChart"></canvas>
@@ -291,7 +318,7 @@
                 </div>
                 <hr style="border: 1px dashed var(--border-color); margin: 30px 0;">
                 <button id="open-redeem-btn" class="gold-btn"
-                    style="width: auto; padding: 10px 30px; margin: 0 auto; display: block; font-size: 16px;">إدخال كود
+                    style="width: auto; padding: 10px 30px; margin: 0 auto; display: block; font-size: 12px;">إدخال كود
                     هدية (Redeem
                     Code)</button>
             </section>
