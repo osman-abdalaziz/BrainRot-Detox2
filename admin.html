@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لوحة تحكم الإدارة | BrainRot Detox</title>
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        /* تنسيقات إضافية لجداول الإدارة */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            color: var(--text-main);
+        }
+
+        th,
+        td {
+            padding: 8px;
+            text-align: right;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        th {
+            background-color: var(--card-dark);
+            color: var(--gold-primary);
+            font-weight: bold;
+        }
+
+        tr:hover {
+            background-color: rgba(255, 255, 255, 0.02);
+        }
+
+        .action-btn {
+            padding: 6px 12px;
+            font-size: 12px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            color: white;
+            margin-left: 5px;
+            white-space: nowrap;
+        }
+
+        .btn-delete {
+            background-color: var(--danger);
+        }
+
+        .btn-edit {
+            background-color: #3b82f6;
+        }
+
+        .badge {
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 10px;
+            font-weight: bold;
+        }
+
+        .badge-active {
+            background: rgba(16, 185, 129, 0.2);
+            color: var(--success);
+        }
+
+        .badge-inactive {
+            background: rgba(239, 68, 68, 0.2);
+            color: var(--danger);
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="layout-wrapper">
+        <aside class="sidebar">
+            <div class="brand">
+                <h1>الإدارة (Admin)</h1>
+            </div>
+            <ul class="nav-links">
+                <li class="active" data-target="codes-page">إدارة الأكواد</li>
+                <li data-target="tasks-page">إدارة المهام</li>
+                <li data-target="challenges-page">إدارة التحديات</li>
+                <li data-target="users-page">إدارة الأعضاء</li>
+                <li data-target="redeem-codes-page">أكواد الهدايا</li>
+                <li data-target="dashboard-page">الرئيسية</li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <header class="navbar">
+                <h2 style="font-size: 16px;" class="gold-text">لوحة التحكم الإدارية</h2>
+                <div><button id="logout-btn"
+                        style="background: var(--danger); border: none; padding: 6px 12px; border-radius: 6px; color: white; cursor: pointer; font-size: 12px; white-space: nowrap;">تسجيل
+                        الخروج</button>
+                    <button id="migrate-btn" class="gold-text"
+                        style="background: var(--danger); border: none; padding: 6px 12px; border-radius: 6px; color: white; cursor: pointer; font-size: 12px; white-space: nowrap;"
+                        onclick="migrateSystemV2()">
+                        <i class="fa-solid fa-rocket"></i> تنفيذ الهجرة لـ V2
+                    </button>
+                </div>
+
+            </header>
+
+            <section id="codes-page" class="page-section active">
+                <h2 class="gold-text" style="margin-bottom: 15px;">إدارة أكواد التفعيل</h2>
+                <div class="glass-card" style="display: flex; gap: 10px;">
+                    <input type="text" id="new-code-input" placeholder="أدخل الكود (مثال: KOLO-1)"
+                        style="margin: 0; flex-grow: 1;">
+                    <button id="generate-code-btn" class="gold-btn"
+                        style="margin: 0; width: auto; white-space: nowrap;">إضافة
+                        الكود</button>
+                </div>
+                <div class="glass-card" style="overflow-x: auto;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>الكود</th>
+                                <th>الحالة</th>
+                                <th>المستخدم</th>
+                                <th>إجراء</th>
+                            </tr>
+                        </thead>
+                        <tbody id="codes-table-body">
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section id="tasks-page" class="page-section">
+                <h2 class="gold-text" style="margin-bottom: 15px;">إدارة المهام (Multi-Options)</h2>
+                <div class="glass-card">
+                    <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                        <input type="number" id="task-order" placeholder="الترتيب" style="margin: 0; width: 80px;">
+                        <input type="text" id="task-name" placeholder="اسم المهمة الأساسي (مثال: صلاة الفجر)"
+                            style="margin: 0; flex-grow: 1;">
+                        <input type="text" id="task-category" placeholder="القسم (مثال: الجانب الديني)"
+                            style="margin: 0; width: 160px;">
+                    </div>
+                    <h3 style="font-size: 12px; color: var(--text-muted); margin-bottom: 8px;">خيارات المهمة (مثال: في
+                        المسجد، في
+                        المنزل...):</h3>
+
+                    <div id="options-container">
+                        <div class="option-row" style="display: flex; gap: 10px; margin-bottom: 8px;">
+                            <input type="text" class="opt-name" placeholder="اسم الخيار (مثال: في المسجد)"
+                                style="margin: 0; flex-grow: 2;">
+                            <input type="number" class="opt-points" placeholder="النقاط (مثال: 20)"
+                                style="margin: 0; flex-grow: 1;">
+                        </div>
+
+                    </div>
+                    <div
+                        style="display: flex; gap: 10px; margin-top: 10px; align-items: center; background: rgba(255,255,255,0.05); padding: 10px; border-radius: 8px;">
+                        <input type="checkbox" id="task-is-multi"
+                            style="accent-color: var(--gold-primary); width: 16px; height: 16px; cursor: pointer; margin: 0 5px 0 0;">
+                        <label for="task-is-multi" class="gold-text"
+                            style="font-size: 14px; cursor: pointer; margin: 0;">السماح باختيار
+                            متعدد (Checklists) - يجمع نقاط كل الخيارات المحددة</label>
+                    </div>
+                    <div style="display: flex; gap: 10px; margin-top: 10px;">
+                        <button id="add-option-row-btn"
+                            style="background: var(--card-hover); color: var(--gold-primary); border: 1px dashed var(--gold-primary); width: auto; padding: 6px 12px; border-radius: 6px; cursor: pointer; margin: 0; font-size: 12px; white-space: nowrap;">+
+                            إضافة خيار</button>
+                        <button id="add-task-btn" class="gold-btn"
+                            style="margin: 0; flex-grow: 1; white-space: nowrap;">حفظ المهمة
+                            بالكامل</button>
+                    </div>
+                </div>
+                <div class="filter-container" style="margin-bottom: 20px;">
+                    <label for="task-category-filter" class="gold-text">تصفية حسب القسم:</label>
+                    <select id="task-category-filter" class="admin-input"
+                        style="width: auto; display: inline-block; margin-right: 10px;">
+                        <option value="all">كل الأقسام</option>
+                    </select>
+                </div>
+                <div class="glass-card" style="overflow-x: auto;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>المهمة</th>
+                                <th>الخيارات والنقاط</th>
+                                <th>الحالة</th>
+                                <th>إجراء</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tasks-table-body">
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section id="challenges-page" class="page-section">
+                <h2 class="gold-text" style="margin-bottom: 15px;">إدارة التحديات النشطة</h2>
+                <div class="glass-card">
+                    <div
+                        style="display: flex; gap: 10px; margin-bottom: 10px; align-items: center; justify-content: space-between;">
+                        <input type="text" id="challenge-title" placeholder="اسم التحدي (مثال: تحدي الـ 7 أيام)"
+                            style="margin: 0; flex-grow: 1;">
+
+                        <div
+                            style="display: flex; align-items: center; gap: 10px; width: auto; justify-content: space-between;">
+                            <label class="profile-label" style="margin: 0; font-size: 12px;">صورة الوسام (PNG):</label>
+                            <input type="file" id="challenge-badge-upload" accept="image/png" style="display: none;">
+                            <button type="button" id="trigger-badge-upload" class="action-btn btn-edit"
+                                style="margin: 0; width: auto;">اختر الصورة</button>
+                            <img id="badge-preview" src=""
+                                style="width: 32px; height: 32px; object-fit: contain; border: 1px solid var(--border-color); border-radius: 6px; padding: 3px;">
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 10px;">
+                        <input type="number" id="challenge-days" placeholder="المدة بالأيام" style="margin: 0;">
+                        <input type="number" id="challenge-daily-target" placeholder="الهدف اليومي" style="margin: 0;">
+                        <button id="start-challenge-btn" class="gold-btn"
+                            style="margin: 0; background: var(--success); color: white; white-space: nowrap;">إطلاق
+                            التحدي</button>
+                    </div>
+                </div>
+                <div class="glass-card" style="margin-top: 20px;">
+                    <h3 class="gold-text">بث الإشعارات العاجلة 📢</h3>
+                    <div style="display: flex; gap: 10px; margin-top: 15px;">
+                        <button id="notify-registration-btn" class="gold-btn" style="width: auto;">إشعار: فتح التسجيل
+                            🔓</button>
+                        <button id="notify-challenge-btn" class="gold-btn"
+                            style="width: auto; background: var(--danger);">إشعار: بدء
+                            التحدي ⚔️</button>
+                    </div>
+                </div>
+                <div class="glass-card" style="overflow-x: auto;">
+                    <h3 style="margin-bottom: 10px; font-size: 14px;">التحدي الحالي</h3>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>التحدي</th>
+                                <th>الهدف اليومي</th>
+                                <th>تاريخ النهاية</th>
+                                <th>الحالة</th>
+                                <th>إجراء</th>
+                            </tr>
+                        </thead>
+                        <tbody id="challenge-table-body">
+                        </tbody>
+                    </table>
+                </div>
+                <div class="glass-card" style="margin-top: 20px;">
+                    <h3 style="margin-bottom: 10px; font-size: 14px;">تقرير الإدارة</h3>
+                    <button id="generate-report-btn" class="gold-btn" onclick="generateComprehensiveReport()">
+                        <i class="fa-solid fa-file-pdf"></i> استخراج التقرير الشامل
+                    </button>
+                </div>
+            </section>
+            <section id="users-page" class="page-section">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h2 class="gold-text" style="margin: 0;">إدارة الأعضاء (المحاربين)</h2>
+                    <button id="factory-reset-btn"
+                        style="background: var(--danger); border: none; padding: 8px 16px; border-radius: 6px; color: white; cursor: pointer; font-weight: bold; font-size: 14px;">إعادة
+                        ضبط المصنع للجميع ☢️</button>
+                </div>
+                <div class="glass-card" style="overflow-x: auto;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>الاسم / الإيميل</th>
+                                <th>النقاط</th>
+                                <th>الحالة</th>
+                                <th>التحدي</th>
+                                <th>إجراءات الإدارة</th>
+                            </tr>
+                        </thead>
+                        <tbody id="users-table-body">
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section id="redeem-codes-page" class="page-section">
+                <h2 class="gold-text" style="margin-bottom: 15px;">إدارة أكواد الهدايا (Redeem Codes)</h2>
+                <div class="glass-card" style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+                    <div style="display: flex; flex-grow: 1; gap: 5px;">
+                        <input type="text" id="new-redeem-code" placeholder="الكود (أو ولّد عشوائياً)"
+                            style="margin: 0; flex-grow: 1; text-transform: uppercase;">
+                        <button id="auto-generate-code-btn" class="action-btn btn-edit"
+                            style="margin: 0; padding: 0 15px; font-size: 16px;" title="توليد كود عشوائي">🎲</button>
+                    </div>
+                    <input type="number" id="new-redeem-points" placeholder="النقاط (مثال: 500)"
+                        style="margin: 0; width: 140px;">
+                    <input type="number" id="new-redeem-max-uses" placeholder="عدد الاستخدامات"
+                        style="margin: 0; width: 140px;">
+                    <button id="generate-redeem-btn" class="gold-btn"
+                        style="margin: 0; width: auto; white-space: nowrap;">إضافة
+                        الكود</button>
+                </div>
+                <div class="glass-card" style="overflow-x: auto;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>الكود</th>
+                                <th>النقاط</th>
+                                <th>عدد الاستخدامات</th>
+                                <th>الحالة</th>
+                                <th>إجراء</th>
+                            </tr>
+                        </thead>
+                        <tbody id="redeem-table-body">
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        // 1. استعادة الصفحة عند التحميل (بدون Click برمجياً)
+        const savedPage = localStorage.getItem('dashboardActiveTab') || 'codes-page';
+        const pages = document.querySelectorAll('.page-section');
+
+        // تفعيل الصفحة والزر "يدوياً" عبر الكلاسات فقط
+        pages.forEach(p => p.classList.remove('active'));
+        const targetSection = document.getElementById(savedPage);
+        if (targetSection) targetSection.classList.add('active');
+
+        document.querySelectorAll('.nav-links li').forEach(li => {
+            if (li.getAttribute('data-target') === savedPage) li.classList.add('active');
+            else li.classList.remove('active');
+        });
+
+        const navItems = document.querySelectorAll('.nav-links li');
+        navItems.forEach(item => {
+            item.addEventListener('click', () => {
+                const target = item.getAttribute('data-target');
+                if (target === 'dashboard-page') {
+                    window.location.href = 'dashboard.html';
+                    return;
+                }
+                navItems.forEach(li => li.classList.remove('active'));
+                item.classList.add('active');
+                pages.forEach(page => page.classList.remove('active'));
+                document.getElementById(target).classList.add('active');
+            });
+
+        });
+    </script>
+
+    <script type="module" src="js/firebase-config.js"></script>
+    <script type="module" src="js/admin.js?v=3"></script>
+</body>
+
+</html>
