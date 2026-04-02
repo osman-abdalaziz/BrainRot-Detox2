@@ -2038,3 +2038,35 @@ select:focus {
     background: rgba(255, 255, 255, 0.05);
     border-radius: 10px;
 }
+
+/* ==========================================
+   المتجر (Store Grid) - متجاوب مع الجوال
+   ========================================== */
+/* إجبار قاطع للمتجر: كروت بحجم 200 بكسل وتوسيط أنيق */
+.store-grid {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    justify-content: center !important; /* توسيط الكروت في منتصف الشاشة */
+    gap: 15px !important;
+    align-items: stretch !important; /* إجبار جميع الكروت في نفس الصف على أخذ نفس الطول */
+    margin-top: 20px;
+}
+
+.store-item {
+    width: 200px !important; /* الحجم الثابت الذي طلبته */
+    flex-shrink: 0 !important; /* منع الكارت من الانضغاط وتشويه شكله */
+    display: flex !important;
+    flex-direction: column !important;
+    height: auto !important;
+    box-sizing: border-box !important;
+}
+/* دفع جميع الأزرار داخل المتجر للقاع للحفاظ على التناسق العسكري */
+.store-item button,
+.store-item .gold-btn,
+.store-item .buy-btn {
+    margin-top: auto;
+    width: 100%; /* زر بعرض الكارت */
+    padding: 10px 5px;
+    font-size: 13px;
+    direction: ltr; /* لضبط شكل الأيقونة مع الرقم */
+}

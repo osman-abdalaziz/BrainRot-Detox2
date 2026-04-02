@@ -428,9 +428,12 @@ async function processActiveParticipant(userData, userDocRef, displayDays) {
     yesterdayDate.setDate(yesterdayDate.getDate() - 1);
     const yesterdayStr = getCairoDateString(yesterdayDate);
 
+    // استخراج تاريخ نهاية التحدي بتوقيت القاهرة
     const endDateStr = getCairoDateString(
         currentChallengeData.endDate.toDate(),
     );
+
+    // حد التقييم الرجعي: الأقدم بين (الأمس) أو (تاريخ نهاية التحدي)
     const limitStr = yesterdayStr < endDateStr ? yesterdayStr : endDateStr;
 
     if (!userData.lastEvalDate) {
@@ -440,6 +443,7 @@ async function processActiveParticipant(userData, userDocRef, displayDays) {
     let currentEvalDateStr = userData.lastEvalDate;
 
     if (currentEvalDateStr < limitStr) {
+        // --- النظام الجديد: سحب المتغيرات الأربعة ---
         let currentXP = userData.currentXP || 0;
         let currentStreak = userData.currentStreak || 0;
         let walletCoins = userData.walletCoins || 0;
@@ -497,11 +501,13 @@ async function processActiveParticipant(userData, userDocRef, displayDays) {
                 let earnedXP = pointsEarned;
                 let xpLabel = "";
 
-                // إصلاح خطأ التقييم الرجعي وتأمين المتغيرات
+                // إذا كان المضاعف مفعلاً، يتم حرقه في هذا اليوم الفائت
                 if (userData.hasDoubleXP) {
                     earnedXP = pointsEarned * 2;
-                    userData.hasDoubleXP = false;
-                    userData.usedDoubleXP = true;
+                    userData.hasDoubleXP = false; // حرق من الذاكرة اللحظية
+                    userData.usedDoubleXP = true; // تسجيل الاستخدام
+                    updates.hasDoubleXP = false; // تجهيز الدفع لقاعدة البيانات
+                    updates.usedDoubleXP = true;
                     xpLabel = " ⚡";
                 }
 
@@ -543,7 +549,9 @@ async function processActiveParticipant(userData, userDocRef, displayDays) {
                         },
                         { merge: true },
                     );
-                } else if (walletCoins >= lifeSaverCost) {
+                }
+                // --- الخصم من العملات (walletCoins) وليس الـ XP ---
+                else if (walletCoins >= lifeSaverCost) {
                     walletCoins -= lifeSaverCost;
                     currentStreak = 0;
                     messages.push(
@@ -585,6 +593,7 @@ async function processActiveParticipant(userData, userDocRef, displayDays) {
             evalDate.setDate(evalDate.getDate() + 1);
         }
 
+        // --- تحديث المتغيرات الأربعة في الداتا بيز ---
         let updates = {
             currentXP: currentXP,
             lifetimeScore: lifetimeScore,
@@ -592,13 +601,6 @@ async function processActiveParticipant(userData, userDocRef, displayDays) {
             currentStreak: currentStreak,
             lastEvalDate: currentEvalDateStr,
         };
-
-        // إرسال حالة المضاعف الجديدة لقاعدة البيانات لو تم استخدامها
-        if (userData.usedDoubleXP) {
-            updates.hasDoubleXP = false;
-            updates.usedDoubleXP = true;
-        }
-
         if (challengeStatus === "failed") updates.challengeStatus = "failed";
         await updateDoc(userDocRef, updates);
 
@@ -613,6 +615,9 @@ async function processActiveParticipant(userData, userDocRef, displayDays) {
         }
     }
 
+    // =======================================
+    // الإغلاق الإجباري عند تجاوز تاريخ النهاية
+    // =======================================
     if (todayStr > endDateStr) {
         document.querySelector(".tasks-container").innerHTML = `
             <div style="text-align: center; padding: 40px; background: rgba(168, 85, 247, 0.1); border-radius: 16px; border: 1px solid var(--gold-primary);">
@@ -621,9 +626,10 @@ async function processActiveParticipant(userData, userDocRef, displayDays) {
                 <p style="font-size: 15px; color: var(--text-muted); line-height: 1.6;">نحن في انتظار الإدارة لإنهاء التحدي رسمياً وتوزيع الأوسمة على الصامدين.<br>استرح قليلاً استعداداً للمعركة القادمة.</p>
             </div>
         `;
-        return;
+        return; // قطع التنفيذ هنا يمنع ظهور المهام نهائياً
     }
 
+    // تحميل مهام اليوم العادية إذا كان التحدي مستمراً
     const todayLogSnap = await getDoc(
         doc(db, `users/${currentUser.uid}/dailyLogs`, todayStr),
     );
@@ -922,16 +928,14 @@ document
 
         // 1. حساب النقاط
         const { totalPoints, selections } = getCurrentSelectionsAndPoints();
-
-        // 2. إصلاح مشكلة الكلمات (التي تسببت في الخطأ غير المتوقع)
-        const reflectionInput = document.getElementById(
-            "daily-reflection-text",
-        );
-        const reflectionText = reflectionInput
-            ? reflectionInput.value.trim()
-            : "";
-        const wordsCount =
-            reflectionText === "" ? 0 : reflectionText.split(/\s+/).length;
+        // let totalPoints = 0;
+        // let selections = {};
+        // document.querySelectorAll(".task-select").forEach((select) => {
+        //     totalPoints += parseInt(select.value);
+        //     selections[select.getAttribute("data-task-id")] = parseInt(
+        //         select.options[select.selectedIndex].getAttribute("data-index"),
+        //     );
+        // });
 
         const passedToday = totalPoints >= dailyTargetPoints;
         const isSure = await CustomDialog.confirm(
@@ -944,7 +948,7 @@ document
         btn.innerText = "جاري الاعتماد...";
         btn.disabled = true;
         const realNow = getRealNow();
-        const today = getCairoDateString(realNow);
+        const today = getCairoDateString(realNow); // التعديل هنا
 
         try {
             await setDoc(
@@ -960,14 +964,16 @@ document
                 { merge: true },
             );
             document.getElementById("today-points").innerText = totalPoints;
-
-            // إرسال البيانات للذكاء الاصطناعي (إن كان مفعلاً)
+            // ==============================
+            // إرسال البيانات (السيرفر سيتولى الباقي تلقائياً)
+            // ==============================
             if (wordsCount >= 30) {
                 const reflectionRef = doc(
                     db,
                     `users/${currentUser.uid}/ai_reflections`,
                     today,
                 );
+                // مجرد حفظ المستند بحالة processing سيفعل دالة السيرفر فوراً
                 await setDoc(reflectionRef, {
                     date: today,
                     userText: reflectionText,
@@ -977,10 +983,16 @@ document
                     aiResponse: "",
                     timestamp: realNow,
                 });
+
+                await CustomDialog.alert(
+                    "تم تسجيل يومك. الموجه يقرأ تقريرك الآن في الخلفية. راجع صفحة 'تحليل التقدم' لاحقاً لترى رده.",
+                    "تقريرك قيد المراجعة ⏳",
+                );
             }
+            // ==============================
 
             // ==============================
-            // توزيع الغنائم وحرق المضاعف
+            // زيادة أو كسر الستريك وتوزيع الغنائم بناءً على النتيجة
             // ==============================
             if (passedToday) {
                 const successSound = new Audio(
@@ -991,18 +1003,21 @@ document
                     .play()
                     .catch((e) => console.log("تم منع تشغيل الصوت"));
 
-                const duration = 3 * 1000;
+                // --- إطلاق احتفال الدوبامين البصري (Confetti) ---
+                const duration = 3 * 1000; // يستمر لـ 3 ثواني
                 const end = Date.now() + duration;
 
                 (function frame() {
+                    // إطلاق من الجهة اليسرى
                     confetti({
                         particleCount: 5,
                         angle: 60,
                         spread: 55,
                         origin: { x: 0 },
-                        colors: ["#a855f7", "#d946ef", "#eab308"],
-                        zIndex: 10005,
+                        colors: ["#a855f7", "#d946ef", "#eab308"], // ألوان هويتك: بنفسجي، وردي، ذهبي
+                        zIndex: 10005, // رقم عالي جداً ليظهر فوق النافذة المنبثقة السوداء
                     });
+                    // إطلاق من الجهة اليمنى
                     confetti({
                         particleCount: 5,
                         angle: 120,
@@ -1011,33 +1026,54 @@ document
                         colors: ["#a855f7", "#d946ef", "#eab308"],
                         zIndex: 10005,
                     });
-                    if (Date.now() < end) requestAnimationFrame(frame);
-                })();
 
+                    if (Date.now() < end) {
+                        requestAnimationFrame(frame);
+                    }
+                })();
+                // ----------------------------------------------
+
+                // --- النظام الجديد: توزيع الغنائم ---
+                // const earnedCoins = Math.floor(totalPoints / 1.5);
+
+                // await updateDoc(doc(db, "users", currentUser.uid), {
+                //     lastEvalDate: today,
+                //     currentXP: increment(totalPoints),
+                //     lifetimeScore: increment(totalPoints),
+                //     walletCoins: increment(earnedCoins),
+                //     currentStreak: increment(1),
+                // });
+                // await CustomDialog.alert(
+                //     `تم الاعتماد بنجاح!\n لقد كسبت: \n <span class="win-info-boxs xp">+${totalPoints} XP</span> <span class="win-info-boxs coins">+${earnedCoins} <i class="fa-solid fa-coins fa-fw"></i></span> <span class="win-info-boxs ">+1 <i class="fa-solid fa-fire fa-fw"></i></span>`,
+                //     "عمل عظيم 🔥",
+                // );
+
+                // --- النظام الجديد: توزيع الغنائم وحرق المضاعف ---
                 let earnedCoins = Math.floor(totalPoints / 1.5);
                 let earnedXP = totalPoints;
                 let xpLabel = "";
 
+                // جلب الداتا للتحقق من امتلاكه للجرعة
                 const userDocSnapLocal = await getDoc(
                     doc(db, "users", currentUser.uid),
                 );
-                const userDataLocal = userDocSnapLocal.data() || {};
+                const userDataLocal = userDocSnapLocal.data();
                 const hasDoubleXP = userDataLocal.hasDoubleXP || false;
 
                 let dbUpdates = {
                     lastEvalDate: today,
-                    walletCoins: increment(earnedCoins),
+                    walletCoins: increment(earnedCoins), // العملات ثابتة
                     currentStreak: increment(1),
                 };
 
-                // إذا كان المضاعف يعمل، نضرب الـ XP ونحرق الميزة
+                // إذا كان المضاعف يعمل، نضرب الـ XP في 2 ونحرق الميزة
                 if (hasDoubleXP) {
                     earnedXP = totalPoints * 2;
                     dbUpdates.currentXP = increment(earnedXP);
                     dbUpdates.lifetimeScore = increment(earnedXP);
-                    dbUpdates.hasDoubleXP = false;
-                    dbUpdates.usedDoubleXP = true;
-                    xpLabel = `<span style="color:#eab308;">(مضاعف ⚡)</span>`;
+                    dbUpdates.hasDoubleXP = false; // حرق الجرعة (لن تعمل غداً)
+                    dbUpdates.usedDoubleXP = true; // تسجيل أنها استُخدمت (لمنع الشراء مجدداً)
+                    xpLabel = `<span style="font-size:10px; color:#eab308;">(مضاعف ⚡)</span>`;
                 } else {
                     dbUpdates.currentXP = increment(earnedXP);
                     dbUpdates.lifetimeScore = increment(earnedXP);
@@ -1046,8 +1082,8 @@ document
                 await updateDoc(doc(db, "users", currentUser.uid), dbUpdates);
 
                 await CustomDialog.alert(
-                    `🔥 تم الاعتماد بنجاح!\n لقد كسبت: \n  ${xpLabel} \n <span class="win-info-boxs xp">+${earnedXP} XP</span> <span class="win-info-boxs coins">+${earnedCoins} <i class="fa-solid fa-coins fa-fw"></i></span> <span class="win-info-boxs ">+1 <i class="fa-solid fa-fire fa-fw"></i></span>`,
-                    "عمل عظيم ",
+                    `تم الاعتماد بنجاح!\n لقد كسبت: \n <span class="win-info-boxs xp">+${earnedXP} XP ${xpLabel}</span> <span class="win-info-boxs coins">+${earnedCoins} <i class="fa-solid fa-coins fa-fw"></i></span> <span class="win-info-boxs ">+1 <i class="fa-solid fa-fire fa-fw"></i></span>`,
+                    "عمل عظيم 🔥",
                 );
                 location.reload();
             } else {
@@ -1057,7 +1093,7 @@ document
                 const userDataObj = userDocSnap.data();
 
                 const hasFreeze = (userDataObj.freezeCount || 0) > 0;
-                const currentWalletCoins = userDataObj.walletCoins || 0;
+                const currentWalletCoins = userDataObj.walletCoins || 0; // المحاسبة بالعملات
 
                 if (hasFreeze) {
                     await CustomDialog.alert(
@@ -1076,7 +1112,7 @@ document
                     );
                     if (useSaver) {
                         await updateDoc(doc(db, "users", currentUser.uid), {
-                            walletCoins: increment(-lifeSaverCost),
+                            walletCoins: increment(-lifeSaverCost), // خصم من العملات
                             lastEvalDate: today,
                             currentStreak: 0,
                         });
@@ -1101,10 +1137,7 @@ document
                 }
             }
         } catch (error) {
-            await CustomDialog.alert(
-                "حدث خطأ غير متوقع: " + error.message,
-                "خطأ ⚠️",
-            );
+            await CustomDialog.alert("حدث خطأ غير متوقع.");
             btn.innerText = "إنهاء اليوم وتسجيل النقاط";
             btn.disabled = false;
         }

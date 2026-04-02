@@ -545,7 +545,12 @@ document
 
             // 2. إنشاء مصفوفة بوعود التحديث لتصفير الستريك للجميع (Batch Update)
             const resetPromises = usersSnap.docs.map((uDoc) =>
-                updateDoc(doc(db, "users", uDoc.id), { streak: 0 }),
+                updateDoc(doc(db, "users", uDoc.id), {
+                    currentStreak: 0,
+                    currentXP: 0,
+                    hasDoubleXP: false,
+                    usedDoubleXP: false,
+                }),
             );
 
             // 3. تنفيذ التصفير للكل قبل الانتقال للخطوة التالية

@@ -102,10 +102,19 @@
                             </h2>
                             <p style="color: var(--text-muted); font-size: 14px;">الوقت المتبقي: <span id="days-left"
                                     class="gold-text">--</span> أيام</p>
+                            <p id="double-xp-tag"
+                                style="display: none; color: #eab308; font-size: 12px; margin-top: 5px; font-weight: bold;">
+                                <i class="fa-solid fa-bolt"></i> 2x XP مُفعل لليوم
+                            </p>
                         </div>
+                        <!-- <div class="challenge-stats">
+                            <p>الهدف اليومي: <span id="daily-target" class="gold-text">0</span></p>
+                            <p>نقاطك اليوم: <span id="today-points" style="color: var(--success);">0</span></p>
+                        </div> -->
                         <div class="challenge-stats">
                             <p>الهدف اليومي: <span id="daily-target" class="gold-text">0</span></p>
                             <p>نقاطك اليوم: <span id="today-points" style="color: var(--success);">0</span></p>
+
                         </div>
                     </div>
                     <p class="challenge-note">* تكلفة الخطأ أو الغياب (طوق النجاة): <span id="life-saver-cost">0</span>
@@ -290,9 +299,9 @@
             <section id="store-page" class="page-section">
                 <div class="glass-card store-section" style="margin-top: 20px; padding: 20px; text-align: center;">
                     <h3 style="color: var(--gold-primary); margin-bottom: 15px;">🏪 المتجر</h3>
-                    <div style="display: flex; justify-content: center; gap: 20px; flex-wrap: wrap;">
+                    <div class="store-grid">
                         <div class="store-item"
-                            style="border: 1px solid var(--border-color); padding: 15px; border-radius: 12px; width: 200px;">
+                            style="border: 1px solid var(--border-color); padding: 15px; border-radius: 12px; ">
                             <!-- <div style="font-size: 40px; margin-bottom: 10px;">❄️</div> -->
                             <div><img src="images/freeze.png" style="width: 100px; object-fit: contain;"></div>
                             <h4>تجميد الستريك</h4>
@@ -300,10 +309,11 @@
                                 عند الإخفاق لمرة
                                 واحدة.</p>
                             <button onclick="buyFreeze()" class="gold-btn"
-                                style="padding: 8px 15px; font-size: 14px; direction: ltr;">شراء (500pt)</button>
+                                style="padding: 8px 15px; font-size: 14px; direction: ltr;">شراء
+                                (500 <i class="fa-solid fa-coins fa-fw"></i>)</button>
                         </div>
                         <div class="store-item"
-                            style="border: 1px solid var(--border-color); padding: 15px; border-radius: 12px; width: 200px;">
+                            style="border: 1px solid var(--border-color); padding: 15px; border-radius: 12px;">
                             <!-- <div style="font-size: 40px; margin-bottom: 10px;">📝</div> -->
                             <div><img src="images/todo.png" style="width: 100px; object-fit: contain;"></div>
                             <h4>مفكرة المهام الحرة</h4>
@@ -311,7 +321,19 @@
                                 الجانبية. تبقى معك دائماً في
                                 القائمة الجانبية.</p>
                             <button id="store-todo-btn" onclick="toggleTodoListFeature()" class="gold-btn"
-                                style="padding: 8px 15px; font-size: 14px; direction: ltr;">شراء (150pt)</button>
+                                style="padding: 8px 15px; font-size: 14px; direction: ltr;">شراء
+                                (150 <i class="fa-solid fa-coins"></i>)</button>
+                        </div>
+                        <div class="store-item"
+                            style="border: 1px solid var(--border-color); padding: 15px; border-radius: 12px;">
+                            <div><img src="images/double.png" style="width: 100px; object-fit: contain;"></div>
+                            <h4>مضاعف النقاط (2x)</h4>
+                            <p style="font-size: 12px; color: var(--text-muted); margin: 10px 0;">تستخدم لمرة واحدة فقط
+                                طوال التحدي. تضاعف الـ
+                                XP لليوم الحالي عند اعتماده (لا تنطبق على العملات).</p>
+                            <button onclick="buyDoubleXP()" class="gold-btn"
+                                style="padding: 8px 15px; font-size: 14px; direction: ltr;">شراء
+                                (1250 <i class="fa-solid fa-coins fa-fw"></i>)</button>
                         </div>
                     </div>
 
