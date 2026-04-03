@@ -713,11 +713,14 @@ async function loadTasks(todayLogData, userData) {
                         const textColor = isChecked
                             ? "var(--gold-primary)"
                             : "var(--text-main)";
-
+                        let optPoint = "+";
+                        if (opt.points < 0) {
+                            optPoint = "";
+                        }
                         checkboxesHtml += `
                         <label class="checklist-item" style="display:flex; align-items:center; gap:10px; margin-bottom:8px; cursor:pointer; background: rgba(0,0,0,0.2); padding: 10px 15px; border-radius: 8px; border: 1px solid ${borderColor}; transition: 0.2s;">
                             <input type="checkbox" class="task-checkbox" data-index="${index}" value="${opt.points}" ${checkedAttr} style="accent-color: var(--gold-primary); width: 18px; height: 18px; cursor: pointer; margin: 0;">
-                            <span class="checklist-text" style="font-size: 14px; color: ${textColor}; transition: 0.2s;">${opt.name} <strong style="color:var(--text-muted); font-size:12px;">(+${opt.points})</strong></span>
+                            <span class="checklist-text" style="font-size: 14px; color: ${textColor}; transition: 0.2s;">${opt.name} <strong style="color:var(--text-muted); font-size:12px;">(${optPoint}${opt.points})</strong></span>
                         </label>`;
                     });
                 }
@@ -740,7 +743,11 @@ async function loadTasks(todayLogData, userData) {
                     task.options.forEach((opt, index) => {
                         const isSelected =
                             index === selectedIndex ? "selected" : "";
-                        const optText = `${opt.name} (+${opt.points})`;
+                        let optPoint = "+";
+                        if (opt.points < 0) {
+                            optPoint = "";
+                        }
+                        const optText = `${opt.name} (${optPoint}${opt.points})`;
                         if (index === selectedIndex) selectedText = optText;
                         nativeSelectHtml += `<option value="${opt.points}" data-index="${index}" ${isSelected}>${optText}</option>`;
                         customOptionsHtml += `<span class="custom-option ${isSelected}" data-value="${opt.points}" data-index="${index}">${optText}</span>`;
@@ -2339,28 +2346,6 @@ function startTour() {
                         "هذه مهامك اليومية. اختر مستوى إنجازك لكل مهمة بصدق، الموجه الذكي سيحاسبك لاحقاً.",
                     side: "top",
                     align: "center",
-                },
-            },
-            {
-                element: ".reflection-container-class ",
-                popover: {
-                    title: "محاكمة الذات ⚖️",
-                    description:
-                        "قبل إنهاء اليوم، اكتب تقريراً مختصراً عن أدائك. الموجه الصارم سيقرأه ويحلل صراحتك.",
-                    side: "top",
-                    align: "center",
-                },
-                // هذا السطر يجبر المتصفح على النزول للعنصر ووضعه في منتصف الشاشة
-                onHighlightStarted: () => {
-                    const reflectionBox = document.getElementById(
-                        "reflection-container",
-                    );
-                    if (reflectionBox) {
-                        reflectionBox.scrollIntoView({
-                            behavior: "auto",
-                            block: "center",
-                        });
-                    }
                 },
             },
             {
