@@ -603,11 +603,19 @@ async function processActiveParticipant(userData, userDocRef, displayDays) {
         if (challengeStatus === "failed") updates.challengeStatus = "failed";
         await updateDoc(userDocRef, updates);
 
-        if (messages.length > 0)
+        // 1. إعدام شاشة التحميل الإجبارية أولاً لمنع حالة التجمد (Deadlock)
+        const loader = document.getElementById("global-loader");
+        if (loader) loader.classList.add("hidden");
+
+        // 2. الطابور الأول: إظهار المنقذ الذكي (إن كان هناك رسائل)
+        if (messages.length > 0) {
             await CustomDialog.alert(
                 "تقرير المنقذ الذكي للأيام الفائتة:\n\n" + messages.join("\n"),
                 "المنقذ الذكي 🤖",
             );
+        }
+
+        // 4. تنفيذ توابع الفشل إن وجدت بعد انتهاء كل النوافذ
         if (challengeStatus === "failed") {
             location.reload();
             return;
@@ -636,11 +644,22 @@ async function processActiveParticipant(userData, userDocRef, displayDays) {
         isTodayFinalized = todayLogData.isFinalized || false;
     }
 
+    // ==========================================
+    // الطابور الثاني: تجديد النية (يظهر للجميع بلا استثناء)
+    // ==========================================
+    // نقتل الـ Spinner مرة أخرى (أمان إضافي لو لم يشتغل المنقذ الذكي)
+    const loader = document.getElementById("global-loader");
+    if (loader) loader.classList.add("hidden");
+
+    // استدعاء دالة النية وننتظرها حتى يغلقها المستخدم
+    if (typeof checkNiyyahReminder === "function") {
+        await checkNiyyahReminder(userData);
+    }
+    // ==========================================
+
     loadTasks(todayLogData, userData);
     startDoomsdayClock();
     renderDailyTrivia(userData);
-    // تفعيل فحص النية اليومية
-    await checkNiyyahReminder(userData);
 }
 
 async function loadTasks(todayLogData, userData) {
@@ -2751,113 +2770,175 @@ document.querySelectorAll(".toggle-btn").forEach((btn) => {
 });
 
 // ==========================================
-// نظام السؤال اليومي (Daily Trivia)
+// نظام البونص اليومي
 // ==========================================
 window.renderDailyTrivia = function (userData) {
-    const realNow = getRealNow();
-    const todayStr = getCairoDateString(realNow);
     const container = document.getElementById("daily-trivia-container");
-
     if (!container) return;
 
-    if (userData.lastDailyQuestionDate === todayStr) {
-        container.innerHTML = `
-            <div class="glass-card" style="text-align: center; border-color: var(--success); padding: 15px;">
-                <h4 style="color: var(--success); margin-bottom: 5px;"><i class="fa-solid fa-check-circle"></i> تمت الإجابة على سؤال اليوم</h4>
-                <p style="font-size: 12px; color: var(--text-muted);">عد غداً لسؤال جديد.</p>
-            </div>
-        `;
-        return;
-    }
+    const realNow = getRealNow();
+    const todayStr = getCairoDateString(realNow);
 
     const dateParts = todayStr.split("-");
     const numericDate = parseInt(dateParts[0] + dateParts[1] + dateParts[2]);
     const questionIndex = numericDate % dailyQuestions.length;
     const qData = dailyQuestions[questionIndex];
 
-    // استخراج الإجابة الصحيحة لإرسالها تحسباً لخطأ المستخدم
     const correctAnswerText = qData.answers.find((a) => a.t === 1).answer;
 
-    // بناء الأزرار وإرسال قيمة (t)، الإجابة الصحيحة، والرابط
+    // 1. جلب حالة إجابة اليوم من بيانات المستخدم
+    const hasAnsweredToday = userData.lastDailyQuestionDate === todayStr;
+    const userLastChoice = userData.lastDailyTriviaChoice; // النص الذي اختاره المستخدم
+
     let optionsHtml = qData.answers
-        .map(
-            (opt) => `
-        <button onclick="submitTriviaAnswer(${opt.t}, '${correctAnswerText}', '${qData.link}')" class="gold-btn" style="background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); margin-bottom: 3px; font-weight: normal; width: 100%; transition: 0.2s;">
-            ${opt.answer}
-        </button>
-    `,
-        )
+        .map((opt) => {
+            // ==========================================
+            // حالة التجميد: المستخدم أجاب مسبقاً اليوم
+            // ==========================================
+            if (hasAnsweredToday) {
+                let btnStyle =
+                    "background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); opacity: 0.4;";
+                let iconHtml = "";
+
+                if (opt.t === 1) {
+                    // الإجابة الصحيحة دائماً تظهر بالأخضر
+                    btnStyle =
+                        "background: rgba(16, 185, 129, 0.15); border: 1px solid #10b981; opacity: 1;";
+                    iconHtml =
+                        '<i class="fa-solid fa-circle-check" style="color: #10b981; font-size: 18px;"></i>';
+                } else if (opt.answer === userLastChoice) {
+                    // الخيار الخاطئ الذي نقر عليه المستخدم يظهر بالأحمر
+                    btnStyle =
+                        "background: rgba(239, 68, 68, 0.15); border: 1px solid #ef4444; opacity: 1;";
+                    iconHtml =
+                        '<i class="fa-solid fa-circle-xmark" style="color: #ef4444; font-size: 18px;"></i>';
+                }
+
+                return `
+                <button disabled class="gold-btn trivia-btn" style="${btnStyle} margin-bottom: 8px; text-align: right; display: flex; justify-content: space-between; align-items: center; width: 100%; cursor: not-allowed;">
+                    <span>${opt.answer}</span>
+                    <span class="status-icon">${iconHtml}</span>
+                </button>`;
+            }
+
+            // ==========================================
+            // الحالة النشطة: المستخدم لم يُجب بعد
+            // ==========================================
+            // مررنا opt.answer كمعامل جديد لنتمكن من حفظ اختياره
+            return `
+            <button onclick="submitTriviaAnswer(event, ${opt.t}, \`${opt.answer}\`, \`${correctAnswerText}\`, '${qData.link}')" class="gold-btn trivia-btn" data-correct="${opt.t}" style="background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); margin-bottom: 8px; text-align: right; display: flex; justify-content: space-between; align-items: center; width: 100%; transition: all 0.3s ease;">
+                <span>${opt.answer}</span>
+                <span class="status-icon"></span>
+            </button>`;
+        })
         .join("");
+
+    // رسالة العودة غداً والمصدر تظهر فقط إذا أجاب
+    let messageHtml = "";
+    if (hasAnsweredToday) {
+        messageHtml = `
+        <div style="text-align: center; margin-top: 15px;">
+            <p style="font-weight: bold; color: var(--gold-primary); font-size: 14px;">تم تسجيل إجابتك. عد غداً لسؤال جديد ⏳</p>
+            <a href="${qData.link}" target="_blank" style="display: inline-block; background: rgba(168, 85, 247, 0.1); border: 1px solid var(--gold-primary); padding: 5px 12px; border-radius: 8px; color: var(--gold-light); text-decoration: none; font-size: 12px; margin-top: 8px;"><i class="fa-solid fa-book-open"></i> اقرأ المصدر للاستزادة</a>
+        </div>`;
+    }
 
     container.innerHTML = `
         <div class="glass-card" style="border-color: var(--gold-primary); padding: 15px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                <h4 class="gold-text"><i class="fa-solid fa-question-circle"></i> سؤال اليوم (بونص)</h4>
+                <h4 class="gold-text"><i class="fa-solid fa-question-circle"></i> سؤال اليوم</h4>
                 <span style="direction: ltr; font-size: 13px; background: rgba(168, 85, 247, 0.2); padding: 2px 8px; border-radius: 12px; color: var(--gold-light);">+25 Score | +15 <i class="fa-solid fa-coins"></i></span>
             </div>
-            <p style="font-size: 18px; margin-bottom: 15px;">${qData.q}</p>
-            <div style="display: flex; flex-direction: column; text-decoration: none;">
+            <p style="font-size: 18px; margin-bottom: 15px; line-height: 1.6;">${qData.q}</p>
+            <div style="display: flex; flex-direction: column;">
                 ${optionsHtml}
             </div>
+            ${messageHtml}
         </div>
     `;
 };
 
 window.submitTriviaAnswer = async function (
+    event,
     isCorrect,
+    selectedAnswerText, // المتغير الجديد لحفظ اختياره
     correctAnswerText,
     sourceLink,
 ) {
     if (!currentUser) return;
 
-    const realNow = getRealNow();
-    const todayStr = getCairoDateString(realNow);
-    const userRef = doc(db, "users", currentUser.uid);
+    const clickedBtn = event.currentTarget;
+    const allBtns = document.querySelectorAll(".trivia-btn");
 
-    document.getElementById("daily-trivia-container").innerHTML =
-        `<p style="margin-top: 10px; text-align: center; color: var(--text-muted);">جاري التحقق...</p>`;
+    // 1. تلوين الأزرار فوراً قبل النافذة المنبثقة
+    allBtns.forEach((btn) => {
+        btn.disabled = true;
+        btn.style.cursor = "not-allowed";
+        btn.style.opacity = "0.4";
 
-    // تجهيز زر الرابط الذي سيظهر في النافذة المنبثقة
-    const linkHtml = `<br><br><a href="${sourceLink}" target="_blank" style="display: inline-block; background: rgba(168, 85, 247, 0.1); border: 1px solid var(--gold-primary); padding: 8px 15px; border-radius: 8px; color: var(--gold-light); text-decoration: none; font-size: 13px; margin-top: 10px;"><i class="fa-solid fa-book-open"></i> اقرأ المصدر للاستزادة</a>`;
-
-    if (isCorrect === 1) {
-        // 1 تعني أن الـ t صحيح حسب بنيتك
-        try {
-            await updateDoc(userRef, {
-                lifetimeScore: increment(25),
-                walletCoins: increment(15),
-                lastDailyQuestionDate: todayStr,
-            });
-
-            new Audio(
-                "https://cdn.pixabay.com/download/audio/2021/08/04/audio_0625c1539c.mp3?filename=success-1-6297.mp3",
-            )
-                .play()
-                .catch(() => {});
-            await CustomDialog.alert(
-                'إجابة دقيقة! 🎉\n تمت إضافة <span style="color: var(--gold-light);">+25</span> Score و <span style="color: var(--gold-light);">+15</span> عملة لمحفظتك.' +
-                    linkHtml,
-                "بونص مستحق 🎁",
-            );
-            location.reload();
-        } catch (error) {
-            CustomDialog.alert("حدث خطأ أثناء تسجيل النقاط.");
+        if (btn.getAttribute("data-correct") === "1") {
+            btn.style.borderColor = "#10b981";
+            btn.style.background = "rgba(16, 185, 129, 0.15)";
+            btn.style.opacity = "1";
+            btn.querySelector(".status-icon").innerHTML =
+                '<i class="fa-solid fa-circle-check" style="color: #10b981; font-size: 18px;"></i>';
         }
-    } else {
-        try {
-            await updateDoc(userRef, {
-                lastDailyQuestionDate: todayStr,
-            });
-            await CustomDialog.alert(
-                `إجابة خاطئة! ❌\nالإجابة الصحيحة هي: <span style=\"color: var(--gold-light);\">${correctAnswerText}</span>` +
-                    linkHtml,
-                "للأسف",
-            );
-            location.reload();
-        } catch (error) {
-            CustomDialog.alert("حدث خطأ.");
-        }
+    });
+
+    if (isCorrect !== 1) {
+        clickedBtn.style.borderColor = "#ef4444";
+        clickedBtn.style.background = "rgba(239, 68, 68, 0.15)";
+        clickedBtn.style.opacity = "1";
+        clickedBtn.querySelector(".status-icon").innerHTML =
+            '<i class="fa-solid fa-circle-xmark" style="color: #ef4444; font-size: 18px;"></i>';
     }
+
+    setTimeout(async () => {
+        const realNow = getRealNow();
+        const todayStr = getCairoDateString(realNow);
+        const userRef = doc(db, "users", currentUser.uid);
+
+        const linkHtml = `<br><br><a href="${sourceLink}" target="_blank" style="display: inline-block; background: rgba(168, 85, 247, 0.1); border: 1px solid var(--gold-primary); padding: 8px 15px; border-radius: 8px; color: var(--gold-light); text-decoration: none; font-size: 13px; margin-top: 10px;"><i class="fa-solid fa-book-open"></i> اقرأ المصدر للاستزادة</a>`;
+
+        // 2. تحديثات الداتا بيز (حفظ التاريخ + النص المختار)
+        let dbUpdates = {
+            lastDailyQuestionDate: todayStr,
+            lastDailyTriviaChoice: selectedAnswerText,
+        };
+
+        if (isCorrect === 1) {
+            dbUpdates.lifetimeScore = increment(25);
+            dbUpdates.walletCoins = increment(15);
+            try {
+                await updateDoc(userRef, dbUpdates);
+                new Audio(
+                    "https://cdn.pixabay.com/download/audio/2021/08/04/audio_0625c1539c.mp3?filename=success-1-6297.mp3",
+                )
+                    .play()
+                    .catch(() => {});
+                await CustomDialog.alert(
+                    "إجابة دقيقة! 🎉\nتمت إضافة +25 Score و +15 عملة لمحفظتك." +
+                        linkHtml,
+                    "بونص مستحق 🎁",
+                );
+                location.reload(); // عند التحديث سيُرسم السؤال وهو مجمد طوال اليوم
+            } catch (error) {
+                console.error(error);
+            }
+        } else {
+            try {
+                await updateDoc(userRef, dbUpdates);
+                await CustomDialog.alert(
+                    `إجابة خاطئة! ❌\nالإجابة الصحيحة هي: [ ${correctAnswerText} ]` +
+                        linkHtml,
+                    "للأسف",
+                );
+                location.reload();
+            } catch (error) {
+                console.error(error);
+            }
+        }
+    }, 800);
 };
 
 // ==========================================
@@ -2901,7 +2982,7 @@ window.dismissNiyyahReminder = async function () {
         setTimeout(() => {
             document.getElementById("niyyah-modal").style.display = "none";
             // إعادة الزر لحالته الأصلية
-            btn.innerHTML = "فهمت، جددت نيتي لله";
+            btn.innerHTML = "فهمت";
             btn.disabled = false;
 
             // 🔥 هنا السحر: إعطاء الضوء الأخضر للمنقذ الذكي وباقي الموقع للعمل

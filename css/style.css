@@ -2080,3 +2080,12 @@ select:focus {
     font-size: 13px;
     direction: ltr; /* لضبط شكل الأيقونة مع الرقم */
 }
+
+.status-icon {
+    display: flex !important;
+}
+
+.trivia-btn {
+    margin-top: 4px !important;
+    margin-bottom: 4px !important;
+}
