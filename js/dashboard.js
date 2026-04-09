@@ -1,4 +1,5 @@
 import { auth, db, storage, messaging } from "./firebase-config.js";
+import dailyQuestions from "./daily-questions.js";
 import {
     getToken,
     onMessage,
@@ -637,6 +638,9 @@ async function processActiveParticipant(userData, userDocRef, displayDays) {
 
     loadTasks(todayLogData, userData);
     startDoomsdayClock();
+    renderDailyTrivia(userData);
+    // تفعيل فحص النية اليومية
+    await checkNiyyahReminder(userData);
 }
 
 async function loadTasks(todayLogData, userData) {
@@ -1044,7 +1048,7 @@ document
                     dbUpdates.lifetimeScore = increment(earnedXP);
                     dbUpdates.hasDoubleXP = false;
                     dbUpdates.usedDoubleXP = true;
-                    xpLabel = `<span style="color:#eab308;">(مضاعف ⚡)</span>`;
+                    xpLabel = `<span style="color:#eab308; display: block;">(مضاعف ⚡)</span>`;
                 } else {
                     dbUpdates.currentXP = increment(earnedXP);
                     dbUpdates.lifetimeScore = increment(earnedXP);
@@ -1053,7 +1057,7 @@ document
                 await updateDoc(doc(db, "users", currentUser.uid), dbUpdates);
 
                 await CustomDialog.alert(
-                    `🔥 تم الاعتماد بنجاح!\n لقد كسبت: \n  ${xpLabel} \n <span class="win-info-boxs xp">+${earnedXP} XP</span> <span class="win-info-boxs coins">+${earnedCoins} <i class="fa-solid fa-coins fa-fw"></i></span> <span class="win-info-boxs ">+1 <i class="fa-solid fa-fire fa-fw"></i></span>`,
+                    `<span style="display: block;">🔥 تم الاعتماد بنجاح! لقد كسبت: </span> ${xpLabel} \n <span><span class="win-info-boxs xp">+${earnedXP} XP</span> <span class="win-info-boxs coins">+${earnedCoins} <i class="fa-solid fa-coins fa-fw"></i></span> <span class="win-info-boxs ">+1 <i class="fa-solid fa-fire fa-fw"></i></span></span>`,
                     "عمل عظيم ",
                 );
                 location.reload();
@@ -1176,6 +1180,8 @@ async function loadLeaderboard() {
         querySnapshot.forEach((doc) => {
             usersArray.push(doc.data());
         });
+
+        usersArray = usersArray.filter((u) => u.role !== "tester"); // استبعاد التيستر من المتصدرين
 
         // 1. خوارزمية الفرز المزدوجة (تعتمد على الزر المضغوط)
         usersArray.sort((a, b) => {
@@ -2743,3 +2749,167 @@ document.querySelectorAll(".toggle-btn").forEach((btn) => {
         loadLeaderboard();
     });
 });
+
+// ==========================================
+// نظام السؤال اليومي (Daily Trivia)
+// ==========================================
+window.renderDailyTrivia = function (userData) {
+    const realNow = getRealNow();
+    const todayStr = getCairoDateString(realNow);
+    const container = document.getElementById("daily-trivia-container");
+
+    if (!container) return;
+
+    if (userData.lastDailyQuestionDate === todayStr) {
+        container.innerHTML = `
+            <div class="glass-card" style="text-align: center; border-color: var(--success); padding: 15px;">
+                <h4 style="color: var(--success); margin-bottom: 5px;"><i class="fa-solid fa-check-circle"></i> تمت الإجابة على سؤال اليوم</h4>
+                <p style="font-size: 12px; color: var(--text-muted);">عد غداً لسؤال جديد.</p>
+            </div>
+        `;
+        return;
+    }
+
+    const dateParts = todayStr.split("-");
+    const numericDate = parseInt(dateParts[0] + dateParts[1] + dateParts[2]);
+    const questionIndex = numericDate % dailyQuestions.length;
+    const qData = dailyQuestions[questionIndex];
+
+    // استخراج الإجابة الصحيحة لإرسالها تحسباً لخطأ المستخدم
+    const correctAnswerText = qData.answers.find((a) => a.t === 1).answer;
+
+    // بناء الأزرار وإرسال قيمة (t)، الإجابة الصحيحة، والرابط
+    let optionsHtml = qData.answers
+        .map(
+            (opt) => `
+        <button onclick="submitTriviaAnswer(${opt.t}, '${correctAnswerText}', '${qData.link}')" class="gold-btn" style="background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); margin-bottom: 3px; font-weight: normal; width: 100%; transition: 0.2s;">
+            ${opt.answer}
+        </button>
+    `,
+        )
+        .join("");
+
+    container.innerHTML = `
+        <div class="glass-card" style="border-color: var(--gold-primary); padding: 15px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <h4 class="gold-text"><i class="fa-solid fa-question-circle"></i> سؤال اليوم (بونص)</h4>
+                <span style="direction: ltr; font-size: 13px; background: rgba(168, 85, 247, 0.2); padding: 2px 8px; border-radius: 12px; color: var(--gold-light);">+25 Score | +15 <i class="fa-solid fa-coins"></i></span>
+            </div>
+            <p style="font-size: 18px; margin-bottom: 15px;">${qData.q}</p>
+            <div style="display: flex; flex-direction: column; text-decoration: none;">
+                ${optionsHtml}
+            </div>
+        </div>
+    `;
+};
+
+window.submitTriviaAnswer = async function (
+    isCorrect,
+    correctAnswerText,
+    sourceLink,
+) {
+    if (!currentUser) return;
+
+    const realNow = getRealNow();
+    const todayStr = getCairoDateString(realNow);
+    const userRef = doc(db, "users", currentUser.uid);
+
+    document.getElementById("daily-trivia-container").innerHTML =
+        `<p style="margin-top: 10px; text-align: center; color: var(--text-muted);">جاري التحقق...</p>`;
+
+    // تجهيز زر الرابط الذي سيظهر في النافذة المنبثقة
+    const linkHtml = `<br><br><a href="${sourceLink}" target="_blank" style="display: inline-block; background: rgba(168, 85, 247, 0.1); border: 1px solid var(--gold-primary); padding: 8px 15px; border-radius: 8px; color: var(--gold-light); text-decoration: none; font-size: 13px; margin-top: 10px;"><i class="fa-solid fa-book-open"></i> اقرأ المصدر للاستزادة</a>`;
+
+    if (isCorrect === 1) {
+        // 1 تعني أن الـ t صحيح حسب بنيتك
+        try {
+            await updateDoc(userRef, {
+                lifetimeScore: increment(25),
+                walletCoins: increment(15),
+                lastDailyQuestionDate: todayStr,
+            });
+
+            new Audio(
+                "https://cdn.pixabay.com/download/audio/2021/08/04/audio_0625c1539c.mp3?filename=success-1-6297.mp3",
+            )
+                .play()
+                .catch(() => {});
+            await CustomDialog.alert(
+                'إجابة دقيقة! 🎉\n تمت إضافة <span style="color: var(--gold-light);">+25</span> Score و <span style="color: var(--gold-light);">+15</span> عملة لمحفظتك.' +
+                    linkHtml,
+                "بونص مستحق 🎁",
+            );
+            location.reload();
+        } catch (error) {
+            CustomDialog.alert("حدث خطأ أثناء تسجيل النقاط.");
+        }
+    } else {
+        try {
+            await updateDoc(userRef, {
+                lastDailyQuestionDate: todayStr,
+            });
+            await CustomDialog.alert(
+                `إجابة خاطئة! ❌\nالإجابة الصحيحة هي: <span style=\"color: var(--gold-light);\">${correctAnswerText}</span>` +
+                    linkHtml,
+                "للأسف",
+            );
+            location.reload();
+        } catch (error) {
+            CustomDialog.alert("حدث خطأ.");
+        }
+    }
+};
+
+// ==========================================
+// نظام تجديد النية اليومي (Niyyah Reminder)
+// ==========================================
+
+// 1. تحويل الفحص إلى "بوابة انتظار" تجمد باقي الموقع
+window.checkNiyyahReminder = function (userData) {
+    return new Promise((resolve) => {
+        const realNow = getRealNow();
+        const todayStr = getCairoDateString(realNow);
+
+        if (userData.lastNiyyahDate !== todayStr) {
+            document.getElementById("niyyah-modal").style.display = "flex";
+            // نربط فتح البوابة بمتغير عالمي لكي يستخدمه الزر لاحقاً
+            window.resolveNiyyah = resolve;
+        } else {
+            // إذا كان مجدد النية مسبقاً، افتح البوابة فوراً بصمت
+            resolve();
+        }
+    });
+};
+
+// 2. دالة الإخفاء تقوم بفتح البوابة والسماح للمنقذ بالظهور
+window.dismissNiyyahReminder = async function () {
+    if (!currentUser) return;
+
+    const btn = document.getElementById("niyyah-btn");
+    btn.innerHTML =
+        'جاري توثيق النية... <i class="fa-solid fa-spinner fa-spin"></i>';
+    btn.disabled = true;
+
+    const realNow = getRealNow();
+    const todayStr = getCairoDateString(realNow);
+    const userRef = doc(db, "users", currentUser.uid);
+
+    try {
+        await updateDoc(userRef, { lastNiyyahDate: todayStr });
+        document.getElementById("niyyah-modal").style.opacity = "0";
+
+        setTimeout(() => {
+            document.getElementById("niyyah-modal").style.display = "none";
+            // إعادة الزر لحالته الأصلية
+            btn.innerHTML = "فهمت، جددت نيتي لله";
+            btn.disabled = false;
+
+            // 🔥 هنا السحر: إعطاء الضوء الأخضر للمنقذ الذكي وباقي الموقع للعمل
+            if (window.resolveNiyyah) window.resolveNiyyah();
+        }, 300);
+    } catch (error) {
+        console.error("حدث خطأ أثناء حفظ النية:", error);
+        btn.innerHTML = "حدث خطأ، حاول مجدداً";
+        btn.disabled = false;
+    }
+};

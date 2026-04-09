@@ -215,7 +215,7 @@ body {
     background-color: rgba(10, 5, 20, 0.7);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
-    padding: 15px 30px;
+    padding: calc(15px + env(safe-area-inset-top)) 30px 15px 30px;
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -1099,6 +1099,11 @@ select:focus {
     margin-bottom: 25px;
     line-height: 1.6;
     white-space: pre-wrap; /* للحفاظ على المسافات في الرسائل الطويلة */
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
 }
 
 .dialog-input {
@@ -1526,6 +1531,9 @@ select:focus {
         height: auto;
         flex-direction: row;
         padding: 0;
+        padding-bottom: env(
+            safe-area-inset-bottom
+        ); /* السطر السحري لحل مشكلة الآيفون */
         border-left: none;
         border-top: 1px solid var(--border-color);
         z-index: 9999;
@@ -1608,12 +1616,14 @@ select:focus {
 
     /* 2. ضبط مساحة المحتوى الرئيسي لكي لا يغطيه الشريط السفلي */
     .main-content {
-        padding-bottom: 70px;
+        padding-bottom: calc(
+            70px + env(safe-area-inset-bottom)
+        ); /* 70px هو ارتفاع الشريط السفلي + مسافة الأمان للآيفون */
     }
 
     /* 3. ضبط الشريط العلوي (Navbar) */
     .navbar {
-        padding: 15px;
+        padding: calc(15px + env(safe-area-inset-top)) 15px 15px 15px !important;
         flex-direction: row; /* إبقاء العناصر بجانب بعضها */
         justify-content: space-between;
     }
@@ -1808,7 +1818,7 @@ select:focus {
     display: inline-flex;
     justify-content: center;
     align-items: center;
-    margin: 10px 2px -10px 2px;
+    margin: 10px 2px -40px 2px;
     direction: ltr;
     width: 80px;
     padding: 3px 10px !important;

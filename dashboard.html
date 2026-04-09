@@ -18,7 +18,7 @@
     <meta property="og:image" content="images/logo.png">
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="BrainRot Detox">
-    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/style.css?v=10">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/driver.js@1.0.1/dist/driver.css" />
@@ -123,6 +123,7 @@
                 </div>
 
                 <div class="tasks-container">
+                    <div id="daily-trivia-container" style="margin-bottom: 25px;"></div>
                     <h3>مهام اليوم</h3>
                     <div class="tasks-list-class" id="tasks-list">
                     </div>
@@ -421,6 +422,35 @@
             </div>
         </div>
     </div>
+    <div id="niyyah-modal"
+        style="display: none; z-index: 100000; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(10, 5, 20, 0.95); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); justify-content: center; align-items: center; padding: 20px;">
+        <div class="glass-card"
+            style="max-width: 450px; width: 100%; text-align: center; border-color: var(--gold-primary); animation: slideUp 0.4s ease;">
+            <div style="font-size: 40px; margin-bottom: 15px;">🤍</div>
+            <h3 class="gold-text" style="margin-bottom: 15px; font-size: 22px;">وقفة لتجديد النية</h3>
+            <p style="font-size: 15px; line-height: 1.7; color: #eee; margin-bottom: 20px;">
+                يا محارب، تذكر أن هذا المعسكر، والنقاط، والرتب ما هي إلا <strong>وسائل دنيوية</strong> لترويض كسلك وبناء
+                انضباطك.<br>
+                أما <strong>غايتك الحقيقية</strong> فهي رضا الله عز وجل.<br>
+                احذر أن تصلي أو تقرأ القرآن من أجل النقاط، بل اجعل العبادة خالصة لله عز وجل.
+            </p>
+
+            <div
+                style="background: rgba(255, 215, 0, 0.05); padding: 15px; border-radius: 8px; margin-bottom: 25px; border-right: 4px solid var(--gold-primary); text-align: right;">
+                <p style="font-size: 16px; font-weight: bold; color: var(--gold-light); margin: 0; line-height: 1.6;">
+                    قال رسول الله ﷺ:<br>
+                    <span style="color: #fff; font-weight: normal;">"إنما الأعمال بالنيّات ، وإنما لكل امريء مانوى ، فمن
+                        كانت هجرته إلى الله ورسوله ، فهجرته إلى الله ورسوله ، ومن كانت هجرته
+                        لدنيا يصيبها ، أو امرأة ينكحها ، فهجرته إلى ما هاجر إليه"</span>
+                </p>
+            </div>
+
+            <button onclick="dismissNiyyahReminder()" id="niyyah-btn" class="gold-btn"
+                style="width: 100%; font-size: 16px; padding: 12px;">
+                فهمت.
+            </button>
+        </div>
+    </div>
     <script>
         const navItems = document.querySelectorAll('.nav-links li, #profile-btn');
         const pages = document.querySelectorAll('.page-section');
@@ -469,7 +499,7 @@
     </script>
     <script src="https://cdn.jsdelivr.net/npm/driver.js@1.0.1/dist/driver.js.iife.js"></script>
     <script type="module" src="js/firebase-config.js"></script>
-    <script type="module" src="js/dashboard.js?v=9"></script>
+    <script type="module" src="js/dashboard.js?v=13"></script>
 </body>
 
 </html>
