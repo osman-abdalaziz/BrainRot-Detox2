@@ -19,7 +19,9 @@
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="BrainRot Detox">
     <link rel="stylesheet" href="css/style.css?v=10">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.1/css/all.min.css"
+        integrity="sha512-2SwdPD6INVrV/lHTZbO2nodKhrnDdJK9/kg2XD1r9uGqPo1cUbujc+IYdlYdEErWNu69gVcYgdxlmVmzTWnetw=="
+        crossorigin="anonymous" referrerpolicy="no-referrer" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/driver.js@1.0.1/dist/driver.css" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.js"></script>
@@ -56,6 +58,9 @@
                 <li class="active" data-target="tasks-page">المهام اليومية</li>
                 <li id="nav-todo-link" data-target="todo-page" style="display: none;">المهام الحرة</li>
                 <li data-target="store-page">المتجر</li>
+                <li class="nav-item" data-target="study-rooms-page">
+                    <i class="fa-solid fa-users-viewfinder fa-fw"></i> غرف الدراسة
+                </li>
                 <li data-target="leaderboard-page">قائمة المتصدرين</li>
                 <li data-target="analytics-page">تحليل التقدم</li>
             </ul>
@@ -157,6 +162,143 @@
                         النقاط</button>
                 </div>
             </section>
+
+            <div id="study-rooms-page" class="page-section hidden">
+                <div class="glass-card" style="padding: 20px; min-height: 500px;">
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
+                        <h2 class="gold-text" style="font-size: 22px;"><i class="fa-solid fa-users-viewfinder"></i> ساحة
+                            الدراسة
+                            المشتركة</h2>
+                        <button id="open-create-room-btn" class="gold-btn"
+                            style="width: auto; padding: 10px 20px; font-size: 14px;">+ إنشاء غرفة (25 <i
+                                class="fa-solid fa-coins"></i>)</button>
+                    </div>
+
+                    <div id="rooms-lobby-grid"
+                        style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 15px;">
+                        <p style="color: var(--text-muted); text-align: center; grid-column: 1 / -1; margin-top: 50px;">
+                            جاري البحث
+                            عن غرف نشطة... ⏳</p>
+                    </div>
+                </div>
+                <div id="active-room-view" class="hidden" style="margin-top: 20px;">
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <button onclick="leaveRoom()" class="dialog-btn-cancel"
+                            style="padding: 5px 15px; font-size: 12px;"><i class="fa-solid fa-door-open"></i>
+                            مغادرة</button>
+                        <h3 id="active-room-title" class="gold-text">اسم الغرفة</h3>
+                        <div id="room-host-controls" class="hidden">
+                            <button onclick="deleteRoom()" class="dialog-btn-cancel"
+                                style="background: rgba(244, 63, 94, 0.2); color: var(--danger);"><i
+                                    class="fa-solid fa-trash"></i>
+                                إنهاء</button>
+                        </div>
+                    </div>
+
+                    <div class="glass-card"
+                        style="text-align: center; padding: 40px; margin-bottom: 20px; border-width: 2px;"
+                        id="timer-card">
+                        <h1 id="main-timer"
+                            style="font-size: 80px; font-family: 'Courier New', Courier, monospace; letter-spacing: 5px;">
+                            00:00</h1>
+                        <p id="timer-status" style="font-size: 20px; font-weight: bold; margin-top: 10px;">في انتظار
+                            البداية...</p>
+                        <div id="progress-bar-container"
+                            style="width: 100%; height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; margin-top: 20px;">
+                            <div id="timer-progress"
+                                style="width: 0%; height: 100%; background: var(--gold-primary); border-radius: 3px; transition: width 1s linear;">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 300px; gap: 20px; height: 400px;">
+                        <div class="glass-card" id="chat-container"
+                            style="display: flex; flex-direction: column; position: relative;">
+                            <div id="chat-lock-overlay"
+                                style="position: absolute; inset: 0; background: rgba(0,0,0,0.8); backdrop-filter: blur(8px); z-index: 10; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 20px;">
+                                <i class="fa-solid fa-lock"
+                                    style="font-size: 40px; color: var(--gold-primary); margin-bottom: 15px;"></i>
+                                <h4 class="gold-text">وقت التركيز جاري</h4>
+                                <p style="font-size: 12px; color: var(--text-muted);">سيتم فتح الشات تلقائياً عند وقت
+                                    البريك</p>
+                            </div>
+                            <div id="room-messages"
+                                style="flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 10px;">
+                            </div>
+                            <div
+                                style="padding: 10px; border-top: 1px solid var(--border-color); display: flex; gap: 5px;">
+                                <input type="text" id="chat-input" class="dialog-input" placeholder="اكتب رسالة..."
+                                    style="flex: 1;">
+                                <button onclick="sendRoomMessage()" class="gold-btn" style="width: 50px;"><i
+                                        class="fa-solid fa-paper-plane"></i></button>
+                            </div>
+                        </div>
+
+                        <div class="glass-card" style="padding: 15px; overflow-y: auto;">
+                            <h4
+                                style="margin-bottom: 15px; font-size: 14px; border-bottom: 1px solid var(--border-color); padding-bottom: 5px;">
+                                المتواجدون (<span id="current-online-count">0</span>)</h4>
+                            <div id="room-participants-list" style="display: flex; flex-direction: column; gap: 10px;">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="create-room-modal" class="custom-dialog-overlay">
+                <div class="glass-card custom-dialog-box" style="text-align: right; max-width: 400px;">
+                    <h3 class="gold-text" style="margin-bottom: 15px; text-align: center;">إعدادات غرفتك الخاصة 🛠️</h3>
+
+                    <label style="display: block; margin-bottom: 5px; color: var(--text-main); font-size: 13px;">عنوان
+                        الغرفة:</label>
+                    <input type="text" id="room-title-input" class="dialog-input"
+                        placeholder="مثال: دراسة النيورو في ليلة..." maxlength="40" style="margin-bottom: 15px;">
+
+                    <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                        <div style="flex: 1;">
+                            <label
+                                style="display: block; margin-bottom: 5px; color: var(--text-main); font-size: 13px;">وقت
+                                الجلسة
+                                (دقيقة):</label>
+                            <input type="number" id="room-session-time" class="dialog-input" value="50" min="10"
+                                max="120">
+                        </div>
+                        <div style="flex: 1;">
+                            <label
+                                style="display: block; margin-bottom: 5px; color: var(--text-main); font-size: 13px;">وقت
+                                البريك
+                                (حد أقصى 25):</label>
+                            <input type="number" id="room-break-time" class="dialog-input" value="10" min="1" max="25">
+                        </div>
+                    </div>
+
+                    <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+                        <div style="flex: 1;">
+                            <label
+                                style="display: block; margin-bottom: 5px; color: var(--text-main); font-size: 13px;">عدد
+                                الجلسات
+                                (الدورات):</label>
+                            <input type="number" id="room-sessions-count" class="dialog-input" value="4" min="1"
+                                max="10">
+                        </div>
+                        <div style="flex: 1;">
+                            <label
+                                style="display: block; margin-bottom: 5px; color: var(--text-main); font-size: 13px;">الحد
+                                الأقصى
+                                للأشخاص:</label>
+                            <input type="number" id="room-max-users" class="dialog-input" value="5" min="2" max="15">
+                        </div>
+                    </div>
+
+                    <div class="dialog-buttons">
+                        <button id="cancel-room-btn" class="dialog-btn-cancel">إلغاء</button>
+                        <button id="confirm-create-room-btn" class="gold-btn dialog-btn-confirm">إنشاء وخصم 25
+                            🪙</button>
+                    </div>
+                </div>
+            </div>
 
             <!-- <section id="leaderboard-page" class="page-section">
                 <h2 class="gold-text leaderboard-title">🏆 قاعة العظماء</h2>
