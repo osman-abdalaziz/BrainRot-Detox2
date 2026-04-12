@@ -178,22 +178,34 @@
                 </div>
 
                 <div id="active-room-view" style="display: none; margin-top: 20px;">
+
                     <div
-                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                        <button onclick="leaveRoom(false)" class="dialog-btn-cancel"
-                            style="padding: 5px 15px; font-size: 12px;"><i class="fa-solid fa-door-open"></i>
-                            مغادرة</button>
-                        <h3 id="active-room-title" class="gold-text">جارِ التحميل...</h3>
-                        <div id="room-host-controls" style="display: none; gap: 10px;">
-                            <button id="start-session-btn" onclick="startRoomTimer()" class="gold-btn"
-                                style="padding: 5px 15px; font-size: 12px;"><i class="fa-solid fa-play"></i> بدء
-                                الجلسة</button>
-                            <button onclick="openEditRoomModal()" class="dialog-btn-cancel"
-                                style="background: rgba(168, 85, 247, 0.2); color: var(--gold-light); padding: 5px 15px; font-size: 12px;"><i
-                                    class="fa-solid fa-gear"></i> الإعدادات</button>
-                            <button onclick="deleteRoom()" class="dialog-btn-cancel"
-                                style="background: rgba(244, 63, 94, 0.2); color: var(--danger); padding: 5px 15px; font-size: 12px;"><i
-                                    class="fa-solid fa-trash"></i> إنهاء</button>
+                        style="display: flex; flex-direction: column; align-items: center; gap: 10px; margin-bottom: 25px;">
+                        <div style="text-align: center;">
+                            <h2 id="active-room-title" class="gold-text" style="font-size: 24px; margin-bottom: 8px;">
+                                جارِ التحميل...
+                            </h2>
+                            <span id="active-room-session-badge"
+                                style="background: rgba(168, 85, 247, 0.2); color: #d8b4fe; padding: 4px 12px; border-radius: 20px; font-size: 13px; border: 1px solid rgba(168, 85, 247, 0.5);">جلسة
+                                0/0</span>
+                        </div>
+
+                        <div
+                            style="display: flex; justify-content: space-between; width: 100%; align-items: center; background: rgba(0,0,0,0.3); padding: 10px 15px; border-radius: 12px; border: 1px solid var(--border-color); margin-top: 10px;">
+                            <button onclick="leaveRoom(false)" class="dialog-btn-cancel"
+                                style="margin: 0; padding: 6px 15px;"><i
+                                    class="fa-solid fa-arrow-right-from-bracket"></i> مغادرة</button>
+
+                            <div id="room-host-controls" style="display: none; gap: 10px;">
+                                <button id="start-session-btn" onclick="startRoomTimer()" class="gold-btn"
+                                    style="padding: 6px 15px;"><i class="fa-solid fa-play"></i> بدء الجلسة</button>
+                                <button onclick="openEditRoomModal()" class="dialog-btn-cancel"
+                                    style="background: rgba(168, 85, 247, 0.2); color: var(--gold-light); padding: 6px 15px;"><i
+                                        class="fa-solid fa-gear"></i> الإعدادات</button>
+                                <button onclick="deleteRoom()" class="dialog-btn-cancel"
+                                    style="background: rgba(244, 63, 94, 0.2); color: var(--danger); padding: 6px 15px;"><i
+                                        class="fa-solid fa-trash"></i> إنهاء</button>
+                            </div>
                         </div>
                     </div>
 
@@ -209,10 +221,13 @@
                     <div style="display: grid; grid-template-columns: 1fr 300px; gap: 20px; height: 400px;">
                         <div class="glass-card" style="display: flex; flex-direction: column; position: relative;">
                             <div id="chat-lock-overlay"
-                                style="position: absolute; inset: 0; background: rgba(0,0,0,0.8); backdrop-filter: blur(8px); z-index: 10; display: flex; flex-direction: column; justify-content: center; align-items: center;">
+                                style="border-radius: 16px; position: absolute; inset: 0; background: rgba(0,0,0,0.9); backdrop-filter: blur(20px); z-index: 10; display: flex; flex-direction: column; justify-content: center; align-items: center;">
                                 <i class="fa-solid fa-lock"
                                     style="font-size: 40px; color: var(--gold-primary); margin-bottom: 15px;"></i>
                                 <h4 class="gold-text">وقت التركيز جاري 🤫</h4>
+                                <p style="font-size: 12px; color: var(--text-muted); margin-top: 5px;">سيفتح الشات
+                                    تلقائياً وقت البريك
+                                </p>
                             </div>
                             <div id="room-messages"
                                 style="flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 10px;">

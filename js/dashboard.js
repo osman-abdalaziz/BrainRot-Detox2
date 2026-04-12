@@ -3043,16 +3043,36 @@ window.enterStudyRoom = async function (roomId) {
     activeRoomListener = roomRef; // حفظ المسار لقتله لاحقاً
 
     // تسجيل الحضور (وإزالة العضو عند انقطاع الإنترنت)
+    // استدعاء الاسم الحقيقي للمستخدم من قاعدة البيانات
+    const userDocRef = doc(db, "users", currentUser.uid);
+    const userSnap = await getDoc(userDocRef);
+    const realName = userSnap.exists() ? userSnap.data().name : "مستخدم";
+    const realAvatar = userSnap.exists()
+        ? userSnap.data().photoURL
+        : "images/profile.jpg";
+
     const myPresenceRef = dbRef(
         rtdb,
         `study_rooms/${roomId}/participants/${currentUser.uid}`,
     );
-    onDisconnect(myPresenceRef).remove(); // مسح كامل عند فصل النت
+    onDisconnect(myPresenceRef).remove();
     await set(myPresenceRef, {
-        name: currentUser.displayName || "مُحارب",
-        avatar: currentUser.photoURL || "images/profile.jpg",
+        name: realName,
+        avatar: realAvatar || "images/profile.jpg",
         isOnline: true,
     });
+
+    // إضافة مراقب التركيز (Visibility Change)
+    const handleVisibilityChange = () => {
+        if (activeRoomId) {
+            const focusRef = dbRef(
+                rtdb,
+                `study_rooms/${activeRoomId}/participants/${currentUser.uid}/isFocused`,
+            );
+            set(focusRef, document.visibilityState === "visible");
+        }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     // الرادار اللحظي للغرفة
     onValue(roomRef, (snapshot) => {
@@ -3132,18 +3152,29 @@ window.renderRoomUI = function (room) {
         hostControls.style.display = "none"; // إخفاء إجباري للضيوف
     }
 
-    // رسم قائمة المتواجدين (بدون أشباح)
+    document.getElementById("active-room-title").innerText = room.title;
+    document.getElementById("active-room-session-badge").innerText =
+        `جلسة ${room.currentSessionIndex || 0}/${room.totalSessions}`;
+
+    // رسم قائمة المتواجدين (الملك للهوست فقط)
     const list = document.getElementById("room-participants-list");
     list.innerHTML = "";
     if (room.participants) {
-        Object.values(room.participants).forEach((p) => {
+        Object.keys(room.participants).forEach((uid) => {
+            const p = room.participants[uid];
+            const isHost = room.hostUid === uid; // فحص صارم عن طريق الـ ID وليس الاسم
+            // المنطق الجديد: أخضر لو مركز، أحمر لو يلهو، رمادي لو أوفلاين
+            let statusColor = "#9ca3af"; // رمادي افتراضي
+            if (p.isOnline) {
+                statusColor = p.isFocused !== false ? "#10b981" : "#ef4444";
+            }
             list.innerHTML += `
                 <div style="display: flex; align-items: center; gap: 10px; background: rgba(255,255,255,0.05); padding: 8px; border-radius: 8px;">
                     <div style="position: relative;">
-                        <img src="${p.avatar}" style="width: 30px; height: 30px; border-radius: 50%;">
-                        <div style="position: absolute; bottom: 0; right: 0; width: 10px; height: 10px; background: #10b981; border-radius: 50%; border: 2px solid #000;"></div>
+                        <img src="${p.avatar}" style="width: 30px; height: 30px; border-radius: 50%; object-fit: cover;">
+                        <div style="position: absolute; top: -2px; right: -1px; width: 12px; height: 12px; background: ${statusColor}; border-radius: 50%; border: 2px solid #000;"></div>
                     </div>
-                    <span style="font-size: 13px; color: #fff">${p.name} ${room.hostName === p.name ? "👑" : ""}</span>
+                    <span style="font-size: 13px; color: ${p.isOnline ? "#fff" : "var(--text-muted)"}">${p.name} ${isHost ? "👑" : ""}</span>
                 </div>
             `;
         });
@@ -3188,6 +3219,59 @@ window.startRoomTimer = async function () {
     });
 };
 
+// function manageTimerState(room, isHost) {
+//     if (roomTimerInterval) clearInterval(roomTimerInterval);
+
+//     const timerStatus = document.getElementById("timer-status");
+//     const timerDisplay = document.getElementById("main-timer");
+//     const chatOverlay = document.getElementById("chat-lock-overlay");
+
+//     if (room.status === "waiting") {
+//         timerStatus.innerText = "في انتظار القائد لبدء الجلسة...";
+//         timerStatus.style.color = "var(--text-muted)";
+//         chatOverlay.style.display = "none"; // تأكد من وجود هذا لفتح الشات أثناء الانتظار
+//     } else if (room.status === "studying") {
+//         timerStatus.innerText = "وقت التركيز.. ممنوع الكلام! 🤫";
+//         timerStatus.style.color = "var(--gold-primary)";
+//         chatOverlay.style.display = "flex"; // قفل الشات
+//     } else if (room.status === "break") {
+//         timerStatus.innerText = "وقت البريك.. خذ نفساً عميقاً ☕";
+//         timerStatus.style.color = "#10b981";
+//         chatOverlay.style.display = "none"; // فتح الشات وقت البريك
+//     } else if (room.status === "finished") {
+//         timerStatus.innerText = "انتهت الجلسات 🎉";
+//         chatOverlay.style.display = "none";
+//         return;
+//     }
+
+//     // منطق الأصوات (يتم استدعاؤه عند تغير الحالة)
+//     if (room.status !== "waiting" && room.status !== "finished") {
+//         const remaining = Math.max(0, room.phaseEndTime - Date.now());
+
+//         // تشغيل صوت عند بداية البريك أو بداية الجلسة (اختياري)
+//         // playPhaseSound(room.status);
+
+//         roomTimerInterval = setInterval(() => {
+//             const timeLeft = Math.max(0, room.phaseEndTime - Date.now());
+
+//             if (timeLeft <= 0) {
+//                 clearInterval(roomTimerInterval);
+//                 if (isHost) transitionRoomPhase(room);
+//                 // تشغيل صوت التنبيه عند الانتهاء
+//                 new Audio(
+//                     "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3",
+//                 )
+//                     .play()
+//                     .catch(() => {});
+//             }
+
+//             const mins = Math.floor(timeLeft / 60000);
+//             const secs = Math.floor((timeLeft % 60000) / 1000);
+//             timerDisplay.innerText = `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+//         }, 1000);
+//     }
+// }
+
 function manageTimerState(room, isHost) {
     if (roomTimerInterval) clearInterval(roomTimerInterval);
 
@@ -3195,44 +3279,50 @@ function manageTimerState(room, isHost) {
     const timerDisplay = document.getElementById("main-timer");
     const chatOverlay = document.getElementById("chat-lock-overlay");
 
-    // تحديث العنوان بناءً على الحالة الفعلية القادمة من السيرفر
+    // فك قفل الدردشة في كل الحالات ما عدا وقت الدراسة (studying)
+    if (
+        room.status === "waiting" ||
+        room.status === "break" ||
+        room.status === "finished"
+    ) {
+        chatOverlay.style.display = "none";
+    } else {
+        chatOverlay.style.display = "flex";
+    }
+
+    // تحديث النصوص والألوان بناءً على الحالة
     if (room.status === "waiting") {
         timerStatus.innerText = "في انتظار القائد لبدء الجلسة...";
         timerStatus.style.color = "var(--text-muted)";
+        timerDisplay.innerText = "00:00";
+        return;
     } else if (room.status === "studying") {
         timerStatus.innerText = "وقت التركيز.. ممنوع الكلام! 🤫";
         timerStatus.style.color = "var(--gold-primary)";
     } else if (room.status === "break") {
         timerStatus.innerText = "وقت البريك.. خذ نفساً عميقاً ☕";
         timerStatus.style.color = "#10b981";
+        // صوت تنبيه عند بدء البريك
+        new Audio(
+            "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3",
+        )
+            .play()
+            .catch(() => {});
     }
 
-    // منطق الأصوات (يتم استدعاؤه عند تغير الحالة)
-    if (room.status !== "waiting" && room.status !== "finished") {
+    // محرك العداد
+    roomTimerInterval = setInterval(() => {
         const remaining = Math.max(0, room.phaseEndTime - Date.now());
 
-        // تشغيل صوت عند بداية البريك أو بداية الجلسة (اختياري)
-        // playPhaseSound(room.status);
+        if (remaining <= 0) {
+            clearInterval(roomTimerInterval);
+            if (isHost) transitionRoomPhase(room);
+        }
 
-        roomTimerInterval = setInterval(() => {
-            const timeLeft = Math.max(0, room.phaseEndTime - Date.now());
-
-            if (timeLeft <= 0) {
-                clearInterval(roomTimerInterval);
-                if (isHost) transitionRoomPhase(room);
-                // تشغيل صوت التنبيه عند الانتهاء
-                new Audio(
-                    "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3",
-                )
-                    .play()
-                    .catch(() => {});
-            }
-
-            const mins = Math.floor(timeLeft / 60000);
-            const secs = Math.floor((timeLeft % 60000) / 1000);
-            timerDisplay.innerText = `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
-        }, 1000);
-    }
+        const mins = Math.floor(remaining / 60000);
+        const secs = Math.floor((remaining % 60000) / 1000);
+        timerDisplay.innerText = `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+    }, 1000);
 }
 
 async function transitionRoomPhase(room) {
@@ -3258,7 +3348,7 @@ async function transitionRoomPhase(room) {
 }
 
 // ==========================================
-// 4. رادار اللوبي النظيف
+// 4. رادار اللوبي الاحترافي (بيانات كاملة + أيقونات)
 // ==========================================
 window.listenToLobby = function () {
     const roomsLobbyGrid = document.getElementById("rooms-lobby-grid");
@@ -3266,38 +3356,75 @@ window.listenToLobby = function () {
 
     const roomsRef = dbRef(rtdb, "study_rooms");
 
-    // استخدام onValue لضمان التحديث اللحظي للجميع
     onValue(roomsRef, (snapshot) => {
         roomsLobbyGrid.innerHTML = "";
-        const rooms = snapshot.val();
 
-        if (!rooms) {
+        if (!snapshot.exists()) {
             roomsLobbyGrid.innerHTML =
-                '<p style="color: var(--text-muted); text-align: center; grid-column: 1 / -1; margin-top: 50px;">لا توجد غرف نشطة حالياً. كن أول من ينشئ غرفة! 🚀</p>';
+                '<p style="color: var(--text-muted); text-align: center; grid-column: 1 / -1; margin-top: 50px; font-size: 16px;">ليس هنالك غرف الان كن اول من ينشئ غرفه 🚀</p>';
             return;
         }
 
+        const rooms = snapshot.val();
+        let validRoomsCount = 0;
+
         Object.keys(rooms).forEach((roomId) => {
             const room = rooms[roomId];
-            if (!room || !room.title) return; // حماية ضد البيانات التالفة
+            if (!room || !room.title) return;
+
+            validRoomsCount++;
+
+            // 1. حسابات الوقت (المنطق الذي أتقناه سابقاً)
+            const totalMinutes =
+                room.sessionDuration * room.totalSessions +
+                room.breakDuration * (room.totalSessions - 1);
+            const totalHours = (totalMinutes / 60).toFixed(1);
 
             const pCount = room.participants
                 ? Object.keys(room.participants).length
                 : 0;
 
-            // كود رسم البطاقة كما فعلناه سابقاً مع التأكد من ربط onclick="joinStudyRoom('${roomId}')"
+            // 2. شارة الحالة (Badge)
+            const statusBadge =
+                room.status === "waiting"
+                    ? `<span style="position: absolute; top: 10px; left: 10px; background: rgba(16, 185, 129, 0.2); color: #10b981; padding: 3px 8px; border-radius: 6px; font-size: 11px; border: 1px solid rgba(16, 185, 129, 0.3);">في الانتظار 🟢</span>`
+                    : `<span style="position: absolute; top: 10px; left: 10px; background: rgba(244, 63, 94, 0.2); color: #f43f5e; padding: 3px 8px; border-radius: 6px; font-size: 11px; border: 1px solid rgba(244, 63, 94, 0.3);">جلسة جارية 🔴</span>`;
+
             const roomCard = document.createElement("div");
             roomCard.className = "glass-card";
             roomCard.style.cssText =
-                "padding: 15px; border: 1px solid var(--gold-primary);";
+                "padding: 18px; border: 1px solid var(--gold-primary); position: relative; transition: transform 0.2s;";
+
+            // 3. تصميم محتوى الكرت بالأيقونات
             roomCard.innerHTML = `
-                <h3 style="font-size: 16px; margin-bottom: 10px;">${room.title}</h3>
-                <p style="font-size: 12px; color: var(--text-muted);">القائد: ${room.hostName}</p>
-                <p style="font-size: 12px;">المتواجدون: ${pCount} / ${room.maxUsers}</p>
-                <button onclick="joinStudyRoom('${roomId}')" class="gold-btn" style="margin-top: 10px; width: 100%;">انضمام ⚔️</button>
+                ${statusBadge}
+                <h3 style="font-size: 18px; margin-bottom: 12px; color: #fff; padding-left: 70px; line-height: 1.4;">${room.title}</h3>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px; font-size: 13px; color: var(--text-muted);">
+                    <div title="القائد"><i class="fa-solid fa-crown" style="color: var(--gold-primary); width: 18px;"></i> <strong>${room.hostName}</strong></div>
+                    <div title="المدة الكلية"><i class="fa-solid fa-hourglass-half" style="color: #a855f7; width: 18px;"></i> ${totalHours} ساعة</div>
+                    <div title="نظام الجلسات"><i class="fa-solid fa-fire" style="color: #f97316; width: 18px;"></i> ${room.totalSessions} × ${room.sessionDuration}د</div>
+                    <div title="السعة الحالية"><i class="fa-solid fa-users" style="color: #3b82f6; width: 18px;"></i> ${pCount} / ${room.maxUsers}</div>
+                </div>
+
+                <button onclick="joinStudyRoom('${roomId}')" class="gold-btn" style="width: 100%; padding: 10px; font-size: 14px; font-weight: bold;" ${pCount >= room.maxUsers ? "disabled" : ""}>
+                    ${pCount >= room.maxUsers ? '<i class="fa-solid fa-lock"></i> الغرفة ممتلئة' : '<i class="fa-solid fa-shield-halved"></i> انضمام '}
+                </button>
             `;
+
+            // تأثير Hover بسيط
+            roomCard.onmouseover = () =>
+                (roomCard.style.transform = "translateY(-5px)");
+            roomCard.onmouseout = () =>
+                (roomCard.style.transform = "translateY(0)");
+
             roomsLobbyGrid.appendChild(roomCard);
         });
+
+        if (validRoomsCount === 0) {
+            roomsLobbyGrid.innerHTML =
+                '<p style="color: var(--text-muted); text-align: center; grid-column: 1 / -1; margin-top: 50px; font-size: 16px;">ليس هنالك غرف الان كن اول من ينشئ غرفه 🚀</p>';
+        }
     });
 };
 
@@ -3329,10 +3456,12 @@ document
         btn.innerText = "جاري الإنشاء... ⏳";
 
         try {
-            // 1. خصم الرصيد من فايرستور
+            // سحب البيانات الحقيقية للهوست من Firestore
             const userDocRef = doc(db, "users", currentUser.uid);
             const userDocSnap = await getDoc(userDocRef);
-            if ((userDocSnap.data().walletCoins || 0) < 25) {
+            const userData = userDocSnap.data();
+
+            if ((userData.walletCoins || 0) < 25) {
                 btn.disabled = false;
                 btn.innerText = "إنشاء وخصم 25 🪙";
                 return CustomDialog.alert(
@@ -3340,9 +3469,11 @@ document
                     "رصيد غير كافٍ",
                 );
             }
+
+            const realName = userData.name || "مستخدم"; // هذا هو الاسم الذي سيظهر في اللوبي
+
             await updateDoc(userDocRef, { walletCoins: increment(-25) });
 
-            // 2. إنشاء الغرفة في RTDB
             const roomsRef = dbRef(rtdb, "study_rooms");
             const newRoomRef = push(roomsRef);
 
@@ -3350,7 +3481,7 @@ document
                 id: newRoomRef.key,
                 title: title,
                 hostUid: currentUser.uid,
-                hostName: currentUser.displayName || "مُحارب",
+                hostName: realName, // تم استبدال "محارب" بالاسم الحقيقي
                 sessionDuration: sessionTime,
                 breakDuration: breakTime,
                 totalSessions: sessionsCount,
@@ -3359,21 +3490,19 @@ document
                 createdAt: serverTimestamp(),
             });
 
-            // 3. إغلاق النافذة والدخول التلقائي
             document
                 .getElementById("create-room-modal")
                 .classList.remove("show");
             btn.disabled = false;
             btn.innerText = "إنشاء وخصم 25 🪙";
 
-            enterStudyRoom(newRoomRef.key); // المحرك الصارم سيتولى الباقي
+            enterStudyRoom(newRoomRef.key);
         } catch (error) {
             console.error(error);
             btn.disabled = false;
             btn.innerText = "إنشاء وخصم 25 🪙";
         }
     });
-
 // دالة الانضمام للغرفة
 window.joinStudyRoom = async function (roomId) {
     if (!currentUser || activeRoomId) return;
@@ -3396,20 +3525,37 @@ window.joinStudyRoom = async function (roomId) {
     enterStudyRoom(roomId);
 };
 
+const chatInput = document.getElementById("chat-input");
+chatInput?.addEventListener("keypress", (e) => {
+    // إذا ضغط المستخدم Enter (رقم الكود 13)
+    if (e.key === "Enter" || e.keyCode === 13) {
+        e.preventDefault(); // منع السطر الجديد
+        sendRoomMessage();
+    }
+});
 // دالة إرسال رسالة الشات
 window.sendRoomMessage = async function () {
     const input = document.getElementById("chat-input");
     const text = input.value.trim();
     if (!text || !activeRoomId) return;
 
-    const chatRef = dbRef(rtdb, `study_rooms/${activeRoomId}/messages`);
-    await push(chatRef, {
-        senderName: currentUser.displayName || "مُحارب",
-        senderUid: currentUser.uid,
-        text: text,
-        timestamp: serverTimestamp(),
-    });
-    input.value = "";
+    try {
+        // سحب اسم المرسل الحقيقي
+        const userDocRef = doc(db, "users", currentUser.uid);
+        const userSnap = await getDoc(userDocRef);
+        const realName = userSnap.exists() ? userSnap.data().name : "مستخدم";
+
+        const chatRef = dbRef(rtdb, `study_rooms/${activeRoomId}/messages`);
+        await push(chatRef, {
+            senderName: realName, // الاسم الحقيقي
+            senderUid: currentUser.uid,
+            text: text,
+            timestamp: serverTimestamp(),
+        });
+        input.value = "";
+    } catch (e) {
+        console.error(e);
+    }
 };
 
 // دالة الاستماع للشات (رادار الرسائل)
@@ -3434,32 +3580,93 @@ window.listenToRoomChat = function (roomId) {
     });
 };
 
+// ==========================================
+// دالة تحديث إعدادات الغرفة (Clean & Real-time)
+// ==========================================
 window.openEditRoomModal = async function () {
-    const roomRef = dbRef(rtdb, `study_rooms/${activeRoomId}`);
-    const snap = await rtdbGet(roomRef);
-    const room = snap.val();
+    if (!activeRoomId) return;
 
-    // نستخدم نفس نافذة الإنشاء لكن نغير النصوص والوظيفة
-    document.getElementById("room-title-input").value = room.title;
-    document.getElementById("room-session-time").value = room.sessionDuration;
-    document.getElementById("room-break-time").value = room.breakDuration;
+    try {
+        // 1. جلب البيانات الحالية لملء الحقول
+        const roomRef = dbRef(rtdb, `study_rooms/${activeRoomId}`);
+        const snap = await rtdbGet(roomRef);
+        const room = snap.val();
 
-    const confirmBtn = document.getElementById("confirm-create-room-btn");
-    confirmBtn.innerText = "تحديث الإعدادات 🛠️";
-    confirmBtn.onclick = async () => {
-        const updates = {
-            title: document.getElementById("room-title-input").value,
-            sessionDuration: parseInt(
+        if (!room) return;
+
+        // 2. تعبئة كافة المدخلات بالقيم الحالية
+        document.getElementById("room-title-input").value = room.title;
+        document.getElementById("room-session-time").value =
+            room.sessionDuration;
+        document.getElementById("room-break-time").value = room.breakDuration;
+        document.getElementById("room-sessions-count").value =
+            room.totalSessions || 4;
+        document.getElementById("room-max-users").value = room.maxUsers || 5;
+
+        // 3. تجهيز زر التأكيد
+        const confirmBtn = document.getElementById("confirm-create-room-btn");
+        confirmBtn.innerText = "تحديث الإعدادات 🛠️";
+
+        // فك أي ارتباط سابق للضغط (لتجنب تكرار العمليات)
+        confirmBtn.onclick = null;
+
+        confirmBtn.onclick = async () => {
+            const newTitle = document
+                .getElementById("room-title-input")
+                .value.trim();
+            const newSession = parseInt(
                 document.getElementById("room-session-time").value,
-            ),
-            breakDuration: parseInt(
+            );
+            const newBreak = parseInt(
                 document.getElementById("room-break-time").value,
-            ),
-        };
-        await update(roomRef, updates);
-        document.getElementById("create-room-modal").classList.remove("show");
-        CustomDialog.alert("تم تحديث إعدادات الغرفة.", "نجاح");
-    };
+            );
+            const newSessionsCount = parseInt(
+                document.getElementById("room-sessions-count").value,
+            );
+            const newMax = parseInt(
+                document.getElementById("room-max-users").value,
+            );
 
-    document.getElementById("create-room-modal").classList.add("show");
+            if (!newTitle) return CustomDialog.alert("العنوان مطلوب", "تنبيه");
+
+            confirmBtn.disabled = true;
+            confirmBtn.innerText = "جاري الحفظ... ⏳";
+
+            // 4. التحديث في Realtime Database
+            const updates = {
+                title: newTitle,
+                sessionDuration: newSession,
+                breakDuration: newBreak,
+                totalSessions: newSessionsCount,
+                maxUsers: newMax,
+            };
+
+            try {
+                await update(roomRef, updates); // سيقوم بتحديث الحقول المذكورة فقط
+
+                document
+                    .getElementById("create-room-modal")
+                    .classList.remove("show");
+                confirmBtn.disabled = false;
+                confirmBtn.innerText = "تحديث الإعدادات 🛠️";
+
+                // ملاحظة: لا نحتاج لريفريش هنا لأن دالة enterStudyRoom
+                // تمتلك مستمع onValue سيقوم بتشغيل renderRoomUI تلقائياً فور الحفظ.
+            } catch (err) {
+                console.error("Update Error:", err);
+                confirmBtn.disabled = false;
+            }
+        };
+
+        document.getElementById("create-room-modal").classList.add("show");
+    } catch (error) {
+        console.error("Fetch Room Error:", error);
+    }
 };
+document.getElementById("cancel-room-btn")?.addEventListener("click", () => {
+    const modal = document.getElementById("create-room-modal");
+    modal.classList.remove("show");
+    // إعادة ضبط نص الزر تحسباً للمرة القادمة
+    document.getElementById("confirm-create-room-btn").innerText =
+        "إنشاء وخصم 25 🪙";
+});

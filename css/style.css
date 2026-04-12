@@ -2089,3 +2089,9 @@ select:focus {
     margin-top: 4px !important;
     margin-bottom: 4px !important;
 }
+
+#room-messages {
+    max-height: 250px;
+    overflow-y: auto;
+    padding-right: 10px; /* لإفساح المجال لظهور Scrollbar */
+}
