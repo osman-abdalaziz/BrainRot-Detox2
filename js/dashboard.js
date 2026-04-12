@@ -3197,29 +3197,60 @@ function listenToLobby() {
     });
 }
 
-// دالة مبدئية للانضمام (سنكملها في الخطوة القادمة)
-window.joinStudyRoom = function (roomId) {
-    console.log("Joining room:", roomId);
-    CustomDialog.alert(
-        "تم الضغط على انضمام! (سيتم برمجة شاشة الغرفة والشات في الخطوة القادمة)",
-        "جاري العمل 🚧",
+// 2. إصلاح زر الانضمام (حل مشكلة "تحت العمل")
+window.joinStudyRoom = async function (roomId) {
+    if (!currentUser) return;
+
+    // فحص سعة الغرفة قبل الدخول
+    const roomRef = dbRef(rtdb, `study_rooms/${roomId}`);
+    const snap = await rtdbGet(roomRef);
+    const room = snap.val();
+
+    if (room.currentUsersCount >= room.maxUsers) {
+        return CustomDialog.alert("عذراً، الغرفة ممتلئة تماماً.", "دخول مرفوض");
+    }
+
+    // تحديث البيانات في Firestore و RTDB
+    const userDocSnap = await getDoc(doc(db, "users", currentUser.uid));
+    const userData = userDocSnap.data();
+
+    // إضافة المستخدم للمشاركين في RTDB
+    const participantRef = dbRef(
+        rtdb,
+        `study_rooms/${roomId}/participants/${currentUser.uid}`,
     );
+    await set(participantRef, {
+        name: userData.name,
+        avatar: userData.photoURL || "images/profile.jpg",
+        role: "member",
+        isOnline: true,
+    });
+
+    // زيادة عداد المستخدمين في الغرفة
+    await update(roomRef, { currentUsersCount: increment(1) });
+
+    enterStudyRoom(roomId);
 };
 
 let currentActiveRoomId = null;
 let roomTimerInterval = null;
 
+// 1. إصلاح دالة الدخول للغرفة (حل مشكلة التداخل)
+// دالة الدخول للغرفة
 window.enterStudyRoom = async function (roomId) {
     currentActiveRoomId = roomId;
 
-    // 1. التحكم في الواجهة: إخفاء اللوبي بالكامل وإظهار الغرفة
-    const lobbyUI = document.getElementById("rooms-lobby-grid").parentElement;
-    const createBtn = document.getElementById("open-create-room-btn");
-    const activeRoomView = document.getElementById("active-room-view");
+    const lobbyContainer = document.getElementById("lobby-container");
+    const activeRoomContainer = document.getElementById(
+        "active-room-container",
+    );
 
-    if (lobbyUI) lobbyUI.style.display = "none"; // إخفاء كرت اللوبي
-    if (createBtn) createBtn.style.display = "none"; // إخفاء زر الإنشاء
-    if (activeRoomView) activeRoomView.classList.remove("hidden"); // إظهار الغرفة
+    // 1. إخفاء اللوبي وإظهار الغرفة بالستايل المباشر (أقوى وأضمن)
+    if (lobbyContainer) lobbyContainer.style.display = "none";
+    if (activeRoomContainer) {
+        activeRoomContainer.style.display = "block";
+        activeRoomContainer.classList.remove("hidden");
+    }
 
     const roomRef = dbRef(rtdb, `study_rooms/${roomId}`);
 
@@ -3231,17 +3262,18 @@ window.enterStudyRoom = async function (roomId) {
     onDisconnect(myPresenceRef).update({ isOnline: false });
     await update(myPresenceRef, { isOnline: true });
 
-    // 3. الاستماع للغرفة
+    // 3. الاستماع لبيانات الغرفة لحظياً
     onValue(roomRef, (snapshot) => {
         if (!snapshot.exists()) {
-            CustomDialog.alert("تم إغلاق هذه الغرفة.", "انتهت الجلسة");
+            CustomDialog.alert("تم إغلاق الغرفة.", "انتهت الجلسة");
             leaveRoom();
             return;
         }
         renderRoomUI(snapshot.val());
     });
-};
 
+    listenToRoomChat(roomId);
+};
 // رسم واجهة الغرفة وتحديث الحالة
 function renderRoomUI(room) {
     document.getElementById("active-room-title").innerText = room.title;
@@ -3302,19 +3334,63 @@ function handleRoomTimerAndChat(room) {
     }
 }
 
+// 3. إصلاح دالة المغادرة (لإعادة إظهار اللوبي)
+// دالة المغادرة
 window.leaveRoom = function () {
     if (!currentActiveRoomId) return;
 
-    // 1. العودة للوبي: عكس الإخفاء والإظهار
-    const lobbyUI = document.getElementById("rooms-lobby-grid").parentElement;
-    const createBtn = document.getElementById("open-create-room-btn");
-    const activeRoomView = document.getElementById("active-room-view");
+    const lobbyContainer = document.getElementById("lobby-container");
+    const activeRoomContainer = document.getElementById(
+        "active-room-container",
+    );
 
-    if (lobbyUI) lobbyUI.style.display = "block";
-    if (createBtn) createBtn.style.display = "block";
-    if (activeRoomView) activeRoomView.classList.add("hidden");
+    // العودة للوبي: إظهار اللوبي وإخفاء الغرفة
+    if (lobbyContainer) {
+        lobbyContainer.style.display = "block";
+        lobbyContainer.classList.remove("hidden");
+    }
+    if (activeRoomContainer) activeRoomContainer.style.display = "none";
 
     currentActiveRoomId = null;
-    // تنظيف الواجهة (اختياري)
     document.getElementById("room-messages").innerHTML = "";
 };
+
+// 4. تفعيل أزرار الشات (إرسال الرسائل)
+window.sendRoomMessage = async function () {
+    const input = document.getElementById("chat-input");
+    const text = input.value.trim();
+    if (!text || !currentActiveRoomId) return;
+
+    const chatRef = dbRef(rtdb, `study_rooms/${currentActiveRoomId}/messages`);
+    const newMessageRef = push(chatRef);
+
+    await set(newMessageRef, {
+        senderName: currentUser.displayName || "محارب",
+        senderUid: currentUser.uid,
+        text: text,
+        timestamp: serverTimestamp(),
+    });
+
+    input.value = "";
+};
+
+// 5. الاستماع للشات لحظياً
+function listenToRoomChat(roomId) {
+    const messagesContainer = document.getElementById("room-messages");
+    const chatRef = dbRef(rtdb, `study_rooms/${roomId}/messages`);
+
+    onValue(chatRef, (snapshot) => {
+        messagesContainer.innerHTML = "";
+        if (snapshot.exists()) {
+            const msgs = snapshot.val();
+            Object.values(msgs).forEach((msg) => {
+                const isMe = msg.senderUid === currentUser.uid;
+                const msgDiv = document.createElement("div");
+                msgDiv.style.cssText = `padding: 8px 12px; border-radius: 8px; max-width: 80%; font-size: 13px; ${isMe ? "align-self: flex-end; background: var(--gold-primary); color: #000;" : "align-self: flex-start; background: rgba(255,255,255,0.1);"}`;
+                msgDiv.innerHTML = `<strong>${isMe ? "أنت" : msg.senderName}:</strong> ${msg.text}`;
+                messagesContainer.appendChild(msgDiv);
+            });
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+    });
+}
