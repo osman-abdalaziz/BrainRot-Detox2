@@ -38,7 +38,12 @@ import {
     update,
     onDisconnect,
     get as rtdbGet,
+    off,
 } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
+
+let activeRoomId = null; // رقم الغرفة الحالية
+let activeRoomListener = null; // رادار الغرفة (لكي نقتله عند الخروج)
+let roomTimerInterval = null; // محرك الوقت (لكي نوقفه عند الخروج)
 
 // إنعاش التطبيق الإجباري في أجهزة iOS عند العودة من الخلفية
 document.addEventListener("visibilitychange", () => {
@@ -248,7 +253,17 @@ onAuthStateChanged(auth, async (user) => {
 
         loadLeaderboard();
         loadAnalytics();
-        listenToLobby();
+        // ==========================================
+        // 6. الإقلاع الذكي (توجيه المستخدم لمكانه الصحيح)
+        // ==========================================
+        const savedRoomId = localStorage.getItem("activeStudyRoomId");
+        if (savedRoomId) {
+            // لو كان مسجلاً في غرفة، أعده إليها غصباً عن الواجهة
+            enterStudyRoom(savedRoomId);
+        } else {
+            // غير ذلك، شغل رادار اللوبي
+            if (typeof listenToLobby === "function") listenToLobby();
+        }
         // إخفاء شاشة التحميل بنعومة بعد الانتهاء من تجهيز وتحديث كل الواجهات
         setTimeout(() => {
             const loader = document.getElementById("global-loader");
@@ -1823,10 +1838,6 @@ navItems.forEach((item) => {
         } else if (target.includes("analytics") || target.includes("stats")) {
             if (typeof loadAnalytics === "function") loadAnalytics();
         }
-        // ======= أضف هذا السطر هنا =======
-        else if (target === "study-rooms-page") {
-            listenToLobby();
-        }
     });
 });
 
@@ -3013,31 +3024,294 @@ window.dismissNiyyahReminder = async function () {
 };
 
 // ==========================================
-// نظام غرف الدراسة اللحظية (Multiplayer Pomodoro)
+// 1. نظام الدخول والخروج الصارم
 // ==========================================
+window.enterStudyRoom = async function (roomId) {
+    if (activeRoomId) return; // منع الدخول لغرفتين في نفس الوقت
+    activeRoomId = roomId;
+    localStorage.setItem("activeStudyRoomId", roomId);
 
-const createRoomModal = document.getElementById("create-room-modal");
+    // التبديل الإجباري للواجهة
+    document
+        .getElementById("lobby-view")
+        .style.setProperty("display", "none", "important");
+    document
+        .getElementById("active-room-view")
+        .style.setProperty("display", "block", "important");
 
-// فتح النافذة المنبثقة
-document
-    .getElementById("open-create-room-btn")
-    ?.addEventListener("click", () => {
-        createRoomModal.classList.add("show");
+    const roomRef = dbRef(rtdb, `study_rooms/${roomId}`);
+    activeRoomListener = roomRef; // حفظ المسار لقتله لاحقاً
+
+    // تسجيل الحضور (وإزالة العضو عند انقطاع الإنترنت)
+    const myPresenceRef = dbRef(
+        rtdb,
+        `study_rooms/${roomId}/participants/${currentUser.uid}`,
+    );
+    onDisconnect(myPresenceRef).remove(); // مسح كامل عند فصل النت
+    await set(myPresenceRef, {
+        name: currentUser.displayName || "مُحارب",
+        avatar: currentUser.photoURL || "images/profile.jpg",
+        isOnline: true,
     });
 
-// إغلاق النافذة المنبثقة
-document.getElementById("cancel-room-btn")?.addEventListener("click", () => {
-    createRoomModal.classList.remove("show");
-});
+    // الرادار اللحظي للغرفة
+    onValue(roomRef, (snapshot) => {
+        if (!snapshot.exists()) {
+            // الغرفة تم مسحها (تُنفذ مرة واحدة فقط لجميع الأعضاء ما عدا الهوست)
+            leaveRoom(true);
+            return;
+        }
+        renderRoomUI(snapshot.val());
+    });
 
-// زر إنشاء الغرفة (الدفع + الإنشاء)
+    listenToRoomChat(roomId);
+};
+
+// دالة المغادرة (تم إصلاح شبح المستخدم وإلغاء الرادار)
+window.leaveRoom = async function (isKicked = false) {
+    if (!activeRoomId) return;
+
+    // 1. إيقاف العداد والرادار فوراً لمنع التكرار (50 ألف Popup)
+    if (roomTimerInterval) clearInterval(roomTimerInterval);
+    if (activeRoomListener) off(activeRoomListener);
+
+    // 2. مسح المستخدم من الغرفة في السيرفر (يحل مشكلة شبح المستخدم)
+    if (!isKicked) {
+        const myPresenceRef = dbRef(
+            rtdb,
+            `study_rooms/${activeRoomId}/participants/${currentUser.uid}`,
+        );
+        await remove(myPresenceRef).catch((e) =>
+            console.log("Ignore error on delete"),
+        );
+    }
+
+    // 3. تنظيف الواجهة والذاكرة
+    activeRoomId = null;
+    activeRoomListener = null;
+    localStorage.removeItem("activeStudyRoomId");
+    document.getElementById("room-messages").innerHTML = "";
+
+    // 4. العودة للوبي
+    document
+        .getElementById("active-room-view")
+        .style.setProperty("display", "none", "important");
+    document
+        .getElementById("lobby-view")
+        .style.setProperty("display", "block", "important");
+
+    if (isKicked) {
+        CustomDialog.alert("تم إنهاء الغرفة من قبل القائد.", "انتهت الجلسة");
+    }
+};
+
+// ==========================================
+// 2. محرك الواجهة والصلاحيات
+// ==========================================
+window.renderRoomUI = function (room) {
+    document.getElementById("active-room-title").innerText =
+        `${room.title} (جلسة ${room.currentSessionIndex || 0}/${room.totalSessions})`;
+
+    // إصلاح خطأ [object Object] (حساب الطول الصحيح للـ Object)
+    const participantsCount = room.participants
+        ? Object.keys(room.participants).length
+        : 0;
+    document.getElementById("current-online-count").innerText =
+        participantsCount;
+
+    // الحماية الصارمة: من هو القائد؟
+    const isHost = room.hostUid === currentUser.uid;
+    const hostControls = document.getElementById("room-host-controls");
+    const startBtn = document.getElementById("start-session-btn");
+
+    if (isHost) {
+        hostControls.style.display = "flex"; // إظهار أزرار التحكم للقائد فقط
+        // زر البدء يظهر فقط في حالة الانتظار
+        startBtn.style.display = room.status === "waiting" ? "block" : "none";
+    } else {
+        hostControls.style.display = "none"; // إخفاء إجباري للضيوف
+    }
+
+    // رسم قائمة المتواجدين (بدون أشباح)
+    const list = document.getElementById("room-participants-list");
+    list.innerHTML = "";
+    if (room.participants) {
+        Object.values(room.participants).forEach((p) => {
+            list.innerHTML += `
+                <div style="display: flex; align-items: center; gap: 10px; background: rgba(255,255,255,0.05); padding: 8px; border-radius: 8px;">
+                    <div style="position: relative;">
+                        <img src="${p.avatar}" style="width: 30px; height: 30px; border-radius: 50%;">
+                        <div style="position: absolute; bottom: 0; right: 0; width: 10px; height: 10px; background: #10b981; border-radius: 50%; border: 2px solid #000;"></div>
+                    </div>
+                    <span style="font-size: 13px; color: #fff">${p.name} ${room.hostName === p.name ? "👑" : ""}</span>
+                </div>
+            `;
+        });
+    }
+
+    manageTimerState(room, isHost); // تمرير صلاحية القائد للمؤقت
+};
+
+// دالة حذف الغرفة للقائد (تحل مشكلة الغرفة الـ undefined)
+window.deleteRoom = async function () {
+    if (!activeRoomId) return;
+    if (!confirm("هل أنت متأكد من إنهاء الغرفة وطرد الجميع؟")) return;
+
+    try {
+        const refToDelete = dbRef(rtdb, `study_rooms/${activeRoomId}`);
+        // عند مسح الغرفة، كل الأعضاء سيصلهم snapshot فارغ ويتم طردهم عبر leaveRoom(true)
+        await remove(refToDelete);
+        leaveRoom(false); // خروج الهوست نفسه
+    } catch (error) {
+        console.error("Delete room error:", error);
+    }
+};
+
+// ==========================================
+// 3. محرك الوقت المتزامن (Sync Timer)
+// ==========================================
+window.startRoomTimer = async function () {
+    if (!activeRoomId) return;
+    const roomRef = dbRef(rtdb, `study_rooms/${activeRoomId}`);
+    const snap = await rtdbGet(roomRef);
+    const room = snap.val();
+    if (!room || room.hostUid !== currentUser.uid) return;
+
+    const now = Date.now();
+    const phaseEndTime = now + room.sessionDuration * 60 * 1000;
+
+    // إطلاق الإشارة للجميع
+    await update(roomRef, {
+        status: "studying",
+        currentSessionIndex: 1,
+        phaseEndTime: phaseEndTime,
+    });
+};
+
+function manageTimerState(room, isHost) {
+    if (roomTimerInterval) clearInterval(roomTimerInterval);
+
+    const timerStatus = document.getElementById("timer-status");
+    const timerDisplay = document.getElementById("main-timer");
+    const chatOverlay = document.getElementById("chat-lock-overlay");
+
+    // تحديث العنوان بناءً على الحالة الفعلية القادمة من السيرفر
+    if (room.status === "waiting") {
+        timerStatus.innerText = "في انتظار القائد لبدء الجلسة...";
+        timerStatus.style.color = "var(--text-muted)";
+    } else if (room.status === "studying") {
+        timerStatus.innerText = "وقت التركيز.. ممنوع الكلام! 🤫";
+        timerStatus.style.color = "var(--gold-primary)";
+    } else if (room.status === "break") {
+        timerStatus.innerText = "وقت البريك.. خذ نفساً عميقاً ☕";
+        timerStatus.style.color = "#10b981";
+    }
+
+    // منطق الأصوات (يتم استدعاؤه عند تغير الحالة)
+    if (room.status !== "waiting" && room.status !== "finished") {
+        const remaining = Math.max(0, room.phaseEndTime - Date.now());
+
+        // تشغيل صوت عند بداية البريك أو بداية الجلسة (اختياري)
+        // playPhaseSound(room.status);
+
+        roomTimerInterval = setInterval(() => {
+            const timeLeft = Math.max(0, room.phaseEndTime - Date.now());
+
+            if (timeLeft <= 0) {
+                clearInterval(roomTimerInterval);
+                if (isHost) transitionRoomPhase(room);
+                // تشغيل صوت التنبيه عند الانتهاء
+                new Audio(
+                    "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3",
+                )
+                    .play()
+                    .catch(() => {});
+            }
+
+            const mins = Math.floor(timeLeft / 60000);
+            const secs = Math.floor((timeLeft % 60000) / 1000);
+            timerDisplay.innerText = `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+        }, 1000);
+    }
+}
+
+async function transitionRoomPhase(room) {
+    const roomRef = dbRef(rtdb, `study_rooms/${activeRoomId}`);
+    const now = Date.now();
+
+    if (room.status === "studying") {
+        if (room.currentSessionIndex >= room.totalSessions) {
+            await update(roomRef, { status: "finished" });
+        } else {
+            await update(roomRef, {
+                status: "break",
+                phaseEndTime: now + room.breakDuration * 60 * 1000,
+            });
+        }
+    } else if (room.status === "break") {
+        await update(roomRef, {
+            status: "studying",
+            currentSessionIndex: room.currentSessionIndex + 1,
+            phaseEndTime: now + room.sessionDuration * 60 * 1000,
+        });
+    }
+}
+
+// ==========================================
+// 4. رادار اللوبي النظيف
+// ==========================================
+window.listenToLobby = function () {
+    const roomsLobbyGrid = document.getElementById("rooms-lobby-grid");
+    if (!roomsLobbyGrid) return;
+
+    const roomsRef = dbRef(rtdb, "study_rooms");
+
+    // استخدام onValue لضمان التحديث اللحظي للجميع
+    onValue(roomsRef, (snapshot) => {
+        roomsLobbyGrid.innerHTML = "";
+        const rooms = snapshot.val();
+
+        if (!rooms) {
+            roomsLobbyGrid.innerHTML =
+                '<p style="color: var(--text-muted); text-align: center; grid-column: 1 / -1; margin-top: 50px;">لا توجد غرف نشطة حالياً. كن أول من ينشئ غرفة! 🚀</p>';
+            return;
+        }
+
+        Object.keys(rooms).forEach((roomId) => {
+            const room = rooms[roomId];
+            if (!room || !room.title) return; // حماية ضد البيانات التالفة
+
+            const pCount = room.participants
+                ? Object.keys(room.participants).length
+                : 0;
+
+            // كود رسم البطاقة كما فعلناه سابقاً مع التأكد من ربط onclick="joinStudyRoom('${roomId}')"
+            const roomCard = document.createElement("div");
+            roomCard.className = "glass-card";
+            roomCard.style.cssText =
+                "padding: 15px; border: 1px solid var(--gold-primary);";
+            roomCard.innerHTML = `
+                <h3 style="font-size: 16px; margin-bottom: 10px;">${room.title}</h3>
+                <p style="font-size: 12px; color: var(--text-muted);">القائد: ${room.hostName}</p>
+                <p style="font-size: 12px;">المتواجدون: ${pCount} / ${room.maxUsers}</p>
+                <button onclick="joinStudyRoom('${roomId}')" class="gold-btn" style="margin-top: 10px; width: 100%;">انضمام ⚔️</button>
+            `;
+            roomsLobbyGrid.appendChild(roomCard);
+        });
+    });
+};
+
+// ==========================================
+// 5. أزرار التفاعل (الإنشاء، الانضمام، الشات)
+// ==========================================
+
+// دالة إنشاء غرفة جديدة (تخصم الرصيد وتدفعك للغرفة)
 document
     .getElementById("confirm-create-room-btn")
     ?.addEventListener("click", async (e) => {
-        if (!currentUser) return;
+        if (!currentUser || activeRoomId) return;
         const btn = e.target;
 
-        // 1. جلب البيانات من الحقول والتحقق منها (Validation)
         const title = document.getElementById("room-title-input").value.trim();
         const sessionTime =
             parseInt(document.getElementById("room-session-time").value) || 50;
@@ -3050,335 +3324,100 @@ document
 
         if (!title)
             return CustomDialog.alert("يجب كتابة عنوان للغرفة.", "تنبيه");
-        if (breakTime > 25)
-            return CustomDialog.alert(
-                "زمن البريك لا يجب أن يتخطى 25 دقيقة.",
-                "مرفوض",
-            );
 
-        // 2. التحقق من الرصيد وخصم الـ 25 عملة (من Firestore)
         btn.disabled = true;
         btn.innerText = "جاري الإنشاء... ⏳";
 
         try {
+            // 1. خصم الرصيد من فايرستور
             const userDocRef = doc(db, "users", currentUser.uid);
             const userDocSnap = await getDoc(userDocRef);
-            const userData = userDocSnap.data();
-            const currentCoins = userData.walletCoins || 0;
-
-            if (currentCoins < 25) {
+            if ((userDocSnap.data().walletCoins || 0) < 25) {
                 btn.disabled = false;
                 btn.innerText = "إنشاء وخصم 25 🪙";
-                createRoomModal.classList.remove("show");
                 return CustomDialog.alert(
-                    "عملاتك لا تكفي لإنشاء غرفة. تحتاج إلى 25 عملة.",
+                    "عملاتك لا تكفي لإنشاء غرفة.",
                     "رصيد غير كافٍ",
                 );
             }
-
-            // خصم العملات
             await updateDoc(userDocRef, { walletCoins: increment(-25) });
 
-            // 3. إنشاء الغرفة في (Realtime Database)
+            // 2. إنشاء الغرفة في RTDB
             const roomsRef = dbRef(rtdb, "study_rooms");
-            const newRoomRef = push(roomsRef); // توليد ID فريد للغرفة
+            const newRoomRef = push(roomsRef);
 
-            const roomData = {
+            await set(newRoomRef, {
                 id: newRoomRef.key,
                 title: title,
                 hostUid: currentUser.uid,
-                hostName: userData.name,
+                hostName: currentUser.displayName || "مُحارب",
                 sessionDuration: sessionTime,
                 breakDuration: breakTime,
                 totalSessions: sessionsCount,
                 maxUsers: maxUsers,
-                currentUsersCount: 1, // الهوست هو أول شخص
-                status: "waiting", // الحالات: waiting, studying, break
+                status: "waiting",
                 createdAt: serverTimestamp(),
-            };
-
-            await set(newRoomRef, roomData);
-
-            // إضافة الهوست كعضو داخل الغرفة
-            const participantRef = dbRef(
-                rtdb,
-                `study_rooms/${newRoomRef.key}/participants/${currentUser.uid}`,
-            );
-            await set(participantRef, {
-                name: userData.name,
-                avatar: userData.photoURL || "images/profile.jpg",
-                role: "host",
-                isOnline: true,
             });
 
-            // تشغيل صوت وإخفاء النافذة
-            new Audio(
-                "https://cdn.pixabay.com/download/audio/2021/08/04/audio_0625c1539c.mp3?filename=success-1-6297.mp3",
-            )
-                .play()
-                .catch(() => {});
-            createRoomModal.classList.remove("show");
+            // 3. إغلاق النافذة والدخول التلقائي
+            document
+                .getElementById("create-room-modal")
+                .classList.remove("show");
             btn.disabled = false;
             btn.innerText = "إنشاء وخصم 25 🪙";
 
-            CustomDialog.alert(
-                "تم إنشاء الغرفة بنجاح! سيتم نقلك إليها الآن.",
-                "غرفة جاهزة ⚔️",
-            );
-            enterStudyRoom(newRoomRef.key);
-
-            // (في الخطوة القادمة سنقوم بتوجيه المستخدم لشاشة الغرفة الفعلية)
+            enterStudyRoom(newRoomRef.key); // المحرك الصارم سيتولى الباقي
         } catch (error) {
-            console.error("Room Creation Error:", error);
+            console.error(error);
             btn.disabled = false;
             btn.innerText = "إنشاء وخصم 25 🪙";
-            CustomDialog.alert(
-                "حدث خطأ أثناء الإنشاء، لم يتم خصم شيء من رصيدك.",
-                "خطأ تقني",
-            );
         }
     });
 
-// ==========================================
-// مراقب اللوبي (جلب الغرف المتاحة لحظياً)
-// ==========================================
-function listenToLobby() {
-    const roomsLobbyGrid = document.getElementById("rooms-lobby-grid");
-    if (!roomsLobbyGrid) return;
-
-    const roomsRef = dbRef(rtdb, "study_rooms");
-
-    // onValue تعمل لحظياً (Real-time)، أي غرفة تُنشأ أو تُحذف ستظهر فوراً بدون Refresh
-    onValue(roomsRef, (snapshot) => {
-        roomsLobbyGrid.innerHTML = "";
-
-        if (!snapshot.exists()) {
-            roomsLobbyGrid.innerHTML =
-                '<p style="color: var(--text-muted); text-align: center; grid-column: 1 / -1; margin-top: 50px;">لا توجد غرف نشطة حالياً. كن أول من ينشئ غرفة! 🚀</p>';
-            return;
-        }
-
-        const rooms = snapshot.val();
-
-        Object.keys(rooms).forEach((roomId) => {
-            const room = rooms[roomId];
-
-            // حساب إجمالي الساعات للغرفة (جلسات + بريكات)
-            const totalMinutes =
-                room.sessionDuration * room.totalSessions +
-                room.breakDuration * (room.totalSessions - 1);
-            const totalHours = (totalMinutes / 60).toFixed(1);
-
-            const roomCard = document.createElement("div");
-            roomCard.style.cssText =
-                "background: rgba(0,0,0,0.3); border: 1px solid var(--gold-primary); border-radius: 12px; padding: 15px; position: relative;";
-
-            // شارة الحالة (انتظار / دراسة)
-            const statusBadge =
-                room.status === "waiting"
-                    ? `<span style="position: absolute; top: 10px; left: 10px; background: rgba(16, 185, 129, 0.2); color: #10b981; padding: 3px 8px; border-radius: 6px; font-size: 11px;">في الانتظار 🟢</span>`
-                    : `<span style="position: absolute; top: 10px; left: 10px; background: rgba(244, 63, 94, 0.2); color: #f43f5e; padding: 3px 8px; border-radius: 6px; font-size: 11px;">جلسة جارية 🔴</span>`;
-
-            roomCard.innerHTML = `
-                ${statusBadge}
-                <h3 style="font-size: 16px; margin-bottom: 10px; color: #fff; padding-left: 70px;">${room.title}</h3>
-                <div style="font-size: 13px; color: var(--text-muted); margin-bottom: 15px; line-height: 1.8;">
-                    <div><i class="fa-solid fa-crown" style="color: var(--gold-primary); width: 20px;"></i> القائد: <strong>${room.hostName}</strong></div>
-                    <div><i class="fa-solid fa-clock" style="color: #a855f7; width: 20px;"></i> المدة الكلية: <strong>${totalHours} ساعة</strong></div>
-                    <div><i class="fa-solid fa-fire" style="color: #ef4444; width: 20px;"></i> الجلسات: <strong>${room.totalSessions} جلسات (${room.sessionDuration} دقيقة)</strong></div>
-                    <div><i class="fa-solid fa-users" style="color: #3b82f6; width: 20px;"></i> السعة: <strong>${room.currentUsersCount || 1} / ${room.maxUsers}</strong></div>
-                </div>
-                <button onclick="joinStudyRoom('${roomId}')" class="gold-btn" style="width: 100%; padding: 8px; font-size: 14px;" ${room.currentUsersCount >= room.maxUsers ? "disabled" : ""}>
-                    ${room.currentUsersCount >= room.maxUsers ? "الغرفة ممتلئة 🔒" : "انضمام للغرفة ⚔️"}
-                </button>
-            `;
-            roomsLobbyGrid.appendChild(roomCard);
-        });
-    });
-}
-
-// 2. إصلاح زر الانضمام (حل مشكلة "تحت العمل")
+// دالة الانضمام للغرفة
 window.joinStudyRoom = async function (roomId) {
-    if (!currentUser) return;
+    if (!currentUser || activeRoomId) return;
 
-    // فحص سعة الغرفة قبل الدخول
+    // فحص السعة قبل الدخول
     const roomRef = dbRef(rtdb, `study_rooms/${roomId}`);
     const snap = await rtdbGet(roomRef);
     const room = snap.val();
 
-    if (room.currentUsersCount >= room.maxUsers) {
-        return CustomDialog.alert("عذراً، الغرفة ممتلئة تماماً.", "دخول مرفوض");
+    if (!room) return CustomDialog.alert("هذه الغرفة لم تعد موجودة.", "خطأ");
+
+    const pCount = room.participants
+        ? Object.keys(room.participants).length
+        : 0;
+    if (pCount >= room.maxUsers) {
+        return CustomDialog.alert("عذراً، الغرفة ممتلئة.", "دخول مرفوض");
     }
 
-    // تحديث البيانات في Firestore و RTDB
-    const userDocSnap = await getDoc(doc(db, "users", currentUser.uid));
-    const userData = userDocSnap.data();
-
-    // إضافة المستخدم للمشاركين في RTDB
-    const participantRef = dbRef(
-        rtdb,
-        `study_rooms/${roomId}/participants/${currentUser.uid}`,
-    );
-    await set(participantRef, {
-        name: userData.name,
-        avatar: userData.photoURL || "images/profile.jpg",
-        role: "member",
-        isOnline: true,
-    });
-
-    // زيادة عداد المستخدمين في الغرفة
-    await update(roomRef, { currentUsersCount: increment(1) });
-
+    // الدخول التلقائي (دالة enterStudyRoom ستسجله في participants تلقائياً)
     enterStudyRoom(roomId);
 };
 
-let currentActiveRoomId = null;
-let roomTimerInterval = null;
-
-// 1. إصلاح دالة الدخول للغرفة (حل مشكلة التداخل)
-// دالة الدخول للغرفة
-window.enterStudyRoom = async function (roomId) {
-    currentActiveRoomId = roomId;
-
-    const lobbyContainer = document.getElementById("lobby-container");
-    const activeRoomContainer = document.getElementById(
-        "active-room-container",
-    );
-
-    // 1. إخفاء اللوبي وإظهار الغرفة بالستايل المباشر (أقوى وأضمن)
-    if (lobbyContainer) lobbyContainer.style.display = "none";
-    if (activeRoomContainer) {
-        activeRoomContainer.style.display = "block";
-        activeRoomContainer.classList.remove("hidden");
-    }
-
-    const roomRef = dbRef(rtdb, `study_rooms/${roomId}`);
-
-    // 2. نظام الحضور (Presence)
-    const myPresenceRef = dbRef(
-        rtdb,
-        `study_rooms/${roomId}/participants/${currentUser.uid}`,
-    );
-    onDisconnect(myPresenceRef).update({ isOnline: false });
-    await update(myPresenceRef, { isOnline: true });
-
-    // 3. الاستماع لبيانات الغرفة لحظياً
-    onValue(roomRef, (snapshot) => {
-        if (!snapshot.exists()) {
-            CustomDialog.alert("تم إغلاق الغرفة.", "انتهت الجلسة");
-            leaveRoom();
-            return;
-        }
-        renderRoomUI(snapshot.val());
-    });
-
-    listenToRoomChat(roomId);
-};
-// رسم واجهة الغرفة وتحديث الحالة
-function renderRoomUI(room) {
-    document.getElementById("active-room-title").innerText = room.title;
-    document.getElementById("current-online-count").innerText = Object.keys(
-        room.participants || {},
-    ).length;
-
-    // إظهار تحكم الهوست
-    const hostControls = document.getElementById("room-host-controls");
-    if (room.hostUid === currentUser.uid)
-        hostControls.classList.remove("hidden");
-
-    // تحديث قائمة الحضور
-    const list = document.getElementById("room-participants-list");
-    list.innerHTML = "";
-    Object.keys(room.participants || {}).forEach((uid) => {
-        const p = room.participants[uid];
-        const statusColor = p.isOnline ? "#10b981" : "#9ca3af";
-        const roleIcon =
-            p.role === "host"
-                ? '<i class="fa-solid fa-crown" style="color:var(--gold-primary); font-size:10px;"></i>'
-                : "";
-
-        list.innerHTML += `
-            <div style="display: flex; align-items: center; gap: 10px; background: rgba(255,255,255,0.05); padding: 8px; border-radius: 8px;">
-                <div style="position: relative;">
-                    <img src="${p.avatar}" style="width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--border-color);">
-                    <div style="position: absolute; bottom: 0; right: 0; width: 10px; height: 10px; background: ${statusColor}; border-radius: 50%; border: 2px solid #000;"></div>
-                </div>
-                <span style="font-size: 13px; color: ${p.isOnline ? "#fff" : "var(--text-muted)"}">${p.name} ${roleIcon}</span>
-            </div>
-        `;
-    });
-
-    // التحكم في الشات والمؤقت بناءً على الحالة
-    handleRoomTimerAndChat(room);
-}
-
-// محرك التوقيت والشات الذكي
-function handleRoomTimerAndChat(room) {
-    const chatOverlay = document.getElementById("chat-lock-overlay");
-    const timerStatus = document.getElementById("timer-status");
-    const timerCard = document.getElementById("timer-card");
-
-    if (room.status === "waiting") {
-        timerStatus.innerText = "في انتظار القائد لبدء الجلسة...";
-        chatOverlay.style.display = "none"; // الشات مفتوح في الانتظار
-    } else if (room.status === "studying") {
-        timerStatus.innerText = "وقت التركيز.. ممنوع الكلام! 🤫";
-        timerStatus.style.color = "var(--gold-primary)";
-        chatOverlay.style.display = "flex"; // قفل الشات
-        timerCard.style.borderColor = "var(--gold-primary)";
-    } else if (room.status === "break") {
-        timerStatus.innerText = "وقت البريك.. دردش مع زملائك ☕";
-        timerStatus.style.color = "#10b981";
-        chatOverlay.style.display = "none"; // فتح الشات
-        timerCard.style.borderColor = "#10b981";
-    }
-}
-
-// 3. إصلاح دالة المغادرة (لإعادة إظهار اللوبي)
-// دالة المغادرة
-window.leaveRoom = function () {
-    if (!currentActiveRoomId) return;
-
-    const lobbyContainer = document.getElementById("lobby-container");
-    const activeRoomContainer = document.getElementById(
-        "active-room-container",
-    );
-
-    // العودة للوبي: إظهار اللوبي وإخفاء الغرفة
-    if (lobbyContainer) {
-        lobbyContainer.style.display = "block";
-        lobbyContainer.classList.remove("hidden");
-    }
-    if (activeRoomContainer) activeRoomContainer.style.display = "none";
-
-    currentActiveRoomId = null;
-    document.getElementById("room-messages").innerHTML = "";
-};
-
-// 4. تفعيل أزرار الشات (إرسال الرسائل)
+// دالة إرسال رسالة الشات
 window.sendRoomMessage = async function () {
     const input = document.getElementById("chat-input");
     const text = input.value.trim();
-    if (!text || !currentActiveRoomId) return;
+    if (!text || !activeRoomId) return;
 
-    const chatRef = dbRef(rtdb, `study_rooms/${currentActiveRoomId}/messages`);
-    const newMessageRef = push(chatRef);
-
-    await set(newMessageRef, {
-        senderName: currentUser.displayName || "محارب",
+    const chatRef = dbRef(rtdb, `study_rooms/${activeRoomId}/messages`);
+    await push(chatRef, {
+        senderName: currentUser.displayName || "مُحارب",
         senderUid: currentUser.uid,
         text: text,
         timestamp: serverTimestamp(),
     });
-
     input.value = "";
 };
 
-// 5. الاستماع للشات لحظياً
-function listenToRoomChat(roomId) {
+// دالة الاستماع للشات (رادار الرسائل)
+window.listenToRoomChat = function (roomId) {
     const messagesContainer = document.getElementById("room-messages");
     const chatRef = dbRef(rtdb, `study_rooms/${roomId}/messages`);
 
+    // نربط الرادار لنستطيع قتله لاحقاً إذا لزم الأمر
     onValue(chatRef, (snapshot) => {
         messagesContainer.innerHTML = "";
         if (snapshot.exists()) {
@@ -3393,4 +3432,34 @@ function listenToRoomChat(roomId) {
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
         }
     });
-}
+};
+
+window.openEditRoomModal = async function () {
+    const roomRef = dbRef(rtdb, `study_rooms/${activeRoomId}`);
+    const snap = await rtdbGet(roomRef);
+    const room = snap.val();
+
+    // نستخدم نفس نافذة الإنشاء لكن نغير النصوص والوظيفة
+    document.getElementById("room-title-input").value = room.title;
+    document.getElementById("room-session-time").value = room.sessionDuration;
+    document.getElementById("room-break-time").value = room.breakDuration;
+
+    const confirmBtn = document.getElementById("confirm-create-room-btn");
+    confirmBtn.innerText = "تحديث الإعدادات 🛠️";
+    confirmBtn.onclick = async () => {
+        const updates = {
+            title: document.getElementById("room-title-input").value,
+            sessionDuration: parseInt(
+                document.getElementById("room-session-time").value,
+            ),
+            breakDuration: parseInt(
+                document.getElementById("room-break-time").value,
+            ),
+        };
+        await update(roomRef, updates);
+        document.getElementById("create-room-modal").classList.remove("show");
+        CustomDialog.alert("تم تحديث إعدادات الغرفة.", "نجاح");
+    };
+
+    document.getElementById("create-room-modal").classList.add("show");
+};
