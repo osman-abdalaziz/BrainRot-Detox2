@@ -2095,3 +2095,16 @@ select:focus {
     overflow-y: auto;
     padding-right: 10px; /* لإفساح المجال لظهور Scrollbar */
 }
+
+#chat-input {
+    margin: 0 !important;
+    text-align: right !important;
+}
+
+.msg-send-btn:hover {
+    transform: none !important;
+    -webkit-transform: none !important;
+    -moz-transform: none !important;
+    -ms-transform: none !important;
+    -o-transform: none !important;
+}

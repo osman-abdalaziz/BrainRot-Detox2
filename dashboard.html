@@ -191,14 +191,15 @@
                         </div>
 
                         <div
-                            style="display: flex; justify-content: space-between; width: 100%; align-items: center; background: rgba(0,0,0,0.3); padding: 10px 15px; border-radius: 12px; border: 1px solid var(--border-color); margin-top: 10px;">
-                            <button onclick="leaveRoom(false)" class="dialog-btn-cancel"
-                                style="margin: 0; padding: 6px 15px;"><i
+                            style="display: flex; gap: 10px; justify-content: space-between; width: 100%; align-items: center; background: rgba(0,0,0,0.3); padding: 10px 15px; border-radius: 12px; border: 1px solid var(--border-color); margin-top: 10px;">
+                            <button onclick="leaveRoom(false)" class="dialog-btn-cancel leave-room-btn"
+                                style="margin: 0; padding: 6px 15px; flex: 2;"><i
                                     class="fa-solid fa-arrow-right-from-bracket"></i> مغادرة</button>
 
-                            <div id="room-host-controls" style="display: none; gap: 10px;">
-                                <button id="start-session-btn" onclick="startRoomTimer()" class="gold-btn"
-                                    style="padding: 6px 15px;"><i class="fa-solid fa-play"></i> بدء الجلسة</button>
+                            <div id="room-host-controls" style="display: none; gap: 10px; width: 100%; flex: 1;">
+                                <button id="start-session-btn" onclick="startRoomTimer()" class="dialog-btn-cancel"
+                                    style="background: rgba(90, 85, 247, 0.2); color: var(--gold-light); padding: 6px 15px;"><i
+                                        class="fa-solid fa-play"></i> بدء الجلسة</button>
                                 <button onclick="openEditRoomModal()" class="dialog-btn-cancel"
                                     style="background: rgba(168, 85, 247, 0.2); color: var(--gold-light); padding: 6px 15px;"><i
                                         class="fa-solid fa-gear"></i> الإعدادات</button>
@@ -236,8 +237,8 @@
                                 style="padding: 10px; border-top: 1px solid var(--border-color); display: flex; gap: 5px;">
                                 <input type="text" id="chat-input" class="dialog-input" placeholder="رسالة..."
                                     style="flex: 1;">
-                                <button onclick="sendRoomMessage()" class="gold-btn" style="width: 50px;"><i
-                                        class="fa-solid fa-paper-plane"></i></button>
+                                <button onclick="sendRoomMessage()" class="gold-btn msg-send-btn"
+                                    style="width: 50px; margin: 0;"><i class="fa-solid fa-paper-plane"></i></button>
                             </div>
                         </div>
 

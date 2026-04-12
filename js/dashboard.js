@@ -44,7 +44,8 @@ import {
 let activeRoomId = null; // رقم الغرفة الحالية
 let activeRoomListener = null; // رادار الغرفة (لكي نقتله عند الخروج)
 let roomTimerInterval = null; // محرك الوقت (لكي نوقفه عند الخروج)
-
+let hasAnnouncedCompletion = false; // لمنع تكرار صوت النجاح والتنبيه عند المزامنة
+let lastPlayedPhaseId = null; // يمنع تكرار الأصوات عند تحديث الداتا بيز
 // إنعاش التطبيق الإجباري في أجهزة iOS عند العودة من الخلفية
 document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") {
@@ -3111,7 +3112,7 @@ window.leaveRoom = async function (isKicked = false) {
     activeRoomListener = null;
     localStorage.removeItem("activeStudyRoomId");
     document.getElementById("room-messages").innerHTML = "";
-
+    lastPlayedPhaseId = null; // تصفير ذاكرة الأصوات
     // 4. العودة للوبي
     document
         .getElementById("active-room-view")
@@ -3119,7 +3120,7 @@ window.leaveRoom = async function (isKicked = false) {
     document
         .getElementById("lobby-view")
         .style.setProperty("display", "block", "important");
-
+    if (typeof listenToLobby === "function") listenToLobby();
     if (isKicked) {
         CustomDialog.alert("تم إنهاء الغرفة من قبل القائد.", "انتهت الجلسة");
     }
@@ -3145,11 +3146,14 @@ window.renderRoomUI = function (room) {
     const startBtn = document.getElementById("start-session-btn");
 
     if (isHost) {
-        hostControls.style.display = "flex"; // إظهار أزرار التحكم للقائد فقط
-        // زر البدء يظهر فقط في حالة الانتظار
-        startBtn.style.display = room.status === "waiting" ? "block" : "none";
+        hostControls.style.display = "flex";
+        // التعديل هنا: يظهر الزر لو الغرفة تنتظر أو لو انتهت الجلسات القديمة
+        startBtn.style.display =
+            room.status === "waiting" || room.status === "finished"
+                ? "block"
+                : "none";
     } else {
-        hostControls.style.display = "none"; // إخفاء إجباري للضيوف
+        hostControls.style.display = "none";
     }
 
     document.getElementById("active-room-title").innerText = room.title;
@@ -3170,7 +3174,7 @@ window.renderRoomUI = function (room) {
             }
             list.innerHTML += `
                 <div style="display: flex; align-items: center; gap: 10px; background: rgba(255,255,255,0.05); padding: 8px; border-radius: 8px;">
-                    <div style="position: relative;">
+                    <div style="position: relative; display: flex; align-items: center; justify-content: flex-start;">
                         <img src="${p.avatar}" style="width: 30px; height: 30px; border-radius: 50%; object-fit: cover;">
                         <div style="position: absolute; top: -2px; right: -1px; width: 12px; height: 12px; background: ${statusColor}; border-radius: 50%; border: 2px solid #000;"></div>
                     </div>
@@ -3211,66 +3215,25 @@ window.startRoomTimer = async function () {
     const now = Date.now();
     const phaseEndTime = now + room.sessionDuration * 60 * 1000;
 
-    // إطلاق الإشارة للجميع
+    // المنطق الجديد: إذا كانت الغرفة منتهية بالفعل، نبدأ الجلسة التالية (Current + 1)
+    let nextSessionIndex = 1;
+    if (room.status === "finished") {
+        nextSessionIndex = (room.currentSessionIndex || 0) + 1;
+        // فحص أمان: لا تبدأ إذا لم يقم الهوست بزيادة عدد الجلسات أولاً
+        if (nextSessionIndex > room.totalSessions) {
+            return CustomDialog.alert(
+                "يجب زيادة 'عدد الجلسات الكلي' من الإعدادات أولاً لتتمكن من البدء مجدداً.",
+                "تنبيه",
+            );
+        }
+    }
+
     await update(roomRef, {
         status: "studying",
-        currentSessionIndex: 1,
+        currentSessionIndex: nextSessionIndex,
         phaseEndTime: phaseEndTime,
     });
 };
-
-// function manageTimerState(room, isHost) {
-//     if (roomTimerInterval) clearInterval(roomTimerInterval);
-
-//     const timerStatus = document.getElementById("timer-status");
-//     const timerDisplay = document.getElementById("main-timer");
-//     const chatOverlay = document.getElementById("chat-lock-overlay");
-
-//     if (room.status === "waiting") {
-//         timerStatus.innerText = "في انتظار القائد لبدء الجلسة...";
-//         timerStatus.style.color = "var(--text-muted)";
-//         chatOverlay.style.display = "none"; // تأكد من وجود هذا لفتح الشات أثناء الانتظار
-//     } else if (room.status === "studying") {
-//         timerStatus.innerText = "وقت التركيز.. ممنوع الكلام! 🤫";
-//         timerStatus.style.color = "var(--gold-primary)";
-//         chatOverlay.style.display = "flex"; // قفل الشات
-//     } else if (room.status === "break") {
-//         timerStatus.innerText = "وقت البريك.. خذ نفساً عميقاً ☕";
-//         timerStatus.style.color = "#10b981";
-//         chatOverlay.style.display = "none"; // فتح الشات وقت البريك
-//     } else if (room.status === "finished") {
-//         timerStatus.innerText = "انتهت الجلسات 🎉";
-//         chatOverlay.style.display = "none";
-//         return;
-//     }
-
-//     // منطق الأصوات (يتم استدعاؤه عند تغير الحالة)
-//     if (room.status !== "waiting" && room.status !== "finished") {
-//         const remaining = Math.max(0, room.phaseEndTime - Date.now());
-
-//         // تشغيل صوت عند بداية البريك أو بداية الجلسة (اختياري)
-//         // playPhaseSound(room.status);
-
-//         roomTimerInterval = setInterval(() => {
-//             const timeLeft = Math.max(0, room.phaseEndTime - Date.now());
-
-//             if (timeLeft <= 0) {
-//                 clearInterval(roomTimerInterval);
-//                 if (isHost) transitionRoomPhase(room);
-//                 // تشغيل صوت التنبيه عند الانتهاء
-//                 new Audio(
-//                     "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3",
-//                 )
-//                     .play()
-//                     .catch(() => {});
-//             }
-
-//             const mins = Math.floor(timeLeft / 60000);
-//             const secs = Math.floor((timeLeft % 60000) / 1000);
-//             timerDisplay.innerText = `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
-//         }, 1000);
-//     }
-// }
 
 function manageTimerState(room, isHost) {
     if (roomTimerInterval) clearInterval(roomTimerInterval);
@@ -3279,7 +3242,29 @@ function manageTimerState(room, isHost) {
     const timerDisplay = document.getElementById("main-timer");
     const chatOverlay = document.getElementById("chat-lock-overlay");
 
-    // فك قفل الدردشة في كل الحالات ما عدا وقت الدراسة (studying)
+    if (room.status === "finished") {
+        timerStatus.innerText = "انتهت جميع الجلسات.. عمل عظيم! 🏆";
+        timerStatus.style.color = "var(--success)";
+        timerDisplay.innerText = "انتهت";
+        chatOverlay.style.display = "none";
+
+        // تشغيل صوت التنبيه والتنبيه المرئي لمرة واحدة فقط
+        if (!hasAnnouncedCompletion) {
+            new Audio(
+                "https://cdn.pixabay.com/download/audio/2021/08/04/audio_0625c1539c.mp3?filename=success-1-6297.mp3",
+            )
+                .play()
+                .catch(() => {});
+
+            CustomDialog.alert(
+                "مبروك! لقد أتممتم جميع جلسات الدراسة بنجاح. فخورون بتركيزكم اليوم! 🔥",
+                "انتصار ساحق ⚔️",
+            );
+            hasAnnouncedCompletion = true;
+        }
+        return;
+    }
+    // فك قفل الدردشة
     if (
         room.status === "waiting" ||
         room.status === "break" ||
@@ -3290,24 +3275,33 @@ function manageTimerState(room, isHost) {
         chatOverlay.style.display = "flex";
     }
 
-    // تحديث النصوص والألوان بناءً على الحالة
+    // صناعة مُعرف فريد للمرحلة الحالية (مثال: break_1 , studying_2)
+    const currentPhaseId = `${room.status}_${room.currentSessionIndex || 0}`;
+
     if (room.status === "waiting") {
         timerStatus.innerText = "في انتظار القائد لبدء الجلسة...";
         timerStatus.style.color = "var(--text-muted)";
         timerDisplay.innerText = "00:00";
+        lastPlayedPhaseId = "waiting";
         return;
     } else if (room.status === "studying") {
         timerStatus.innerText = "وقت التركيز.. ممنوع الكلام! 🤫";
         timerStatus.style.color = "var(--gold-primary)";
+        hasAnnouncedCompletion = false;
+        lastPlayedPhaseId = currentPhaseId; // تسجيل المرحلة لتجنب التكرار مستقبلاً
     } else if (room.status === "break") {
         timerStatus.innerText = "وقت البريك.. خذ نفساً عميقاً ☕";
         timerStatus.style.color = "#10b981";
-        // صوت تنبيه عند بدء البريك
-        new Audio(
-            "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3",
-        )
-            .play()
-            .catch(() => {});
+
+        // تشغيل الصوت مرة واحدة فقط لكل جلسة بريك فريدة
+        if (lastPlayedPhaseId !== currentPhaseId) {
+            new Audio(
+                "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3",
+            )
+                .play()
+                .catch(() => {});
+            lastPlayedPhaseId = currentPhaseId; // حفظ المعرف لمنع التكرار
+        }
     }
 
     // محرك العداد
@@ -3331,6 +3325,7 @@ async function transitionRoomPhase(room) {
 
     if (room.status === "studying") {
         if (room.currentSessionIndex >= room.totalSessions) {
+            // التعديل: تغيير الحالة إلى done بدلاً من finished
             await update(roomRef, { status: "finished" });
         } else {
             await update(roomRef, {
@@ -3341,7 +3336,7 @@ async function transitionRoomPhase(room) {
     } else if (room.status === "break") {
         await update(roomRef, {
             status: "studying",
-            currentSessionIndex: room.currentSessionIndex + 1,
+            currentSessionIndex: (room.currentSessionIndex || 0) + 1,
             phaseEndTime: now + room.sessionDuration * 60 * 1000,
         });
     }
@@ -3385,11 +3380,14 @@ window.listenToLobby = function () {
                 : 0;
 
             // 2. شارة الحالة (Badge)
-            const statusBadge =
-                room.status === "waiting"
-                    ? `<span style="position: absolute; top: 10px; left: 10px; background: rgba(16, 185, 129, 0.2); color: #10b981; padding: 3px 8px; border-radius: 6px; font-size: 11px; border: 1px solid rgba(16, 185, 129, 0.3);">في الانتظار 🟢</span>`
-                    : `<span style="position: absolute; top: 10px; left: 10px; background: rgba(244, 63, 94, 0.2); color: #f43f5e; padding: 3px 8px; border-radius: 6px; font-size: 11px; border: 1px solid rgba(244, 63, 94, 0.3);">جلسة جارية 🔴</span>`;
-
+            let statusBadge = "";
+            if (room.status === "waiting") {
+                statusBadge = `<span style="position: absolute; top: 10px; left: 10px; background: rgba(16, 185, 129, 0.2); color: #10b981; padding: 3px 8px; border-radius: 6px; font-size: 11px; border: 1px solid rgba(16, 185, 129, 0.3);">في الانتظار <i class="fa-solid fa-circle fa-fw" style="margin-right: 3px;"></i></span>`;
+            } else if (room.status === "finished") {
+                statusBadge = `<span style="position: absolute; top: 10px; left: 10px; background: rgba(156, 163, 175, 0.2); color: #9ca3af; padding: 3px 8px; border-radius: 6px; font-size: 11px; border: 1px solid rgba(156, 163, 175, 0.3);">انتهت الجلسة <i class="fa-solid fa-circle fa-fw" style="margin-right: 3px;"></i></span>`;
+            } else {
+                statusBadge = `<span style="position: absolute; top: 10px; left: 10px; background: rgba(244, 63, 94, 0.2); color: #f43f5e; padding: 3px 8px; border-radius: 6px; font-size: 11px; border: 1px solid rgba(244, 63, 94, 0.3);">جلسة جارية <i class="fa-solid fa-circle fa-fw" style="margin-right: 3px;"></i></span>`;
+            }
             const roomCard = document.createElement("div");
             roomCard.className = "glass-card";
             roomCard.style.cssText =
