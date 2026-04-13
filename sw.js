@@ -1,7 +1,6 @@
 const CACHE_NAME = "detox-v1";
 const ASSETS = [
     "/",
-    "/index.html",
     "/css/style.css",
     "/js/dashboard.js",
     "/images/logo.webp",

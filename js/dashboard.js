@@ -350,8 +350,12 @@ function updateProfileUI(userData) {
         }
     } else {
         if (todoLink) todoLink.style.display = "none"; // إخفاؤها
-        storeTodoBtn.classList.remove("delete-todo-btn"); // تغيير اللون إلى الأحمر
         if (storeTodoBtn) {
+            storeTodoBtn.classList.remove("delete-todo-btn"); // تغيير اللون إلى الأحمر
+            // الحل القطعي: تصفير الألوان الملتصقة ليعود الزر لشكله الذهبي الطبيعي
+            storeTodoBtn.style.background = "";
+            storeTodoBtn.style.borderColor = "";
+            storeTodoBtn.style.color = "";
             storeTodoBtn.innerHTML = `شراء (150 <i class="fa-solid fa-coins fa-fw"></i>)`;
         }
     }
@@ -691,7 +695,7 @@ async function processActiveParticipant(userData, userDocRef, displayDays) {
 
 async function loadTasks(todayLogData, userData) {
     const tasksList = document.getElementById("tasks-list");
-    tasksList.innerHTML = "";
+    // tasksList.innerHTML = "";
 
     const q = query(collection(db, "tasks"), orderBy("order", "asc"));
     const querySnapshot = await getDocs(q);
@@ -719,6 +723,8 @@ async function loadTasks(todayLogData, userData) {
             groupedTasks[cat].push(displayTask);
         }
     });
+
+    tasksList.innerHTML = "";
 
     // رسم المهام مرتبة تحت أقسامها
     for (const [category, tasks] of Object.entries(groupedTasks)) {
@@ -1216,7 +1222,6 @@ async function loadLeaderboard() {
     const listContainer = document.getElementById("leaderboard-list");
     const podiumContainer = document.getElementById("podium-container");
 
-    listContainer.innerHTML = "";
     // إخفاء حاوية المنصة تماماً بناءً على طلبك
     if (podiumContainer) podiumContainer.style.display = "none";
 
@@ -1249,6 +1254,8 @@ async function loadLeaderboard() {
             const nameB = b.name ? b.name.toLowerCase() : "";
             return nameA.localeCompare(nameB);
         });
+
+        listContainer.innerHTML = "";
 
         if (usersArray.length === 0) {
             listContainer.innerHTML =
@@ -3061,7 +3068,7 @@ window.renderRoomUI = function (room) {
     if (isHost) {
         hostControls.style.display = "flex";
         startBtn.style.display =
-            room.status === "waiting" || room.status === "done"
+            room.status === "waiting" || room.status === "finished"
                 ? "block"
                 : "none";
 
@@ -4056,7 +4063,7 @@ function initFloatingTimer() {
 
     document.getElementById("return-room-btn").onclick = () => {
         const roomsTabBtn = document.querySelector(
-            '[data-target="rooms-page"]',
+            '[data-target="study-rooms-page"]',
         );
         if (roomsTabBtn) roomsTabBtn.click();
 
@@ -4202,73 +4209,242 @@ function initFloatingTimer() {
 initFloatingTimer();
 
 // ==========================================
-// 11. محرك المزامنة الشامل (بديل الريفريش الكامل 100%)
+// 11. محرك المزامنة الشامل الفولاذي (يُحدث كل شيء حرفياً)
 // ==========================================
 window.syncUserUI = async function () {
     if (!currentUser) return;
 
-    // إعطاء تأثير بصري خفيف جداً يوضح للمستخدم أن الشاشة تتحدث
     document.body.style.opacity = "0.8";
 
     try {
-        // 1. سحب أحدث بيانات للمستخدم من السيرفر فوراً
+        // 1. مزامنة بيانات الحساب (Firestore)
         const userDocSnap = await getDoc(doc(db, "users", currentUser.uid));
         if (!userDocSnap.exists()) return;
         const userData = userDocSnap.data();
 
-        // 2. تحديث البروفايل، الكوينز، الستريك، والرتبة في كل مكان بالشاشة
         updateProfileUI(userData);
 
-        // 3. تحديث سؤال اليوم (سيرسم الإجابة التي اختارها باللون الأحمر أو الأخضر ويغلق الأزرار)
         if (typeof renderDailyTrivia === "function") {
             renderDailyTrivia(userData);
         }
 
-        // 4. تحديث الصفحة التي يقف عليها المستخدم حالياً (لسرعة الأداء)
-        const activeTab =
-            localStorage.getItem("dashboardActiveTab") || "tasks-page";
-
-        if (activeTab === "tasks-page") {
-            // تحديث المهام وحالة إغلاق اليوم
-            const realNow = getRealNow();
-            const todayStr = getCairoDateString(realNow);
-            const todayLogSnap = await getDoc(
-                doc(db, `users/${currentUser.uid}/dailyLogs`, todayStr),
+        // 2. تحديث التحدي الحالي والأيام المتبقية والهدف اليومي فوراً
+        const challengeDoc = await getDoc(
+            doc(db, "settings", "currentChallenge"),
+        );
+        if (challengeDoc.exists() && challengeDoc.data().isActive) {
+            const challengeData = challengeDoc.data();
+            const endDate = challengeData.endDate.toDate();
+            // حساب الأيام بالوقت الحقيقي
+            const diffDays = Math.ceil(
+                (endDate - getRealNow()) / (1000 * 60 * 60 * 24),
             );
-            let todayLogData = null;
-            if (todayLogSnap.exists()) {
-                todayLogData = todayLogSnap.data();
-                isTodayFinalized = todayLogData.isFinalized || false;
-            } else {
-                isTodayFinalized = false;
-            }
+            const displayDays = diffDays > 0 ? diffDays : "انتهى";
 
-            const pointsDisplay = document.getElementById("today-points");
-            if (pointsDisplay)
-                pointsDisplay.innerText = todayLogData
-                    ? todayLogData.pointsEarned || 0
-                    : 0;
+            // رسم البيانات الجديدة في الواجهة
+            const titleEl = document.getElementById("challenge-title");
+            const targetEl = document.getElementById("daily-target");
+            const costEl = document.getElementById("life-saver-cost");
+            const daysEl = document.getElementById("days-left");
 
-            await loadTasks(todayLogData, userData);
-        } else if (activeTab === "leaderboard-page") {
-            // تحديث قائمة المتصدرين لو كان فاتحها
-            if (typeof loadLeaderboard === "function") loadLeaderboard();
-        } else if (
-            activeTab === "analytics-page" ||
-            activeTab === "stats-page"
+            if (titleEl) titleEl.innerText = "تحدي: " + challengeData.title;
+            if (targetEl) targetEl.innerText = challengeData.dailyTargetPoints;
+            if (costEl)
+                costEl.innerText = challengeData.dailyTargetPoints * 1.5;
+            if (daysEl) daysEl.innerText = displayDays;
+        }
+
+        // 3. التحقق مما إذا كان المستخدم داخل الغرفة النشطة الآن
+        const roomView = document.getElementById("active-room-view");
+        const isRoomVisible =
+            roomView && (roomView.offsetWidth > 0 || roomView.offsetHeight > 0);
+
+        if (
+            isRoomVisible &&
+            typeof activeRoomId !== "undefined" &&
+            activeRoomId
         ) {
-            // تحديث المخططات البيانية
-            if (typeof loadAnalytics === "function") loadAnalytics();
+            const roomRef = dbRef(rtdb, `study_rooms/${activeRoomId}`);
+            const snap = await rtdbGet(roomRef);
+            if (snap.exists()) {
+                if (typeof renderRoomUI === "function")
+                    renderRoomUI(snap.val());
+            }
+        }
+        // 4. إذا لم يكن في الغرفة، نقوم بتحديث التاب النشط
+        else {
+            const activeTab =
+                localStorage.getItem("dashboardActiveTab") || "tasks-page";
+
+            if (activeTab === "tasks-page") {
+                const realNow = getRealNow();
+                const todayStr = getCairoDateString(realNow);
+                const todayLogSnap = await getDoc(
+                    doc(db, `users/${currentUser.uid}/dailyLogs`, todayStr),
+                );
+                let todayLogData = null;
+                if (todayLogSnap.exists()) {
+                    todayLogData = todayLogSnap.data();
+                    isTodayFinalized = todayLogData.isFinalized || false;
+                } else {
+                    isTodayFinalized = false;
+                }
+
+                const pointsDisplay = document.getElementById("today-points");
+                if (pointsDisplay)
+                    pointsDisplay.innerText = todayLogData
+                        ? todayLogData.pointsEarned || 0
+                        : 0;
+
+                await loadTasks(todayLogData, userData);
+            } else if (activeTab === "leaderboard-page") {
+                if (typeof loadLeaderboard === "function") loadLeaderboard();
+            } else if (
+                activeTab === "analytics-page" ||
+                activeTab === "stats-page"
+            ) {
+                if (typeof loadAnalytics === "function") loadAnalytics();
+            }
         }
     } catch (error) {
         console.error("فشل المزامنة الشاملة:", error);
     } finally {
-        // إرجاع إضاءة الشاشة لطبيعتها بعد انتهاء التحديث (تأخذ أقل من نصف ثانية)
         document.body.style.opacity = "1";
     }
 };
+// // ==========================================
+// // 12. محرك السحب للتحديث (Pull-to-Refresh) للآيفون والـ PWA - النسخة الخالية من الأشباح
+// // ==========================================
+// (function initPullToRefresh() {
+//     if (!document.getElementById("custom-ptr-style")) {
+//         const style = document.createElement("style");
+//         style.id = "custom-ptr-style";
+//         style.innerHTML = `
+//             #custom-ptr-indicator {
+//                 position: fixed;
+//                 top: -60px;
+//                 left: 50%;
+//                 transform: translateX(-50%);
+//                 z-index: 999999;
+//                 background: rgba(15, 10, 30, 0.95);
+//                 border: 1px solid var(--gold-primary);
+//                 color: var(--gold-primary);
+//                 padding: 8px 20px;
+//                 border-radius: 25px;
+//                 font-size: 13px;
+//                 font-weight: bold;
+//                 display: flex;
+//                 align-items: center;
+//                 gap: 10px;
+//                 box-shadow: 0 5px 15px rgba(0,0,0,0.6);
+//                 transition: top 0.2s ease, background 0.2s ease, color 0.2s ease;
+//                 backdrop-filter: blur(5px);
+//                 -webkit-backdrop-filter: blur(5px);
+//                 pointer-events: none;
+//             }
+//         `;
+//         document.head.appendChild(style);
+//     }
+
+//     if (document.getElementById("custom-ptr-indicator")) {
+//         document.getElementById("custom-ptr-indicator").remove();
+//     }
+
+//     const ptrIndicator = document.createElement("div");
+//     ptrIndicator.id = "custom-ptr-indicator";
+//     ptrIndicator.innerHTML =
+//         '<i class="fa-solid fa-arrow-down"></i> <span>اسحب للتحديث</span>';
+//     document.body.appendChild(ptrIndicator);
+
+//     function isScrolled(element) {
+//         let el = element;
+//         while (el && el !== document.body && el !== document.documentElement) {
+//             if (el.scrollTop > 0) {
+//                 return true;
+//             }
+//             el = el.parentNode;
+//         }
+//         return window.scrollY > 0;
+//     }
+
+//     let startY = 0;
+//     let currentY = 0;
+//     let isPulling = false;
+//     const threshold = 75;
+
+//     document.addEventListener(
+//         "touchstart",
+//         (e) => {
+//             if (!isScrolled(e.target)) {
+//                 startY = e.touches[0].clientY;
+//                 currentY = startY; // 🐛 الحل السحري: قتل القيمة الشبحية القديمة وتصفير العداد
+//                 isPulling = true;
+//             } else {
+//                 isPulling = false;
+//             }
+//         },
+//         { passive: true },
+//     );
+
+//     document.addEventListener(
+//         "touchmove",
+//         (e) => {
+//             if (!isPulling) return;
+
+//             currentY = e.touches[0].clientY;
+//             let pullDistance = currentY - startY;
+
+//             if (pullDistance > 0) {
+//                 ptrIndicator.style.transition = "none";
+//                 ptrIndicator.style.top =
+//                     Math.min(pullDistance / 2 - 60, 25) + "px";
+
+//                 if (pullDistance > threshold) {
+//                     ptrIndicator.innerHTML =
+//                         '<i class="fa-solid fa-bolt"></i> <span>أفلت للتحديث</span>';
+//                     ptrIndicator.style.color = "#10b981";
+//                     ptrIndicator.style.borderColor = "#10b981";
+//                 } else {
+//                     ptrIndicator.innerHTML =
+//                         '<i class="fa-solid fa-arrow-down"></i> <span>اسحب للتحديث</span>';
+//                     ptrIndicator.style.color = "var(--gold-primary)";
+//                     ptrIndicator.style.borderColor = "var(--gold-primary)";
+//                 }
+
+//                 if (e.cancelable) e.preventDefault();
+//             } else {
+//                 isPulling = false;
+//             }
+//         },
+//         { passive: false },
+//     );
+
+//     document.addEventListener("touchend", async () => {
+//         if (!isPulling) return;
+//         isPulling = false;
+
+//         let pullDistance = currentY - startY;
+//         ptrIndicator.style.transition = "top 0.3s ease";
+
+//         if (pullDistance > threshold) {
+//             ptrIndicator.innerHTML =
+//                 '<i class="fa-solid fa-spinner fa-spin"></i> <span>جاري المزامنة...</span>';
+//             ptrIndicator.style.top = "25px";
+
+//             if (typeof window.syncUserUI === "function") {
+//                 await window.syncUserUI();
+//             }
+
+//             setTimeout(() => {
+//                 ptrIndicator.style.top = "-60px";
+//             }, 600);
+//         } else {
+//             ptrIndicator.style.top = "-60px";
+//         }
+//     });
+// })();
 // ==========================================
-// 12. محرك السحب للتحديث (Pull-to-Refresh) للآيفون والـ PWA - النسخة الخالية من الأشباح
+// 12. محرك السحب للتحديث (Pull-to-Refresh) - النسخة الديناميكية (Dynamic Safe Area)
 // ==========================================
 (function initPullToRefresh() {
     if (!document.getElementById("custom-ptr-style")) {
@@ -4277,24 +4453,25 @@ window.syncUserUI = async function () {
         style.innerHTML = `
             #custom-ptr-indicator {
                 position: fixed;
-                top: -60px;
+                /* إخفاء ديناميكي: يرتفع فوق منطقة الكاميرا بمسافة كافية */
+                top: calc(-80px - env(safe-area-inset-top, 0px));
                 left: 50%;
                 transform: translateX(-50%);
                 z-index: 999999;
                 background: rgba(15, 10, 30, 0.95);
                 border: 1px solid var(--gold-primary);
                 color: var(--gold-primary);
-                padding: 8px 20px;
-                border-radius: 25px;
+                padding: 8px 24px;
+                border-radius: 30px;
                 font-size: 13px;
                 font-weight: bold;
                 display: flex;
                 align-items: center;
                 gap: 10px;
-                box-shadow: 0 5px 15px rgba(0,0,0,0.6);
+                box-shadow: 0 5px 20px rgba(0,0,0,0.8);
                 transition: top 0.2s ease, background 0.2s ease, color 0.2s ease;
-                backdrop-filter: blur(5px);
-                -webkit-backdrop-filter: blur(5px);
+                backdrop-filter: blur(8px);
+                -webkit-backdrop-filter: blur(8px);
                 pointer-events: none;
             }
         `;
@@ -4314,9 +4491,7 @@ window.syncUserUI = async function () {
     function isScrolled(element) {
         let el = element;
         while (el && el !== document.body && el !== document.documentElement) {
-            if (el.scrollTop > 0) {
-                return true;
-            }
+            if (el.scrollTop > 0) return true;
             el = el.parentNode;
         }
         return window.scrollY > 0;
@@ -4325,14 +4500,14 @@ window.syncUserUI = async function () {
     let startY = 0;
     let currentY = 0;
     let isPulling = false;
-    const threshold = 75;
+    const threshold = 80;
 
     document.addEventListener(
         "touchstart",
         (e) => {
             if (!isScrolled(e.target)) {
                 startY = e.touches[0].clientY;
-                currentY = startY; // 🐛 الحل السحري: قتل القيمة الشبحية القديمة وتصفير العداد
+                currentY = startY;
                 isPulling = true;
             } else {
                 isPulling = false;
@@ -4351,8 +4526,10 @@ window.syncUserUI = async function () {
 
             if (pullDistance > 0) {
                 ptrIndicator.style.transition = "none";
-                ptrIndicator.style.top =
-                    Math.min(pullDistance / 2 - 60, 25) + "px";
+
+                // حساب النزول ديناميكياً باستخدام calc و env
+                let pullOffset = Math.min(pullDistance / 2 - 80, 25);
+                ptrIndicator.style.top = `calc(${pullOffset}px + env(safe-area-inset-top, 0px))`;
 
                 if (pullDistance > threshold) {
                     ptrIndicator.innerHTML =
@@ -4384,17 +4561,22 @@ window.syncUserUI = async function () {
         if (pullDistance > threshold) {
             ptrIndicator.innerHTML =
                 '<i class="fa-solid fa-spinner fa-spin"></i> <span>جاري المزامنة...</span>';
-            ptrIndicator.style.top = "25px";
+
+            // الوقوف بدقة تحت منطقة الكاميرا (مساحة الكاميرا + 25 بكسل)
+            ptrIndicator.style.top =
+                "calc(25px + env(safe-area-inset-top, 0px))";
 
             if (typeof window.syncUserUI === "function") {
                 await window.syncUserUI();
             }
 
             setTimeout(() => {
-                ptrIndicator.style.top = "-60px";
+                ptrIndicator.style.top =
+                    "calc(-80px - env(safe-area-inset-top, 0px))";
             }, 600);
         } else {
-            ptrIndicator.style.top = "-60px";
+            ptrIndicator.style.top =
+                "calc(-80px - env(safe-area-inset-top, 0px))";
         }
     });
 })();

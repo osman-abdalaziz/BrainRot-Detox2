@@ -1,3 +1,4 @@
+@import url("https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;800&display=swap");
 :root {
     --bg-dark: #090514; /* Deep dark purple background */
     --card-dark: rgba(20, 10, 40, 0.45); /* Glass base */
@@ -1470,6 +1471,9 @@ select:focus {
    التجاوب مع الشاشات (Responsive Design - Mobile & Tablets)
    ========================================== */
 @media (max-width: 768px) {
+    h2.gold-text {
+        font-size: 25px !important;
+    }
     /* إخفاء الستريك في الشريط العلوي فقط لتوفير المساحة */
     .nav-divider {
         display: none;
