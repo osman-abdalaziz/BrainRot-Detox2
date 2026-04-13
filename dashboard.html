@@ -97,7 +97,7 @@
                     <div class="user-menu" id="user-menu-btn">
                         <span id="nav-user-name" style="margin-left: 5px;">المستخدم</span>
                         <div id="nav-avatar-wrapper" class="avatar-wrapper" style="width: 45px; height: 45px;">
-                            <img src="images/profile.jpg" alt="Avatar" id="nav-avatar">
+                            <img src="images/profile.webp" alt="Avatar" id="nav-avatar">
                         </div>
                         <span><i class="fa-solid fa-angle-down"></i></span>
                         <div class="dropdown-menu" id="user-dropdown">
@@ -191,7 +191,7 @@
                 </div>
 
                 <div id="active-room-view" style="display: none; margin-top: 20px;">
-
+                    <hr style="border-color: var(--border-color); margin-bottom: 20px;">
                     <div
                         style="display: flex; flex-direction: column; align-items: center; gap: 10px; margin-bottom: 25px;">
                         <div style="text-align: center;">
@@ -199,7 +199,7 @@
                                 جارِ التحميل...
                             </h2>
                             <span id="active-room-session-badge"
-                                style="background: rgba(168, 85, 247, 0.2); color: #d8b4fe; padding: 4px 12px; border-radius: 20px; font-size: 13px; border: 1px solid rgba(168, 85, 247, 0.5);">جلسة
+                                style="background: rgba(168, 85, 247, 0.2); color: #d8b4fe; padding: 4px 12px; border-radius: 20px; font-size: 13px; border: 1px solid rgba(168, 85, 247, 0.5); margin-top: 10px;">جلسة
                                 0/0</span>
                         </div>
 
@@ -213,6 +213,9 @@
                                 <button id="start-session-btn" onclick="startRoomTimer()" class="dialog-btn-cancel"
                                     style="background: rgba(90, 85, 247, 0.2); color: var(--gold-light); padding: 6px 15px;"><i
                                         class="fa-solid fa-play"></i> بدء الجلسة</button>
+                                <button id="pause-session-btn" onclick="togglePauseRoom()" class="dialog-btn-cancel"
+                                    style="display: none; background: rgba(245, 158, 11, 0.2); color: #f59e0b; padding: 6px 15px;"><i
+                                        class="fa-solid fa-pause"></i> إيقاف مؤقت</button>
                                 <button onclick="openEditRoomModal()" class="dialog-btn-cancel"
                                     style="background: rgba(168, 85, 247, 0.2); color: var(--gold-light); padding: 6px 15px;"><i
                                         class="fa-solid fa-gear"></i> الإعدادات</button>
@@ -460,7 +463,7 @@
                 <div class="glass-card" style="max-width: 500px; margin: 0 auto; text-align: center;">
                     <div id="profile-avatar-wrapper" class="avatar-wrapper"
                         style="width: 140px; height: 140px; margin-bottom: 15px;">
-                        <img src="images/profile.jpg" alt="Profile" id="profile-avatar-preview">
+                        <img src="images/profile.webp" alt="Profile" id="profile-avatar-preview">
                     </div>
                     <input type="file" id="avatar-upload" accept="image/*" style="display: none;">
                     <button id="trigger-upload-btn" class="gold-btn upload-btn">تغيير الصورة</button>
@@ -691,24 +694,32 @@
             else li.classList.remove('active');
         });
 
-        // 2. معالج الضغطات (التحديث المشروط بـ isTrusted)
+        // 2. معالج الضغطات (مع تفعيل الريفريش الإجباري لصفحة المهام كما طلبت)
         navItems.forEach(item => {
             item.addEventListener('click', (e) => {
                 const targetId = item.getAttribute('data-target');
 
-                // 🛑 إذا ضغط المستخدم (بشرياً) على زر المهام
+                // 🛑 إذا ضغط المستخدم على زر المهام
                 if (targetId === 'tasks-page' && e.isTrusted) {
+                    // تعطيل حماية الخروج من الصفحة مؤقتاً للسماح للريفريش بالمرور
+                    window.onbeforeunload = null;
+
                     localStorage.setItem('dashboardActiveTab', 'tasks-page');
                     window.location.reload();
                     return;
                 }
 
-                // التنقل العادي (صامت وبدون ريفريش)
+                // التنقل العادي لباقي الصفحات (صامت وبدون ريفريش)
                 localStorage.setItem('dashboardActiveTab', targetId);
+
                 navItems.forEach(i => i.classList.remove('active'));
-                item.classList.add('active');
+                if (item.id !== 'profile-btn') {
+                    item.classList.add('active');
+                }
+
                 pages.forEach(page => page.classList.remove('active'));
-                document.getElementById(targetId).classList.add('active');
+                const targetSection = document.getElementById(targetId);
+                if (targetSection) targetSection.classList.add('active');
             });
         });
 
@@ -722,7 +733,7 @@
     </script>
     <script src="https://cdn.jsdelivr.net/npm/driver.js@1.0.1/dist/driver.js.iife.js"></script>
     <script type="module" src="js/firebase-config.js"></script>
-    <script type="module" src="js/dashboard.js?v=17"></script>
+    <script type="module" src="js/dashboard.js?v=18"></script>
 </body>
 
 </html>

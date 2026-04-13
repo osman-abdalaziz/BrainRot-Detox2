@@ -2271,3 +2271,50 @@ input[type="number"] {
     display: flex;
     gap: 15px;
 }
+
+/* ==========================================
+   قائمة كليك يمين للدردشة (Chat Context Menu)
+   ========================================== */
+.chat-context-menu {
+    position: fixed;
+    z-index: 100000;
+    padding: 8px;
+    min-width: 140px;
+    border-radius: 12px;
+    animation: fadeInMenu 0.2s ease;
+    /* border: 1px solid var(--danger); */
+    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.7);
+}
+
+.chat-context-menu button {
+    width: 100%;
+    background: rgba(244, 63, 94, 0.1) !important;
+    color: var(--danger) !important;
+    border: 1px solid transparent !important;
+    padding: 8px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: bold;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: all 0.2s;
+}
+
+.chat-context-menu button:hover {
+    background: var(--danger) !important;
+    color: #fff !important;
+    box-shadow: 0 0 10px rgba(244, 63, 94, 0.4);
+}
+
+@keyframes fadeInMenu {
+    from {
+        opacity: 0;
+        transform: scale(0.9);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}

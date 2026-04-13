@@ -2959,14 +2959,31 @@ window.renderRoomUI = function (room) {
     const isHost = room.hostUid === currentUser.uid;
     const hostControls = document.getElementById("room-host-controls");
     const startBtn = document.getElementById("start-session-btn");
+    const pauseBtn = document.getElementById("pause-session-btn"); // تعريف الزر
 
     if (isHost) {
         hostControls.style.display = "flex";
-        // التعديل هنا: يظهر الزر لو الغرفة تنتظر أو لو انتهت الجلسات القديمة
         startBtn.style.display =
-            room.status === "waiting" || room.status === "finished"
+            room.status === "waiting" || room.status === "done"
                 ? "block"
                 : "none";
+
+        // منطق ظهور زر الإيقاف المؤقت
+        if (room.status === "studying" || room.status === "break") {
+            pauseBtn.style.display = "block";
+            if (room.isPaused) {
+                pauseBtn.innerHTML = '<i class="fa-solid fa-play"></i> استئناف';
+                pauseBtn.style.background = "rgba(16, 185, 129, 0.2)";
+                pauseBtn.style.color = "#10b981";
+            } else {
+                pauseBtn.innerHTML =
+                    '<i class="fa-solid fa-pause"></i> إيقاف مؤقت';
+                pauseBtn.style.background = "rgba(245, 158, 11, 0.2)";
+                pauseBtn.style.color = "#f59e0b";
+            }
+        } else {
+            pauseBtn.style.display = "none";
+        }
     } else {
         hostControls.style.display = "none";
     }
@@ -3051,8 +3068,94 @@ window.startRoomTimer = async function () {
         status: "studying",
         currentSessionIndex: nextSessionIndex,
         phaseEndTime: phaseEndTime,
+        isPaused: false,
+        pausedRemainingTime: null,
     });
 };
+
+// function manageTimerState(room, isHost) {
+//     if (roomTimerInterval) clearInterval(roomTimerInterval);
+
+//     const timerStatus = document.getElementById("timer-status");
+//     const timerDisplay = document.getElementById("main-timer");
+//     const chatOverlay = document.getElementById("chat-lock-overlay");
+
+//     if (room.status === "finished") {
+//         timerStatus.innerText = "انتهت جميع الجلسات.. عمل عظيم! 🏆";
+//         timerStatus.style.color = "var(--success)";
+//         timerDisplay.innerText = "انتهت";
+//         chatOverlay.style.display = "none";
+
+//         // تشغيل صوت التنبيه والتنبيه المرئي لمرة واحدة فقط
+//         if (!hasAnnouncedCompletion) {
+//             new Audio(
+//                 "https://cdn.pixabay.com/download/audio/2021/08/04/audio_0625c1539c.mp3?filename=success-1-6297.mp3",
+//             )
+//                 .play()
+//                 .catch(() => {});
+
+//             CustomDialog.alert(
+//                 "مبروك! لقد أتممتم جميع جلسات الدراسة بنجاح. فخورون بتركيزكم اليوم! 🔥",
+//                 "انتصار ساحق ⚔️",
+//             );
+//             hasAnnouncedCompletion = true;
+//         }
+//         return;
+//     }
+//     // فك قفل الدردشة
+//     if (
+//         room.status === "waiting" ||
+//         room.status === "break" ||
+//         room.status === "finished"
+//     ) {
+//         chatOverlay.style.display = "none";
+//     } else {
+//         chatOverlay.style.display = "flex";
+//     }
+
+//     // صناعة مُعرف فريد للمرحلة الحالية (مثال: break_1 , studying_2)
+//     const currentPhaseId = `${room.status}_${room.currentSessionIndex || 0}`;
+
+//     if (room.status === "waiting") {
+//         timerStatus.innerText = "في انتظار القائد لبدء الجلسة...";
+//         timerStatus.style.color = "var(--text-muted)";
+//         timerDisplay.innerText = "00:00";
+//         lastPlayedPhaseId = "waiting";
+//         return;
+//     } else if (room.status === "studying") {
+//         timerStatus.innerText = "وقت التركيز.. ممنوع الكلام! 🤫";
+//         timerStatus.style.color = "var(--gold-primary)";
+//         hasAnnouncedCompletion = false;
+//         lastPlayedPhaseId = currentPhaseId; // تسجيل المرحلة لتجنب التكرار مستقبلاً
+//     } else if (room.status === "break") {
+//         timerStatus.innerText = "وقت البريك.. خذ نفساً عميقاً ☕";
+//         timerStatus.style.color = "#10b981";
+
+//         // تشغيل الصوت مرة واحدة فقط لكل جلسة بريك فريدة
+//         if (lastPlayedPhaseId !== currentPhaseId) {
+//             new Audio(
+//                 "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3",
+//             )
+//                 .play()
+//                 .catch(() => {});
+//             lastPlayedPhaseId = currentPhaseId; // حفظ المعرف لمنع التكرار
+//         }
+//     }
+
+//     // محرك العداد
+//     roomTimerInterval = setInterval(() => {
+//         const remaining = Math.max(0, room.phaseEndTime - Date.now());
+
+//         if (remaining <= 0) {
+//             clearInterval(roomTimerInterval);
+//             if (isHost) transitionRoomPhase(room);
+//         }
+
+//         const mins = Math.floor(remaining / 60000);
+//         const secs = Math.floor((remaining % 60000) / 1000);
+//         timerDisplay.innerText = `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+//     }, 1000);
+// }
 
 function manageTimerState(room, isHost) {
     if (roomTimerInterval) clearInterval(roomTimerInterval);
@@ -3060,43 +3163,20 @@ function manageTimerState(room, isHost) {
     const timerStatus = document.getElementById("timer-status");
     const timerDisplay = document.getElementById("main-timer");
     const chatOverlay = document.getElementById("chat-lock-overlay");
+    const chatOverlayText = chatOverlay.querySelector("h4");
 
-    if (room.status === "finished") {
-        timerStatus.innerText = "انتهت جميع الجلسات.. عمل عظيم! 🏆";
-        timerStatus.style.color = "var(--success)";
-        timerDisplay.innerText = "انتهت";
+    // 1. نظام الشات الصارم: مقفول دائماً في الدراسة، ويقفل أيضاً لو تم إيقاف البريك مؤقتاً
+    if (room.status === "waiting" || room.status === "done") {
         chatOverlay.style.display = "none";
-
-        // تشغيل صوت التنبيه والتنبيه المرئي لمرة واحدة فقط
-        if (!hasAnnouncedCompletion) {
-            new Audio(
-                "https://cdn.pixabay.com/download/audio/2021/08/04/audio_0625c1539c.mp3?filename=success-1-6297.mp3",
-            )
-                .play()
-                .catch(() => {});
-
-            CustomDialog.alert(
-                "مبروك! لقد أتممتم جميع جلسات الدراسة بنجاح. فخورون بتركيزكم اليوم! 🔥",
-                "انتصار ساحق ⚔️",
-            );
-            hasAnnouncedCompletion = true;
-        }
-        return;
-    }
-    // فك قفل الدردشة
-    if (
-        room.status === "waiting" ||
-        room.status === "break" ||
-        room.status === "finished"
-    ) {
-        chatOverlay.style.display = "none";
+    } else if (room.status === "break") {
+        chatOverlay.style.display = room.isPaused ? "flex" : "none";
     } else {
         chatOverlay.style.display = "flex";
     }
 
-    // صناعة مُعرف فريد للمرحلة الحالية (مثال: break_1 , studying_2)
     const currentPhaseId = `${room.status}_${room.currentSessionIndex || 0}`;
 
+    // 2. تحديث النصوص بناءً على حالة الإيقاف
     if (room.status === "waiting") {
         timerStatus.innerText = "في انتظار القائد لبدء الجلسة...";
         timerStatus.style.color = "var(--text-muted)";
@@ -3104,32 +3184,74 @@ function manageTimerState(room, isHost) {
         lastPlayedPhaseId = "waiting";
         return;
     } else if (room.status === "studying") {
-        timerStatus.innerText = "وقت التركيز.. ممنوع الكلام! 🤫";
-        timerStatus.style.color = "var(--gold-primary)";
-        hasAnnouncedCompletion = false;
-        lastPlayedPhaseId = currentPhaseId; // تسجيل المرحلة لتجنب التكرار مستقبلاً
+        if (room.isPaused) {
+            timerStatus.innerText = "⏸️ الجلسة متوقفة مؤقتاً...";
+            timerStatus.style.color = "var(--text-muted)";
+            if (chatOverlayText)
+                chatOverlayText.innerText = "الشات مغلق (الجلسة متوقفة) ⏸️";
+        } else {
+            timerStatus.innerText = "وقت التركيز.. ممنوع الكلام! 🤫";
+            timerStatus.style.color = "var(--gold-primary)";
+            if (chatOverlayText)
+                chatOverlayText.innerText = "وقت التركيز جاري 🤫";
+            hasAnnouncedCompletion = false;
+            lastPlayedPhaseId = currentPhaseId;
+        }
     } else if (room.status === "break") {
-        timerStatus.innerText = "وقت البريك.. خذ نفساً عميقاً ☕";
-        timerStatus.style.color = "#10b981";
+        if (room.isPaused) {
+            timerStatus.innerText = "⏸️ الاستراحة متوقفة مؤقتاً...";
+            timerStatus.style.color = "var(--text-muted)";
+            if (chatOverlayText)
+                chatOverlayText.innerText = "الشات مغلق (الجلسة متوقفة) ⏸️";
+        } else {
+            timerStatus.innerText = "وقت البريك.. خذ نفساً عميقاً ☕";
+            timerStatus.style.color = "var(--success)";
+            if (lastPlayedPhaseId !== currentPhaseId) {
+                new Audio(
+                    "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3",
+                )
+                    .play()
+                    .catch(() => {});
+                lastPlayedPhaseId = currentPhaseId;
+            }
+        }
+    } else if (room.status === "done") {
+        timerStatus.innerText = "انتهت جميع الجلسات.. عمل عظيم! 🏆";
+        timerStatus.style.color = "var(--success)";
+        timerDisplay.innerText = "انتهت";
+        chatOverlay.style.display = "none";
 
-        // تشغيل الصوت مرة واحدة فقط لكل جلسة بريك فريدة
-        if (lastPlayedPhaseId !== currentPhaseId) {
+        if (!hasAnnouncedCompletion) {
             new Audio(
-                "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3",
+                "https://cdn.pixabay.com/download/audio/2021/08/04/audio_0625c1539c.mp3?filename=success-1-6297.mp3",
             )
                 .play()
                 .catch(() => {});
-            lastPlayedPhaseId = currentPhaseId; // حفظ المعرف لمنع التكرار
+            CustomDialog.alert(
+                "مبروك! لقد أتممتم جميع جلسات الدراسة بنجاح. 🔥",
+                "انتصار ساحق ⚔️",
+            );
+            hasAnnouncedCompletion = true;
         }
+        return;
     }
 
-    // محرك العداد
+    // 3. المحرك الزمني (إما يعرض الوقت المجمد، أو يشغل العداد)
+    if (room.isPaused) {
+        // رسم الوقت المتجمد والخروج بدون تشغيل (setInterval)
+        const remaining = room.pausedRemainingTime || 0;
+        const mins = Math.floor(remaining / 60000);
+        const secs = Math.floor((remaining % 60000) / 1000);
+        timerDisplay.innerText = `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+        return;
+    }
+
     roomTimerInterval = setInterval(() => {
         const remaining = Math.max(0, room.phaseEndTime - Date.now());
 
         if (remaining <= 0) {
             clearInterval(roomTimerInterval);
-            if (isHost) transitionRoomPhase(room);
+            if (isHost) transitionRoomPhase(room); // ملاحظة: لا يمكن أن يعمل هذا أثناء التوقف لأن العداد أصلاً لا يعمل
         }
 
         const mins = Math.floor(remaining / 60000);
@@ -3144,7 +3266,6 @@ async function transitionRoomPhase(room) {
 
     if (room.status === "studying") {
         if (room.currentSessionIndex >= room.totalSessions) {
-            // التعديل: تغيير الحالة إلى done بدلاً من finished
             await update(roomRef, { status: "finished" });
         } else {
             await update(roomRef, {
@@ -3379,20 +3500,104 @@ window.sendRoomMessage = async function () {
 };
 
 // دالة الاستماع للشات (رادار الرسائل)
+// window.listenToRoomChat = function (roomId) {
+//     const messagesContainer = document.getElementById("room-messages");
+//     const chatRef = dbRef(rtdb, `study_rooms/${roomId}/messages`);
+
+//     // نربط الرادار لنستطيع قتله لاحقاً إذا لزم الأمر
+//     onValue(chatRef, (snapshot) => {
+//         messagesContainer.innerHTML = "";
+//         if (snapshot.exists()) {
+//             const msgs = snapshot.val();
+//             Object.values(msgs).forEach((msg) => {
+//                 const isMe = msg.senderUid === currentUser.uid;
+//                 const msgDiv = document.createElement("div");
+//                 msgDiv.style.cssText = `padding: 8px 12px; border-radius: 8px; max-width: 80%; font-size: 13px; ${isMe ? "align-self: flex-end; background: var(--gold-primary); color: #000;" : "align-self: flex-start; background: rgba(255,255,255,0.1);"}`;
+//                 msgDiv.innerHTML = `<strong>${isMe ? "أنت" : msg.senderName}:</strong> ${msg.text}`;
+//                 messagesContainer.appendChild(msgDiv);
+//             });
+//             messagesContainer.scrollTop = messagesContainer.scrollHeight;
+//         }
+//     });
+// };
+
+// ==========================================
+// مصفاة الشات (تحويل الروابط + حماية XSS)
+// ==========================================
+window.formatChatMessage = function (text, isMe = false) {
+    if (!text) return "";
+
+    // 1. تنظيف النص من أي أكواد خبيثة (حماية إجبارية)
+    let safeText = text
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+
+    // 2. البحث عن الروابط وتحويلها لأزرار قابلة للضغط
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    return safeText.replace(urlRegex, function (url) {
+        // استخدمنا لون أزرق فاتح ليكون واضحاً على الخلفيات الداكنة والبنفسجية
+        return `<a href="${url}" target="_blank" style="color: ${isMe ? "#000" : "var(--gold-primary)"}; text-decoration: underline; word-break: break-all; font-weight: bold;">${url}</a>`;
+    });
+};
+
+// دالة الاستماع للشات (رادار الرسائل)
 window.listenToRoomChat = function (roomId) {
     const messagesContainer = document.getElementById("room-messages");
     const chatRef = dbRef(rtdb, `study_rooms/${roomId}/messages`);
 
-    // نربط الرادار لنستطيع قتله لاحقاً إذا لزم الأمر
     onValue(chatRef, (snapshot) => {
         messagesContainer.innerHTML = "";
         if (snapshot.exists()) {
             const msgs = snapshot.val();
-            Object.values(msgs).forEach((msg) => {
+
+            // استخدام entries بدلاً من values للحصول على الـ ID الخاص بكل رسالة
+            Object.entries(msgs).forEach(([msgId, msg]) => {
                 const isMe = msg.senderUid === currentUser.uid;
                 const msgDiv = document.createElement("div");
-                msgDiv.style.cssText = `padding: 8px 12px; border-radius: 8px; max-width: 80%; font-size: 13px; ${isMe ? "align-self: flex-end; background: var(--gold-primary); color: #000;" : "align-self: flex-start; background: rgba(255,255,255,0.1);"}`;
-                msgDiv.innerHTML = `<strong>${isMe ? "أنت" : msg.senderName}:</strong> ${msg.text}`;
+
+                // تنسيق الوقت
+                let timeString = "";
+                if (msg.timestamp) {
+                    const date = new Date(msg.timestamp);
+                    timeString = date.toLocaleTimeString("ar-EG", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        hour12: true,
+                    });
+                }
+
+                msgDiv.style.cssText = `
+                    padding: 8px 12px 4px 12px; 
+                    border-radius: 12px; 
+                    max-width: 80%; 
+                    font-size: 13px; 
+                    margin-bottom: 8px;
+                    display: flex;
+                    flex-direction: column;
+                    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+                    ${isMe ? "align-self: flex-end; background: var(--gold-primary); color: #000; border-bottom-left-radius: 2px;" : "align-self: flex-start; background: rgba(255,255,255,0.1); border-bottom-right-radius: 2px;"}
+                `;
+
+                msgDiv.innerHTML = `
+                    <div style="margin-bottom: 4px; line-height: 1.4;">
+                        ${isMe ? "" : '<strong style="color: var(--gold-primary); margin-bottom: 5px;">' + msg.senderName + "</strong><br> "} ${formatChatMessage(msg.text, isMe)}
+                    </div>
+                    <div style="user-select: none; font-size: 10px; text-align: ${isMe ? "left" : "right"}; opacity: 0.7; margin-top: -3px;">
+                        ${timeString}
+                    </div>
+                `;
+
+                // إضافة حدث الكليك يمين (أو الضغط المطول) لحذف رسائلك فقط
+                if (isMe) {
+                    msgDiv.addEventListener("contextmenu", (e) => {
+                        e.preventDefault(); // منع ظهور قائمة المتصفح العادية
+                        showDeleteContextMenu(e.pageX, e.pageY, msgId);
+                    });
+                }
+
                 messagesContainer.appendChild(msgDiv);
             });
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
@@ -3590,6 +3795,100 @@ window.stopAdjust = function () {
 };
 
 // ==========================================
+// 9. محرك الإيقاف المؤقت (للصلاة والطوارئ)
+// ==========================================
+window.togglePauseRoom = async function () {
+    if (!activeRoomId) return;
+    const roomRef = dbRef(rtdb, `study_rooms/${activeRoomId}`);
+    const snap = await rtdbGet(roomRef);
+    const room = snap.val();
+
+    if (!room || room.hostUid !== currentUser.uid) return;
+
+    // الإيقاف مسموح فقط أثناء تشغيل المؤقت (الدراسة أو البريك)
+    if (room.status !== "studying" && room.status !== "break") return;
+
+    if (room.isPaused) {
+        // استئناف الجلسة: صناعة وقت انتهاء جديد بناءً على الوقت المتبقي المجمد
+        const newEndTime = Date.now() + (room.pausedRemainingTime || 0);
+        await update(roomRef, {
+            isPaused: false,
+            phaseEndTime: newEndTime,
+        });
+    } else {
+        // إيقاف مؤقت: حساب الوقت المتبقي وتجميده
+        const remaining = Math.max(0, room.phaseEndTime - Date.now());
+        await update(roomRef, {
+            isPaused: true,
+            pausedRemainingTime: remaining,
+        });
+    }
+};
+
+// ==========================================
+// محرك القائمة المنبثقة وحذف الرسائل
+// ==========================================
+let currentChatContextMenu = null;
+
+window.showDeleteContextMenu = function (x, y, msgId) {
+    // إزالة أي قائمة مفتوحة مسبقاً
+    if (currentChatContextMenu) currentChatContextMenu.remove();
+
+    const menu = document.createElement("div");
+    menu.className = "chat-context-menu glass-card";
+
+    // ضبط المكان بناءً على الضغطة (مع حماية عدم خروجها عن الشاشة)
+    const menuWidth = 140;
+    const adjustX = x + menuWidth > window.innerWidth ? x - menuWidth : x;
+
+    menu.style.top = `${y}px`;
+    menu.style.left = `${adjustX}px`;
+
+    const deleteBtn = document.createElement("button");
+    deleteBtn.innerHTML = 'حذف الرسالة <i class="fa-solid fa-trash"></i>';
+
+    deleteBtn.onclick = async () => {
+        menu.remove();
+        await deleteChatMessage(msgId);
+    };
+
+    menu.appendChild(deleteBtn);
+    document.body.appendChild(menu);
+    currentChatContextMenu = menu;
+
+    // إغلاق القائمة عند الضغط في أي مكان آخر
+    setTimeout(() => {
+        const closeMenu = (e) => {
+            if (
+                currentChatContextMenu &&
+                !currentChatContextMenu.contains(e.target)
+            ) {
+                currentChatContextMenu.remove();
+                currentChatContextMenu = null;
+            }
+            document.removeEventListener("click", closeMenu);
+            document.removeEventListener("scroll", closeMenu, true);
+        };
+        document.addEventListener("click", closeMenu);
+        document.addEventListener("scroll", closeMenu, true); // يغلقها لو عمل سكرول للشات
+    }, 0);
+};
+
+window.deleteChatMessage = async function (msgId) {
+    if (!activeRoomId) return;
+    try {
+        const msgRef = dbRef(
+            rtdb,
+            `study_rooms/${activeRoomId}/messages/${msgId}`,
+        );
+        await remove(msgRef); // سيتم الحذف اللحظي وسيقوم رادار onValue بتحديث الشاشة عند الجميع
+    } catch (error) {
+        console.error("Delete Msg Error:", error);
+        CustomDialog.alert("حدث خطأ أثناء الحذف.", "خطأ");
+    }
+};
+
+// ==========================================
 // تشغيل محرك الكاش (Service Worker)
 // ==========================================
 if ("serviceWorker" in navigator) {
@@ -3607,3 +3906,200 @@ if ("serviceWorker" in navigator) {
             });
     });
 }
+
+// ==========================================
+// 10. نظام المؤقت العائم الذكي (Picture in Picture) - النسخة الفولاذية
+// ==========================================
+function initFloatingTimer() {
+    // منع تكرار إنشاء البطاقة
+    if (document.getElementById("floating-timer-card")) return;
+
+    // 1. بناء الواجهة زجاجية التصميم برمجياً
+    const floatingCard = document.createElement("div");
+    floatingCard.id = "floating-timer-card";
+    floatingCard.className = "glass-card";
+    // استخدام !important لضمان عدم طمسها من أي CSS آخر
+    floatingCard.style.cssText = `
+        display: none !important; 
+        position: fixed !important; 
+        bottom: 90px !important; 
+        left: 20px !important; 
+        z-index: 9999999 !important; 
+        width: 170px !important; 
+        padding: 12px !important; 
+        cursor: grab; 
+        flex-direction: column; 
+        gap: 10px; 
+        box-shadow: 0 10px 40px rgba(0,0,0,0.8) !important; 
+        border: 2px solid var(--gold-primary) !important;
+        border-radius: 12px !important;
+        background: rgba(10, 5, 20, 0.95) !important;
+        backdrop-filter: blur(10px);
+        touch-action: none;
+        user-select: none;
+    `;
+
+    floatingCard.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span id="floating-status-icon" style="font-size: 11px; color: var(--gold-primary); font-weight: bold;"><i class="fa-solid fa-stopwatch"></i> جاري التركيز</span>
+            <button id="close-floating-btn" style="background: rgba(244, 63, 94, 0.1); border: 1px solid var(--danger); color: var(--danger); cursor: pointer; padding: 2px 6px; border-radius: 6px; transition: 0.2s;"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div id="floating-time-display" style="font-size: 28px; font-weight: 900; text-align: center; color: #fff; letter-spacing: 2px; text-shadow: 0 0 10px rgba(255,255,255,0.3);">00:00</div>
+        <button id="return-room-btn" class="gold-btn" style="padding: 6px; font-size: 12px; margin-top: 0;"><i class="fa-solid fa-arrow-right-to-bracket"></i> العودة للغرفة</button>
+    `;
+    document.body.appendChild(floatingCard);
+
+    let isFloatingClosedByUser = false;
+
+    // 2. أوامر الأزرار
+    document.getElementById("close-floating-btn").onclick = () => {
+        isFloatingClosedByUser = true;
+        floatingCard.style.setProperty("display", "none", "important");
+    };
+
+    document.getElementById("return-room-btn").onclick = () => {
+        const roomsTabBtn = document.querySelector(
+            '[data-target="rooms-page"]',
+        );
+        if (roomsTabBtn) roomsTabBtn.click();
+
+        document
+            .getElementById("lobby-view")
+            .style.setProperty("display", "none", "important");
+        document
+            .getElementById("active-room-view")
+            .style.setProperty("display", "block", "important");
+
+        isFloatingClosedByUser = false;
+        floatingCard.style.setProperty("display", "none", "important");
+    };
+
+    // 3. المحرك الصامت (يراقب التغيرات كل نصف ثانية)
+    setInterval(() => {
+        const roomView = document.getElementById("active-room-view");
+        const mainTimer = document.getElementById("main-timer");
+        const timerStatus = document.getElementById("timer-status");
+
+        if (!roomView || !mainTimer) return;
+
+        // الحل القطعي لمعرفة هل الغرفة مخفية: إذا كان عرضها 0 فهي مخفية
+        const isRoomVisible =
+            roomView.offsetWidth > 0 || roomView.offsetHeight > 0;
+        const timeText = mainTimer.innerText.trim();
+
+        // التحقق من أن العداد يعمل (ليس صفراً وليس منتهياً ويوجد غرفة نشطة)
+        const isTimerActive =
+            typeof activeRoomId !== "undefined" &&
+            activeRoomId !== null &&
+            timeText !== "00:00" &&
+            timeText !== "انتهت";
+
+        if (isRoomVisible) {
+            // إذا كنت داخل الغرفة -> أخفِ الـ Popup
+            isFloatingClosedByUser = false;
+            floatingCard.style.setProperty("display", "none", "important");
+        } else if (isTimerActive && !isFloatingClosedByUser) {
+            // إذا خرجت لصفحة أخرى والعداد يعمل -> أظهر الـ Popup
+            floatingCard.style.setProperty("display", "flex", "important");
+            document.getElementById("floating-time-display").innerText =
+                timeText;
+
+            // تغيير الألوان حسب الحالة (بريك / دراسة)
+            const statusIcon = document.getElementById("floating-status-icon");
+            if (timerStatus && timerStatus.innerText.includes("البريك")) {
+                statusIcon.innerHTML =
+                    '<i class="fa-solid fa-mug-hot"></i> وقت البريك';
+                statusIcon.style.color = "#10b981";
+                floatingCard.style.setProperty(
+                    "border-color",
+                    "#10b981",
+                    "important",
+                );
+            } else {
+                statusIcon.innerHTML =
+                    '<i class="fa-solid fa-stopwatch"></i> وقت التركيز';
+                statusIcon.style.color = "var(--gold-primary)";
+                floatingCard.style.setProperty(
+                    "border-color",
+                    "var(--gold-primary)",
+                    "important",
+                );
+            }
+        } else {
+            floatingCard.style.setProperty("display", "none", "important");
+        }
+    }, 500);
+
+    // 4. محرك السحب والإفلات (يدعم الماوس واللمس)
+    let pos1 = 0,
+        pos2 = 0,
+        pos3 = 0,
+        pos4 = 0;
+
+    floatingCard.onmousedown = dragMouseDown;
+    floatingCard.ontouchstart = dragTouchStart;
+
+    function dragMouseDown(e) {
+        if (e.target.closest("button")) return;
+        e.preventDefault();
+        pos3 = e.clientX;
+        pos4 = e.clientY;
+        document.onmouseup = closeDragElement;
+        document.onmousemove = elementDrag;
+        floatingCard.style.cursor = "grabbing";
+    }
+
+    function elementDrag(e) {
+        e.preventDefault();
+        pos1 = pos3 - e.clientX;
+        pos2 = pos4 - e.clientY;
+        pos3 = e.clientX;
+        pos4 = e.clientY;
+        applyNewPosition();
+    }
+
+    function dragTouchStart(e) {
+        if (e.target.closest("button")) return;
+        pos3 = e.touches[0].clientX;
+        pos4 = e.touches[0].clientY;
+        document.ontouchend = closeDragElement;
+        document.ontouchmove = elementTouchDrag;
+    }
+
+    function elementTouchDrag(e) {
+        pos1 = pos3 - e.touches[0].clientX;
+        pos2 = pos4 - e.touches[0].clientY;
+        pos3 = e.touches[0].clientX;
+        pos4 = e.touches[0].clientY;
+        applyNewPosition();
+    }
+
+    function applyNewPosition() {
+        let newTop = floatingCard.offsetTop - pos2;
+        let newLeft = floatingCard.offsetLeft - pos1;
+
+        // حدود الشاشة (لمنع ضياع الـ Popup)
+        const maxTop = window.innerHeight - floatingCard.offsetHeight;
+        const maxLeft = window.innerWidth - floatingCard.offsetWidth;
+
+        if (newTop < 0) newTop = 0;
+        if (newTop > maxTop) newTop = maxTop;
+        if (newLeft < 0) newLeft = 0;
+        if (newLeft > maxLeft) newLeft = maxLeft;
+
+        floatingCard.style.top = newTop + "px";
+        floatingCard.style.left = newLeft + "px";
+        floatingCard.style.bottom = "auto";
+        floatingCard.style.right = "auto";
+    }
+
+    function closeDragElement() {
+        document.onmouseup = null;
+        document.onmousemove = null;
+        document.ontouchend = null;
+        document.ontouchmove = null;
+        floatingCard.style.cursor = "grab";
+    }
+}
+// استدعاء الدالة لتشغيل النظام فوراً
+initFloatingTimer();
