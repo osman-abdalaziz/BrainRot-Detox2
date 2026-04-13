@@ -1,6 +1,9 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
 import { getAuth } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
-import { getFirestore } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+import {
+    getFirestore,
+    enableIndexedDbPersistence,
+} from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 import { getStorage } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-storage.js";
 import { getMessaging } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-messaging.js"; // السطر الجديد
 import { getDatabase } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
@@ -20,6 +23,12 @@ export const app = initializeApp(firebaseConfig);
 // تصدير الخدمات
 export const auth = getAuth(app);
 export const db = getFirestore(app);
+
+// ⚡ السطر السحري: تفعيل التخزين المؤقت المحلي (الكاش)
+enableIndexedDbPersistence(db).catch((err) => {
+    console.error("فشل تفعيل الكاش المحلي:", err);
+});
+
 export const storage = getStorage(app); // تم إضافة خدمة التخزين
 export const messaging = getMessaging(app); // تم إضافة خدمة المراسلة
 export const rtdb = getDatabase(app);

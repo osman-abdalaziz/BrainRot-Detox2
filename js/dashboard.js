@@ -254,6 +254,8 @@ onAuthStateChanged(auth, async (user) => {
 
         loadLeaderboard();
         loadAnalytics();
+        const loader = document.getElementById("global-loader");
+        if (loader) loader.classList.add("hidden");
         // ==========================================
         // 6. الإقلاع الذكي (توجيه المستخدم لمكانه الصحيح)
         // ==========================================
@@ -266,10 +268,6 @@ onAuthStateChanged(auth, async (user) => {
             if (typeof listenToLobby === "function") listenToLobby();
         }
         // إخفاء شاشة التحميل بنعومة بعد الانتهاء من تجهيز وتحديث كل الواجهات
-        setTimeout(() => {
-            const loader = document.getElementById("global-loader");
-            if (loader) loader.classList.add("hidden");
-        }, 600);
     } else window.location.href = "index.html";
 });
 
@@ -279,7 +277,7 @@ function updateProfileUI(userData) {
         `مرحباً يا ${firstName}`;
     document.getElementById("nav-user-name").innerText = userData.name;
     document.getElementById("profile-name-input").value = userData.name;
-    const userAvatarUrl = userData.photoURL || "images/profile.jpg";
+    const userAvatarUrl = userData.photoURL || "images/profile.webp";
     document.getElementById("nav-avatar").src = userAvatarUrl;
     document.getElementById("profile-avatar-preview").src = userAvatarUrl;
 
@@ -1335,7 +1333,7 @@ async function loadLeaderboard() {
                 <div class="leaderboard-user-info" style="min-width: 0;">
                     <div class="rank-badge ${badgeClass}" style="${customStyle}">#${currentRank}</div>
                     <div class="avatar-wrapper ${frameClass}" style="width: 45px; height: 45px; flex-shrink: 0;">
-                        <img src="${user.photoURL || "images/profile.jpg"}" alt="Avatar">
+                        <img src="${user.photoURL || "images/profile.webp"}" alt="Avatar">
                     </div>
                     <div style="display: flex; flex-direction: column; gap: 3px; min-width: 0; align-items: flex-start; text-align: right;">
                         <span class="leaderboard-name" dir="auto" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${user.name}</span>
@@ -1377,7 +1375,7 @@ function openUserProfileModal(user) {
     const avatarWrapper = document.getElementById("modal-avatar-wrapper");
     avatarWrapper.className = `avatar-wrapper ${getRankFrameClass(user.lifetimeScore)}`;
     document.getElementById("modal-user-avatar").src =
-        user.photoURL || "images/profile.jpg";
+        user.photoURL || "images/profile.webp";
     const badgesContainer = document.getElementById("modal-badges-container");
     if (user.badges && user.badges.length > 0) {
         badgesContainer.innerHTML = user.badges
@@ -2038,189 +2036,6 @@ if (reflectionInput) {
 }
 
 // ==========================================
-// محرك الذكاء الاصطناعي (موجه الانضباط الداعم) - متصل بـ API حقيقي
-// ==========================================
-// async function processAIJudgment(uid, dateStr, userText, points, passed) {
-//     try {
-//         // التلقين (Prompt) المعدل: صارم ولكن منصف ومشجع
-//         const systemPrompt = `
-//         أنت "موجه الانضباط" في منصة (BrainRot Detox). دورك هو مساعدة المحاربين على التخلص من المشتتات وبناء عادات حقيقية بأسلوب "الحزم الداعم" (Tough Love).
-
-//         بيانات اليوم:
-//         - النتيجة: ${passed ? "نجح في الوصول للهدف اليومي" : "فشل في الوصول للهدف اليومي"}
-//         - إجمالي النقاط: ${points}
-//         - تقرير المحارب: "${userText}"
-
-//         قواعد التحليل والرد:
-//         1. إذا نجح في التحدي: احتفل بإنجازه! أكد له أن التزامه اليوم هو انتصار حقيقي يستحق الفخر، ثم شجعه بحماس للحفاظ على هذا الزخم غداً.
-//         2. إذا فشل واختلق أعذاراً واهية: كن حازماً ومباشراً. ذكره بأن الأعذار لن تبني مستقبله، وأن الانضباط يعني العمل حتى في أسوأ الأيام. لا تهنه، بل أيقظه.
-//         3. إذا فشل لكنه كان صريحاً وتحمل المسؤولية: ادعمه بقوة. أخبره أن التعثر جزء من الرحلة، والمهم هو كيف سينهض غداً. طالبه بخطة تعويض.
-//         4. الأسلوب: احترافي، محفز، مباشر، وصادق. (تجنب الإهانة أو التحطيم، أنت مدرب ولست جلاداً).
-//         5. الحد الأقصى للرد: 80 كلمة فقط لتكون الرسالة سريعة وقوية.
-//         `;
-
-//         console.log("جاري الاتصال بالذكاء الاصطناعي الحقيقي...");
-
-//         // ==========================================
-//         // ⚠️ الاتصال الحقيقي بـ Gemini API
-//         // ==========================================
-//         const GEMINI_API_KEY = "AIzaSyAuSIOy2VQC-Ulcq7XF0jkU21i12rcQ_fo"; // استبدل هذا بمفتاحك الحقيقي
-//         const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
-
-//         const response = await fetch(url, {
-//             method: "POST",
-//             headers: { "Content-Type": "application/json" },
-//             body: JSON.stringify({
-//                 contents: [{ parts: [{ text: systemPrompt }] }],
-//             }),
-//         });
-
-//         if (!response.ok)
-//             throw new Error("فشل الاتصال بـ API الذكاء الاصطناعي");
-
-//         const data = await response.json();
-//         const aiResponseText = data.candidates[0].content.parts[0].text;
-
-//         // تحديث قاعدة البيانات بالرد الحقيقي
-//         await updateDoc(doc(db, `users/${uid}/ai_reflections`, dateStr), {
-//             status: "completed",
-//             aiResponse: aiResponseText,
-//         });
-
-//         console.log("تم استلام الرد الحقيقي وحفظه بنجاح.");
-//     } catch (error) {
-//         console.error("فشل في جلب رد الذكاء الاصطناعي:", error);
-
-//         // رسالة طوارئ في حال تعطل الـ API أو نفاد الرصيد
-//         const fallbackMessage = passed
-//             ? "عمل ممتاز اليوم! لقد حققت هدفك وهذا إنجاز حقيقي. (ملاحظة: الموجه غير متاح حالياً، لكن إنجازك محفوظ. استمر!)"
-//             : "التعثر يحدث للجميع. المهم هو أن تنهض غداً بخطة أقوى. (ملاحظة: الموجه غير متاح حالياً، راجع أهدافك وانطلق من جديد).";
-
-//         await updateDoc(doc(db, `users/${uid}/ai_reflections`, dateStr), {
-//             status: "error", // يمكنك جعلها completed ليظهر النص البديل بشكل طبيعي
-//             aiResponse: fallbackMessage,
-//         });
-//     }
-// }
-
-// ==========================================
-// إدارة سجلات المحاكمة (جلب، تثبيت، حذف)
-// ==========================================
-// async function loadAIReflections() {
-//     if (!currentUser) return;
-//     const listContainer = document.getElementById("reflections-list");
-//     const mainContainer = document.getElementById("ai-reflections-container");
-//     if (!listContainer || !mainContainer) return;
-
-//     try {
-//         const snap = await getDocs(
-//             collection(db, `users/${currentUser.uid}/ai_reflections`),
-//         );
-//         let reflections = [];
-//         snap.forEach((doc) => {
-//             reflections.push({ id: doc.id, ...doc.data() });
-//         });
-
-//         // إخفاء الصندوق بالكامل إذا لم يقم المستخدم بكتابة أي تقرير سابقاً
-//         if (reflections.length === 0) {
-//             mainContainer.style.display = "none";
-//             return;
-//         } else {
-//             mainContainer.style.display = "block";
-//         }
-
-//         // الترتيب: المثبت (Pinned) يظهر أولاً، ثم الترتيب حسب الأحدث
-//         reflections.sort((a, b) => {
-//             if (a.isPinned && !b.isPinned) return -1;
-//             if (!a.isPinned && b.isPinned) return 1;
-//             return new Date(b.date) - new Date(a.date);
-//         });
-
-//         listContainer.innerHTML = "";
-//         reflections.forEach((refData) => {
-//             const statusHtml =
-//                 refData.status === "processing"
-//                     ? `<span style="color: #f59e0b; font-size: 12px;">⏳ جاري التحليل...</span>`
-//                     : refData.passed
-//                       ? `<span style="color: var(--success); font-size: 12px;">✅ حقق الهدف</span>`
-//                       : `<span style="color: var(--danger); font-size: 12px;">❌ فشل</span>`;
-
-//             const pinColor = refData.isPinned
-//                 ? "var(--gold-primary)"
-//                 : "var(--text-muted)";
-
-//             const aiResponseHtml =
-//                 refData.status === "completed"
-//                     ? `<div style="background: rgba(168, 85, 247, 0.1); border-right: 3px solid var(--gold-primary); padding: 10px; border-radius: 4px; margin-top: 10px; font-size: 13.5px; line-height: 1.6; color: #f3f4f6;">
-//                      <strong style="color: var(--gold-primary);">الموجه:</strong> ${refData.aiResponse}
-//                    </div>`
-//                     : refData.status === "processing"
-//                       ? `<p style="color: var(--text-muted); font-size: 12px; margin-top: 10px;">الموجه يقرأ تقريرك الآن...</p>`
-//                       : "";
-
-//             const itemDiv = document.createElement("div");
-//             itemDiv.style.cssText =
-//                 "background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-radius: 8px; padding: 15px;";
-//             itemDiv.innerHTML = `
-//                 <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
-//                     <div>
-//                         <span style="font-weight: bold; color: var(--gold-primary); margin-left: 10px; font-size: 14px;">${refData.date}</span>
-//                         ${statusHtml}
-//                     </div>
-//                     <div style="display: flex; gap: 15px;">
-//                         <button onclick="togglePinReflection('${refData.id}', ${!!refData.isPinned})" style="background: none; border: none; color: ${pinColor}; cursor: pointer; font-size: 16px; transition: 0.2s;" title="تفضيل/تثبيت"><i class="fa-solid fa-thumbtack"></i></button>
-//                         <button onclick="deleteReflection('${refData.id}')" style="background: none; border: none; color: var(--danger); cursor: pointer; font-size: 16px; transition: 0.2s;" title="حذف نهائي"><i class="fa-solid fa-trash"></i></button>
-//                     </div>
-//                 </div>
-//                 <p style="font-size: 14px; color: var(--text-main); line-height: 1.6; white-space: pre-wrap;"><strong>تقريرك:</strong> ${refData.userText}</p>
-//                 ${aiResponseHtml}
-//             `;
-//             listContainer.appendChild(itemDiv);
-//         });
-//     } catch (error) {
-//         console.error("Error loading reflections:", error);
-//         listContainer.innerHTML =
-//             '<p style="color: var(--danger); text-align: center;">حدث خطأ أثناء تحميل السجلات.</p>';
-//     }
-// }
-
-// دالة التفضيل (تثبيت السجل)
-// window.togglePinReflection = async function (id, currentStatus) {
-//     try {
-//         await updateDoc(
-//             doc(db, `users/${currentUser.uid}/ai_reflections`, id),
-//             {
-//                 isPinned: !currentStatus,
-//             },
-//         );
-//         // loadAIReflections(); // إعادة التحميل لترتيب العناصر فوراً
-//     } catch (error) {
-//         console.error("Error pinning reflection:", error);
-//         CustomDialog.alert("حدث خطأ أثناء تثبيت السجل.");
-//     }
-// };
-
-// // دالة الحذف النهائي
-// window.deleteReflection = async function (id) {
-//     if (
-//         await CustomDialog.confirm(
-//             "هل أنت متأكد من حذف هذا السجل نهائياً؟",
-//             "حذف السجل 🗑️",
-//         )
-//     ) {
-//         try {
-//             await deleteDoc(
-//                 doc(db, `users/${currentUser.uid}/ai_reflections`, id),
-//             );
-//             // loadAIReflections(); // تحديث الواجهة بعد الحذف
-//         } catch (e) {
-//             console.error("Error deleting reflection:", e);
-//             CustomDialog.alert("حدث خطأ أثناء الحذف.");
-//         }
-//     }
-// };
-
-// ==========================================
 // نظام المهام الحرة (To-Do List) - LocalStorage
 // ==========================================
 const todoInput = document.getElementById("todo-input");
@@ -2620,7 +2435,7 @@ if (messaging) {
         if (Notification.permission === "granted") {
             new Notification(payload.notification.title, {
                 body: payload.notification.body,
-                icon: "/images/icon-512.png", // تأكد من مسار الأيقونة
+                icon: "/images/icon-512.webp", // تأكد من مسار الأيقونة
             });
         }
     });
@@ -3050,7 +2865,7 @@ window.enterStudyRoom = async function (roomId) {
     const realName = userSnap.exists() ? userSnap.data().name : "مستخدم";
     const realAvatar = userSnap.exists()
         ? userSnap.data().photoURL
-        : "images/profile.jpg";
+        : "images/profile.webp";
 
     const myPresenceRef = dbRef(
         rtdb,
@@ -3059,7 +2874,7 @@ window.enterStudyRoom = async function (roomId) {
     onDisconnect(myPresenceRef).remove();
     await set(myPresenceRef, {
         name: realName,
-        avatar: realAvatar || "images/profile.jpg",
+        avatar: realAvatar || "images/profile.webp",
         isOnline: true,
     });
 
@@ -3773,3 +3588,22 @@ window.stopAdjust = function () {
         currentActiveButton = null;
     }
 };
+
+// ==========================================
+// تشغيل محرك الكاش (Service Worker)
+// ==========================================
+if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+        navigator.serviceWorker
+            .register("/sw.js")
+            .then((registration) => {
+                console.log(
+                    "✅ تم تشغيل Service Worker بنجاح، النطاق:",
+                    registration.scope,
+                );
+            })
+            .catch((error) => {
+                console.error("❌ فشل تشغيل Service Worker:", error);
+            });
+    });
+}
