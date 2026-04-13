@@ -55,14 +55,15 @@
                     style="width: 180px; text-align: center; margin: 0  auto 5px auto;">
             </div>
             <ul class="nav-links">
-                <li class="active" data-target="tasks-page">المهام اليومية</li>
-                <li id="nav-todo-link" data-target="todo-page" style="display: none;">المهام الحرة</li>
-                <li data-target="store-page">المتجر</li>
+                <li class="active" data-target="tasks-page"> <i class="fa-solid fa-tasks fa-fw"></i> المهام اليومية</li>
+                <li id="nav-todo-link" data-target="todo-page" style="display: none;"> <i
+                        class="fa-solid fa-list fa-fw"></i> المهام الحرة</li>
+                <li data-target="store-page"><i class="fa-solid fa-store fa-fw"></i> المتجر</li>
                 <li class="nav-item" data-target="study-rooms-page">
                     <i class="fa-solid fa-users-viewfinder fa-fw"></i> غرف الدراسة
                 </li>
-                <li data-target="leaderboard-page">قائمة المتصدرين</li>
-                <li data-target="analytics-page">تحليل التقدم</li>
+                <li data-target="leaderboard-page"> <i class="fa-solid fa-trophy fa-fw"></i> قائمة المتصدرين</li>
+                <li data-target="analytics-page"> <i class="fa-solid fa-chart-line fa-fw"></i> تحليل التقدم</li>
             </ul>
         </aside>
 
@@ -190,13 +191,13 @@
                                 0/0</span>
                         </div>
 
-                        <div
+                        <div class="buttons-of-room"
                             style="display: flex; gap: 10px; justify-content: space-between; width: 100%; align-items: center; background: rgba(0,0,0,0.3); padding: 10px 15px; border-radius: 12px; border: 1px solid var(--border-color); margin-top: 10px;">
                             <button onclick="leaveRoom(false)" class="dialog-btn-cancel leave-room-btn"
-                                style="margin: 0; padding: 6px 15px; flex: 2;"><i
+                                style="margin: 0; padding: 6px 15px; flex: 1;"><i
                                     class="fa-solid fa-arrow-right-from-bracket"></i> مغادرة</button>
 
-                            <div id="room-host-controls" style="display: none; gap: 10px; width: 100%; flex: 1;">
+                            <div id="room-host-controls" style="display: none; gap: 10px; width: 100%; flex: 6;">
                                 <button id="start-session-btn" onclick="startRoomTimer()" class="dialog-btn-cancel"
                                     style="background: rgba(90, 85, 247, 0.2); color: var(--gold-light); padding: 6px 15px;"><i
                                         class="fa-solid fa-play"></i> بدء الجلسة</button>

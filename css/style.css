@@ -2108,3 +2108,67 @@ select:focus {
     -ms-transform: none !important;
     -o-transform: none !important;
 }
+
+/* ==========================================
+   إصلاح تجاوب ميزة "غرف الدراسة" للجوال فقط
+   ========================================== */
+@media (max-width: 768px) {
+    .nav-links i {
+        display: none; /* إخفاء الأيقونات في الروابط الجانبية لتوفير المساحة */
+    }
+    /* 1. تصغير حجم المؤقت ليتناسب مع الشاشة */
+    #main-timer {
+        font-size: 50px !important;
+        letter-spacing: 2px !important;
+    }
+    #timer-card {
+        padding: 20px !important;
+    }
+
+    /* 2. فصل الشات عن قائمة المشاركين (ليكونوا فوق بعض بدلاً من بجانب بعض) */
+    #active-room-view > div:last-child {
+        display: flex !important;
+        flex-direction: column !important;
+        height: auto !important;
+    }
+
+    /* إعطاء الشات ارتفاع ثابت في الجوال حتى تتمكن من التمرير بداخله */
+    #active-room-view > div:last-child > div:first-child {
+        height: 380px !important;
+    }
+
+    /* 3. شريط أزرار التحكم السفلي (السماح بالتفاف الأزرار لو ضاقت الشاشة) */
+    #active-room-view > div:first-child > div:last-child {
+        flex-wrap: wrap !important;
+        justify-content: center !important;
+        gap: 10px !important;
+    }
+
+    .buttons-of-room {
+        flex-direction: column !important;
+        gap: 10px !important;
+    }
+
+    /* تصغير الأزرار داخل الغرفة قليلاً */
+    #room-host-controls {
+        flex-wrap: wrap !important;
+        justify-content: center !important;
+    }
+
+    #room-host-controls button,
+    #active-room-view .dialog-btn-cancel {
+        font-size: 11px !important;
+        padding: 6px 12px !important;
+        flex-grow: 1; /* لتتوزع الأزرار بشكل متساوٍ */
+        display: flex !important;
+        justify-content: center !important;
+        flex-wrap: wrap !important;
+        align-items: center !important;
+        gap: 5px !important;
+    }
+
+    /* 4. تعديل شبكة اللوبي (الغرف من الخارج) لتأخذ عرض الشاشة بالكامل */
+    #rooms-lobby-grid {
+        grid-template-columns: 1fr !important;
+    }
+}
