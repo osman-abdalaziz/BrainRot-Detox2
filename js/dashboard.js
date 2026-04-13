@@ -417,7 +417,7 @@ async function joinChallenge() {
             challengeStatus: "active",
             streak: 0, // تصفير الستريك مع التحدي الجديد
         });
-        location.reload();
+        window.syncUserUI();
     } catch (error) {
         await CustomDialog.alert("حدث خطأ أثناء الانضمام.", "خطأ");
         btn.disabled = false;
@@ -1106,7 +1106,7 @@ document
                     `<span style="display: block;">🔥 تم الاعتماد بنجاح! لقد كسبت: </span> ${xpLabel} \n <span><span class="win-info-boxs xp">+${earnedXP} XP</span> <span class="win-info-boxs coins">+${earnedCoins} <i class="fa-solid fa-coins fa-fw"></i></span> <span class="win-info-boxs ">+1 <i class="fa-solid fa-fire fa-fw"></i></span></span>`,
                     "عمل عظيم ",
                 );
-                location.reload();
+                window.syncUserUI();
             } else {
                 const userDocSnap = await getDoc(
                     doc(db, "users", currentUser.uid),
@@ -1125,7 +1125,7 @@ document
                         freezeCount: increment(-1),
                         lastEvalDate: today,
                     });
-                    location.reload();
+                    window.syncUserUI();
                 } else if (currentWalletCoins >= lifeSaverCost) {
                     const useSaver = await CustomDialog.confirm(
                         `فشلت في الوصول للهدف! رصيد عملاتك يسمح بشراء نجاة مقابل ${lifeSaverCost} عملة. هل تستخدمه لتجنب الطرد؟\n(ملاحظة: هذا سيكسر الستريك 💔)`,
@@ -1137,13 +1137,13 @@ document
                             lastEvalDate: today,
                             currentStreak: 0,
                         });
-                        location.reload();
+                        window.syncUserUI();
                     } else {
                         await updateDoc(doc(db, "users", currentUser.uid), {
                             challengeStatus: "failed",
                             currentStreak: 0,
                         });
-                        location.reload();
+                        window.syncUserUI();
                     }
                 } else {
                     await updateDoc(doc(db, "users", currentUser.uid), {
@@ -1410,7 +1410,7 @@ document
             .value.trim();
         if (!newName) return await CustomDialog.alert("الاسم مطلوب.");
         await updateDoc(doc(db, "users", currentUser.uid), { name: newName });
-        location.reload();
+        window.syncUserUI();
     });
 
 // ==========================================
@@ -1496,7 +1496,7 @@ document
                     await updateDoc(doc(db, "users", currentUser.uid), {
                         photoURL,
                     });
-                    location.reload();
+                    window.syncUserUI();
                 } catch (err) {
                     await CustomDialog.alert(
                         "حدث خطأ أثناء الاتصال بقاعدة البيانات لرفع الصورة.",
@@ -1817,24 +1817,111 @@ function getRankDetails(score) {
     };
 }
 
-// ==============================
-// حل المشكلة 2 و 3: حفظ التاب النشط + تحديث البيانات تلقائياً (Live Fetch)
-// بدون DOMContentLoaded لأن type="module" يتم تنفيذه بعد جاهزية الصفحة تلقائياً
-// ==============================
+// // ==============================
+// // حل المشكلة 2 و 3: حفظ التاب النشط + تحديث البيانات تلقائياً (Live Fetch)
+// // بدون DOMContentLoaded لأن type="module" يتم تنفيذه بعد جاهزية الصفحة تلقائياً
+// // ==============================
+// const navItems = document.querySelectorAll("[data-target]");
+
+// navItems.forEach((item) => {
+//     item.addEventListener("click", function () {
+//         const target = this.getAttribute("data-target");
+//         if (!target) return;
+
+//         // 1. حفظ الصفحة الحالية في الذاكرة
+//         localStorage.setItem("dashboardActiveTab", target);
+
+//         // 2. تحديث البيانات الصامت حسب الصفحة المفتوحة
+//         if (target.includes("leaderboard")) {
+//             if (typeof loadLeaderboard === "function") loadLeaderboard();
+//         } else if (target.includes("analytics") || target.includes("stats")) {
+//             if (typeof loadAnalytics === "function") loadAnalytics();
+//         }
+//     });
+// });
+
+// ==========================================
+// محرك التنقل الموحد (التبديل الصامت بدون ريفريش)
+// ==========================================
+
+// دالة التحديث الصامت لصفحة المهام (Silent Fetch)
+window.silentRefreshTasks = async function () {
+    if (!currentUser) return;
+
+    const tasksList = document.getElementById("tasks-list");
+    // تأثير بصري خفيف يوضح للمستخدم أن هناك تحديث يجري في الخلفية
+    if (tasksList) tasksList.style.opacity = "0.4";
+
+    try {
+        const realNow = getRealNow();
+        const todayStr = getCairoDateString(realNow);
+
+        // جلب بيانات المستخدم وسجل اليوم في نفس الوقت (لأقصى سرعة)
+        const [userDocSnap, todayLogSnap] = await Promise.all([
+            getDoc(doc(db, "users", currentUser.uid)),
+            getDoc(doc(db, `users/${currentUser.uid}/dailyLogs`, todayStr)),
+        ]);
+
+        const userData = userDocSnap.data();
+        let todayLogData = null;
+
+        if (todayLogSnap.exists()) {
+            todayLogData = todayLogSnap.data();
+            isTodayFinalized = todayLogData.isFinalized || false;
+        } else {
+            isTodayFinalized = false;
+        }
+
+        // تحديث النقاط في الواجهة العلوية
+        const pointsDisplay = document.getElementById("today-points");
+        if (pointsDisplay)
+            pointsDisplay.innerText = todayLogData
+                ? todayLogData.pointsEarned || 0
+                : 0;
+
+        // إعادة رسم المهام بناءً على البيانات الطازجة
+        await loadTasks(todayLogData, userData);
+    } catch (error) {
+        console.error("فشل التحديث الصامت:", error);
+    } finally {
+        if (tasksList) tasksList.style.opacity = "1"; // إرجاع الشفافية
+    }
+};
+
 const navItems = document.querySelectorAll("[data-target]");
 
 navItems.forEach((item) => {
-    item.addEventListener("click", function () {
-        const target = this.getAttribute("data-target");
-        if (!target) return;
+    item.addEventListener("click", async function (e) {
+        e.preventDefault(); // منع أي سلوك افتراضي مزعج
+        const targetId = this.getAttribute("data-target");
+        if (!targetId) return;
 
-        // 1. حفظ الصفحة الحالية في الذاكرة
-        localStorage.setItem("dashboardActiveTab", target);
+        // 1. التبديل البصري للأزرار (UI)
+        navItems.forEach((i) => i.classList.remove("active"));
+        if (this.id !== "profile-btn") {
+            this.classList.add("active");
+        }
 
-        // 2. تحديث البيانات الصامت حسب الصفحة المفتوحة
-        if (target.includes("leaderboard")) {
+        // 2. إظهار الصفحة المطلوبة وإخفاء الباقي فوراً
+        const allTargets = Array.from(navItems).map((btn) =>
+            btn.getAttribute("data-target"),
+        );
+        allTargets.forEach((id) => {
+            const el = document.getElementById(id);
+            if (el) el.classList.remove("active");
+        });
+        const targetSection = document.getElementById(targetId);
+        if (targetSection) targetSection.classList.add("active");
+
+        // 3. حفظ الصفحة في الذاكرة
+        localStorage.setItem("dashboardActiveTab", targetId);
+
+        // 4. جلب البيانات صامتاً بناءً على الصفحة المفتوحة
+        if (targetId === "tasks-page") {
+            await window.silentRefreshTasks();
+        } else if (targetId === "leaderboard-page") {
             if (typeof loadLeaderboard === "function") loadLeaderboard();
-        } else if (target.includes("analytics") || target.includes("stats")) {
+        } else if (targetId === "analytics-page" || targetId === "stats-page") {
             if (typeof loadAnalytics === "function") loadAnalytics();
         }
     });
@@ -1880,7 +1967,7 @@ window.buyFreeze = async function () {
                 "تمت عملية الشراء بنجاح! سيتم استهلاكها تلقائياً عند أول إخفاق.",
                 "مبروك ❄️",
             );
-            location.reload(); // لتحديث الواجهة والنقاط
+            window.syncUserUI(); // لتحديث الواجهة والنقاط
         } catch (error) {
             CustomDialog.alert("حدث خطأ أثناء الشراء.");
         }
@@ -1908,15 +1995,25 @@ window.toggleTodoListFeature = async function () {
             "إلغاء الأداة 🗑️",
         );
 
+        // if (confirmCancel) {
+        //     await updateDoc(userRef, { hasTodoList: false });
+
+        //     // طرد المستخدم للرئيسية إذا كان داخل صفحة المهام الحرة وقت الإلغاء
+        //     if (localStorage.getItem("dashboardActiveTab") === "todo-page") {
+        //         localStorage.setItem("dashboardActiveTab", "tasks-page");
+        //     }
+
+        //     location.reload();
+        // }
         if (confirmCancel) {
             await updateDoc(userRef, { hasTodoList: false });
 
-            // طرد المستخدم للرئيسية إذا كان داخل صفحة المهام الحرة وقت الإلغاء
+            // طرده لصفحة المهام إذا كان يقف في المفكرة
             if (localStorage.getItem("dashboardActiveTab") === "todo-page") {
-                localStorage.setItem("dashboardActiveTab", "tasks-page");
+                document.querySelector('[data-target="tasks-page"]')?.click();
             }
 
-            location.reload();
+            window.syncUserUI();
         }
     } else {
         // حالة الشراء
@@ -1942,7 +2039,7 @@ window.toggleTodoListFeature = async function () {
                 "تم فتح الأداة بنجاح! ستجدها الآن في القائمة الجانبية.",
                 "عملية ناجحة 🎉",
             );
-            location.reload();
+            window.syncUserUI();
         }
     }
 };
@@ -1999,7 +2096,7 @@ window.buyDoubleXP = async function () {
                 "تم التفعيل! أكمل مهام اليوم واعتمدها لتحصل على ضعف النقاط.",
                 "عملية ناجحة ⚡",
             );
-            location.reload();
+            window.syncUserUI();
         } catch (error) {
             CustomDialog.alert("حدث خطأ أثناء عملية الشراء.");
         }
@@ -2361,7 +2458,7 @@ document
                 `مبروك! 🎉 تم استرداد الكود بنجاح. تمت إضافة ${codeData.points} عملة لمحفظتك.`,
                 "عملية ناجحة 🎁",
             );
-            location.reload();
+            window.syncUserUI();
         } catch (error) {
             console.error("Redeem Error:", error);
             await CustomDialog.alert(
@@ -2765,7 +2862,7 @@ window.submitTriviaAnswer = async function (
                         linkHtml,
                     "بونص مستحق 🎁",
                 );
-                location.reload(); // عند التحديث سيُرسم السؤال وهو مجمد طوال اليوم
+                window.syncUserUI(); // عند التحديث سيُرسم السؤال وهو مجمد طوال اليوم
             } catch (error) {
                 console.error(error);
             }
@@ -2777,7 +2874,7 @@ window.submitTriviaAnswer = async function (
                         linkHtml,
                     "للأسف",
                 );
-                location.reload();
+                window.syncUserUI();
             } catch (error) {
                 console.error(error);
             }
@@ -3215,7 +3312,7 @@ function manageTimerState(room, isHost) {
                 lastPlayedPhaseId = currentPhaseId;
             }
         }
-    } else if (room.status === "done") {
+    } else if (room.status === "finished") {
         timerStatus.innerText = "انتهت جميع الجلسات.. عمل عظيم! 🏆";
         timerStatus.style.color = "var(--success)";
         timerDisplay.innerText = "انتهت";
@@ -4103,3 +4200,201 @@ function initFloatingTimer() {
 }
 // استدعاء الدالة لتشغيل النظام فوراً
 initFloatingTimer();
+
+// ==========================================
+// 11. محرك المزامنة الشامل (بديل الريفريش الكامل 100%)
+// ==========================================
+window.syncUserUI = async function () {
+    if (!currentUser) return;
+
+    // إعطاء تأثير بصري خفيف جداً يوضح للمستخدم أن الشاشة تتحدث
+    document.body.style.opacity = "0.8";
+
+    try {
+        // 1. سحب أحدث بيانات للمستخدم من السيرفر فوراً
+        const userDocSnap = await getDoc(doc(db, "users", currentUser.uid));
+        if (!userDocSnap.exists()) return;
+        const userData = userDocSnap.data();
+
+        // 2. تحديث البروفايل، الكوينز، الستريك، والرتبة في كل مكان بالشاشة
+        updateProfileUI(userData);
+
+        // 3. تحديث سؤال اليوم (سيرسم الإجابة التي اختارها باللون الأحمر أو الأخضر ويغلق الأزرار)
+        if (typeof renderDailyTrivia === "function") {
+            renderDailyTrivia(userData);
+        }
+
+        // 4. تحديث الصفحة التي يقف عليها المستخدم حالياً (لسرعة الأداء)
+        const activeTab =
+            localStorage.getItem("dashboardActiveTab") || "tasks-page";
+
+        if (activeTab === "tasks-page") {
+            // تحديث المهام وحالة إغلاق اليوم
+            const realNow = getRealNow();
+            const todayStr = getCairoDateString(realNow);
+            const todayLogSnap = await getDoc(
+                doc(db, `users/${currentUser.uid}/dailyLogs`, todayStr),
+            );
+            let todayLogData = null;
+            if (todayLogSnap.exists()) {
+                todayLogData = todayLogSnap.data();
+                isTodayFinalized = todayLogData.isFinalized || false;
+            } else {
+                isTodayFinalized = false;
+            }
+
+            const pointsDisplay = document.getElementById("today-points");
+            if (pointsDisplay)
+                pointsDisplay.innerText = todayLogData
+                    ? todayLogData.pointsEarned || 0
+                    : 0;
+
+            await loadTasks(todayLogData, userData);
+        } else if (activeTab === "leaderboard-page") {
+            // تحديث قائمة المتصدرين لو كان فاتحها
+            if (typeof loadLeaderboard === "function") loadLeaderboard();
+        } else if (
+            activeTab === "analytics-page" ||
+            activeTab === "stats-page"
+        ) {
+            // تحديث المخططات البيانية
+            if (typeof loadAnalytics === "function") loadAnalytics();
+        }
+    } catch (error) {
+        console.error("فشل المزامنة الشاملة:", error);
+    } finally {
+        // إرجاع إضاءة الشاشة لطبيعتها بعد انتهاء التحديث (تأخذ أقل من نصف ثانية)
+        document.body.style.opacity = "1";
+    }
+};
+// ==========================================
+// 12. محرك السحب للتحديث (Pull-to-Refresh) للآيفون والـ PWA - النسخة الخالية من الأشباح
+// ==========================================
+(function initPullToRefresh() {
+    if (!document.getElementById("custom-ptr-style")) {
+        const style = document.createElement("style");
+        style.id = "custom-ptr-style";
+        style.innerHTML = `
+            #custom-ptr-indicator {
+                position: fixed;
+                top: -60px;
+                left: 50%;
+                transform: translateX(-50%);
+                z-index: 999999;
+                background: rgba(15, 10, 30, 0.95);
+                border: 1px solid var(--gold-primary);
+                color: var(--gold-primary);
+                padding: 8px 20px;
+                border-radius: 25px;
+                font-size: 13px;
+                font-weight: bold;
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                box-shadow: 0 5px 15px rgba(0,0,0,0.6);
+                transition: top 0.2s ease, background 0.2s ease, color 0.2s ease;
+                backdrop-filter: blur(5px);
+                -webkit-backdrop-filter: blur(5px);
+                pointer-events: none;
+            }
+        `;
+        document.head.appendChild(style);
+    }
+
+    if (document.getElementById("custom-ptr-indicator")) {
+        document.getElementById("custom-ptr-indicator").remove();
+    }
+
+    const ptrIndicator = document.createElement("div");
+    ptrIndicator.id = "custom-ptr-indicator";
+    ptrIndicator.innerHTML =
+        '<i class="fa-solid fa-arrow-down"></i> <span>اسحب للتحديث</span>';
+    document.body.appendChild(ptrIndicator);
+
+    function isScrolled(element) {
+        let el = element;
+        while (el && el !== document.body && el !== document.documentElement) {
+            if (el.scrollTop > 0) {
+                return true;
+            }
+            el = el.parentNode;
+        }
+        return window.scrollY > 0;
+    }
+
+    let startY = 0;
+    let currentY = 0;
+    let isPulling = false;
+    const threshold = 75;
+
+    document.addEventListener(
+        "touchstart",
+        (e) => {
+            if (!isScrolled(e.target)) {
+                startY = e.touches[0].clientY;
+                currentY = startY; // 🐛 الحل السحري: قتل القيمة الشبحية القديمة وتصفير العداد
+                isPulling = true;
+            } else {
+                isPulling = false;
+            }
+        },
+        { passive: true },
+    );
+
+    document.addEventListener(
+        "touchmove",
+        (e) => {
+            if (!isPulling) return;
+
+            currentY = e.touches[0].clientY;
+            let pullDistance = currentY - startY;
+
+            if (pullDistance > 0) {
+                ptrIndicator.style.transition = "none";
+                ptrIndicator.style.top =
+                    Math.min(pullDistance / 2 - 60, 25) + "px";
+
+                if (pullDistance > threshold) {
+                    ptrIndicator.innerHTML =
+                        '<i class="fa-solid fa-bolt"></i> <span>أفلت للتحديث</span>';
+                    ptrIndicator.style.color = "#10b981";
+                    ptrIndicator.style.borderColor = "#10b981";
+                } else {
+                    ptrIndicator.innerHTML =
+                        '<i class="fa-solid fa-arrow-down"></i> <span>اسحب للتحديث</span>';
+                    ptrIndicator.style.color = "var(--gold-primary)";
+                    ptrIndicator.style.borderColor = "var(--gold-primary)";
+                }
+
+                if (e.cancelable) e.preventDefault();
+            } else {
+                isPulling = false;
+            }
+        },
+        { passive: false },
+    );
+
+    document.addEventListener("touchend", async () => {
+        if (!isPulling) return;
+        isPulling = false;
+
+        let pullDistance = currentY - startY;
+        ptrIndicator.style.transition = "top 0.3s ease";
+
+        if (pullDistance > threshold) {
+            ptrIndicator.innerHTML =
+                '<i class="fa-solid fa-spinner fa-spin"></i> <span>جاري المزامنة...</span>';
+            ptrIndicator.style.top = "25px";
+
+            if (typeof window.syncUserUI === "function") {
+                await window.syncUserUI();
+            }
+
+            setTimeout(() => {
+                ptrIndicator.style.top = "-60px";
+            }, 600);
+        } else {
+            ptrIndicator.style.top = "-60px";
+        }
+    });
+})();

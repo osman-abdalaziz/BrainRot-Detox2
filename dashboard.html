@@ -694,34 +694,6 @@
             else li.classList.remove('active');
         });
 
-        // 2. معالج الضغطات (مع تفعيل الريفريش الإجباري لصفحة المهام كما طلبت)
-        navItems.forEach(item => {
-            item.addEventListener('click', (e) => {
-                const targetId = item.getAttribute('data-target');
-
-                // 🛑 إذا ضغط المستخدم على زر المهام
-                if (targetId === 'tasks-page' && e.isTrusted) {
-                    // تعطيل حماية الخروج من الصفحة مؤقتاً للسماح للريفريش بالمرور
-                    window.onbeforeunload = null;
-
-                    localStorage.setItem('dashboardActiveTab', 'tasks-page');
-                    window.location.reload();
-                    return;
-                }
-
-                // التنقل العادي لباقي الصفحات (صامت وبدون ريفريش)
-                localStorage.setItem('dashboardActiveTab', targetId);
-
-                navItems.forEach(i => i.classList.remove('active'));
-                if (item.id !== 'profile-btn') {
-                    item.classList.add('active');
-                }
-
-                pages.forEach(page => page.classList.remove('active'));
-                const targetSection = document.getElementById(targetId);
-                if (targetSection) targetSection.classList.add('active');
-            });
-        });
 
         // كود المنيو ورفع الصور
         document.getElementById('user-menu-btn').addEventListener('click', (e) => {
