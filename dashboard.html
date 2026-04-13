@@ -166,15 +166,17 @@
 
             <div id="study-rooms-page" class="page-section hidden">
 
+                <h2 class="gold-text" style="margin-bottom: 20px;">ساحة الدراسة المشتركة</h2>
                 <div id="lobby-view" class="glass-card" style="display: block; padding: 20px; min-height: 500px;">
                     <div
                         style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                        <h2 class="gold-text"><i class="fa-solid fa-users-viewfinder"></i> ساحة الدراسة المشتركة</h2>
+
                         <button onclick="document.getElementById('create-room-modal').classList.add('show')"
-                            class="gold-btn" style="width: auto; padding: 10px 20px;">+ إنشاء غرفة</button>
+                            class="gold-btn" style="width: auto; padding: 10px 20px; margin: 0;"> <i
+                                class="fa-solid fa-plus fa-fw"></i> إنشاء غرفة</button>
                     </div>
                     <div id="rooms-lobby-grid"
-                        style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 15px;">
+                        style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 15px;">
                     </div>
                 </div>
 
@@ -263,59 +265,122 @@
                     <input type="text" id="room-title-input" class="dialog-input"
                         placeholder="مثال: دراسة النيورو في ليلة..." maxlength="40" style="margin-bottom: 15px;">
 
-                    <div style="display: flex; gap: 10px; margin-bottom: 15px;">
-                        <div style="flex: 1;">
-                            <label
-                                style="display: block; margin-bottom: 5px; color: var(--text-main); font-size: 13px;">وقت
-                                الجلسة
-                                (دقيقة):</label>
-                            <input type="number" id="room-session-time" class="dialog-input" value="50" min="10"
-                                max="120">
+                    <div class="create-room-inputs-wrapper">
+                        <div class="inputs-row">
+                            <div>
+                                <label
+                                    style="color: var(--text-muted); font-size: 13px; margin-bottom: 5px; display: block; text-align: right;">مدة
+                                    الجلسة (دقائق):</label>
+                                <div class="custom-number-wrapper">
+                                    <button type="button" class="custom-number-btn"
+                                        onmousedown="startAdjust(this, 'room-session-time', -5, event)"
+                                        onmouseup="stopAdjust()" onmouseleave="stopAdjust()"
+                                        ontouchstart="startAdjust(this, 'room-session-time', -5, event)"
+                                        ontouchend="stopAdjust()" ontouchcancel="stopAdjust()"><i
+                                            class="fa-solid fa-minus"></i></button>
+
+                                    <input type="number" id="room-session-time" value="50" min="5" max="180"
+                                        inputmode="numeric" pattern="[0-9]*"
+                                        onkeypress="return validateNumberInput(event)" oninput="enforceMaxInput(this)"
+                                        onblur="enforceMinBlur(this)">
+
+                                    <button type="button" class="custom-number-btn"
+                                        onmousedown="startAdjust(this, 'room-session-time', 5, event)"
+                                        onmouseup="stopAdjust()" onmouseleave="stopAdjust()"
+                                        ontouchstart="startAdjust(this, 'room-session-time', 5, event)"
+                                        ontouchend="stopAdjust()" ontouchcancel="stopAdjust()"><i
+                                            class="fa-solid fa-plus"></i></button>
+                                </div>
+                            </div>
+                            <div>
+                                <label
+                                    style="color: var(--text-muted); font-size: 13px; margin-bottom: 5px; display: block; text-align: right;">مدة
+                                    البريك (دقائق):</label>
+                                <div class="custom-number-wrapper">
+                                    <button type="button" class="custom-number-btn"
+                                        onmousedown="startAdjust(this, 'room-break-time', -1, event)"
+                                        onmouseup="stopAdjust()" onmouseleave="stopAdjust()"
+                                        ontouchstart="startAdjust(this, 'room-break-time', -1, event)"
+                                        ontouchend="stopAdjust()" ontouchcancel="stopAdjust()"><i
+                                            class="fa-solid fa-minus"></i></button>
+
+                                    <input type="number" id="room-break-time" value="10" min="1" max="30"
+                                        inputmode="numeric" pattern="[0-9]*"
+                                        onkeypress="return validateNumberInput(event)" oninput="enforceMaxInput(this)"
+                                        onblur="enforceMinBlur(this)">
+
+                                    <button type="button" class="custom-number-btn"
+                                        onmousedown="startAdjust(this, 'room-break-time', 1, event)"
+                                        onmouseup="stopAdjust()" onmouseleave="stopAdjust()"
+                                        ontouchstart="startAdjust(this, 'room-break-time', 1, event)"
+                                        ontouchend="stopAdjust()" ontouchcancel="stopAdjust()"><i
+                                            class="fa-solid fa-plus"></i></button>
+                                </div>
+                            </div>
                         </div>
-                        <div style="flex: 1;">
-                            <label
-                                style="display: block; margin-bottom: 5px; color: var(--text-main); font-size: 13px;">وقت
-                                البريك
-                                (حد أقصى 25):</label>
-                            <input type="number" id="room-break-time" class="dialog-input" value="10" min="1" max="25">
+                        <div class="inputs-row">
+                            <div>
+                                <label
+                                    style="color: var(--text-muted); font-size: 13px; margin-bottom: 5px; display: block; text-align: right;">عدد
+                                    الجلسات:</label>
+                                <div class="custom-number-wrapper">
+                                    <button type="button" class="custom-number-btn"
+                                        onmousedown="startAdjust(this, 'room-sessions-count', -1, event)"
+                                        onmouseup="stopAdjust()" onmouseleave="stopAdjust()"
+                                        ontouchstart="startAdjust(this, 'room-sessions-count', -1, event)"
+                                        ontouchend="stopAdjust()" ontouchcancel="stopAdjust()"><i
+                                            class="fa-solid fa-minus"></i></button>
+
+                                    <input type="number" id="room-sessions-count" value="4" min="1" max="20"
+                                        inputmode="numeric" pattern="[0-9]*"
+                                        onkeypress="return validateNumberInput(event)" oninput="enforceMaxInput(this)"
+                                        onblur="enforceMinBlur(this)">
+
+                                    <button type="button" class="custom-number-btn"
+                                        onmousedown="startAdjust(this, 'room-sessions-count', 1, event)"
+                                        onmouseup="stopAdjust()" onmouseleave="stopAdjust()"
+                                        ontouchstart="startAdjust(this, 'room-sessions-count', 1, event)"
+                                        ontouchend="stopAdjust()" ontouchcancel="stopAdjust()"><i
+                                            class="fa-solid fa-plus"></i></button>
+                                </div>
+                            </div>
+                            <div>
+                                <label
+                                    style="color: var(--text-muted); font-size: 13px; margin-bottom: 5px; display: block; text-align: right;">أقصى
+                                    عدد للأعضاء:</label>
+                                <div class="custom-number-wrapper">
+                                    <button type="button" class="custom-number-btn"
+                                        onmousedown="startAdjust(this, 'room-max-users', -1, event)"
+                                        onmouseup="stopAdjust()" onmouseleave="stopAdjust()"
+                                        ontouchstart="startAdjust(this, 'room-max-users', -1, event)"
+                                        ontouchend="stopAdjust()" ontouchcancel="stopAdjust()"><i
+                                            class="fa-solid fa-minus"></i></button>
+
+                                    <input type="number" id="room-max-users" value="5" min="1" max="25"
+                                        inputmode="numeric" pattern="[0-9]*"
+                                        onkeypress="return validateNumberInput(event)" oninput="enforceMaxInput(this)"
+                                        onblur="enforceMinBlur(this)">
+
+                                    <button type="button" class="custom-number-btn"
+                                        onmousedown="startAdjust(this, 'room-max-users', 1, event)"
+                                        onmouseup="stopAdjust()" onmouseleave="stopAdjust()"
+                                        ontouchstart="startAdjust(this, 'room-max-users', 1, event)"
+                                        ontouchend="stopAdjust()" ontouchcancel="stopAdjust()"><i
+                                            class="fa-solid fa-plus"></i></button>
+
+                                </div>
+                            </div>
                         </div>
                     </div>
-
-                    <div style="display: flex; gap: 10px; margin-bottom: 20px;">
-                        <div style="flex: 1;">
-                            <label
-                                style="display: block; margin-bottom: 5px; color: var(--text-main); font-size: 13px;">عدد
-                                الجلسات
-                                (الدورات):</label>
-                            <input type="number" id="room-sessions-count" class="dialog-input" value="4" min="1"
-                                max="10">
-                        </div>
-                        <div style="flex: 1;">
-                            <label
-                                style="display: block; margin-bottom: 5px; color: var(--text-main); font-size: 13px;">الحد
-                                الأقصى
-                                للأشخاص:</label>
-                            <input type="number" id="room-max-users" class="dialog-input" value="5" min="2" max="15">
-                        </div>
-                    </div>
-
                     <div class="dialog-buttons">
                         <button id="cancel-room-btn" class="dialog-btn-cancel">إلغاء</button>
                         <button id="confirm-create-room-btn" class="gold-btn dialog-btn-confirm">إنشاء وخصم 25
-                            🪙</button>
+                            <i class="fa-solid fa-coins fa-fw"></i>
+                        </button>
                     </div>
                 </div>
             </div>
 
-            <!-- <section id="leaderboard-page" class="page-section">
-                <h2 class="gold-text leaderboard-title">🏆 قاعة العظماء</h2>
-
-                <div class="glass-card">
-                    <div id="leaderboard-list">
-                        <p style="text-align: center; color: var(--text-muted);">جاري تحميل المتصدرين...</p>
-                    </div>
-                </div>
-            </section> -->
             <section id="leaderboard-page" class="page-section">
                 <h2 class="gold-text leaderboard-title">🏆 قاعة العظماء</h2>
 
@@ -336,7 +401,6 @@
                     </div>
                 </div>
             </section>
-
 
             <section id="analytics-page" class="page-section">
                 <h2 class="gold-text analytics-title">تحليل التقدم</h2>
@@ -484,7 +548,7 @@
                                 XP لليوم الحالي عند اعتماده (لا تنطبق على العملات).</p>
                             <button onclick="buyDoubleXP()" class="gold-btn"
                                 style="padding: 8px 15px; font-size: 14px; direction: ltr;">شراء
-                                (1250 <i class="fa-solid fa-coins fa-fw"></i>)</button>
+                                (500 <i class="fa-solid fa-coins fa-fw"></i>)</button>
                         </div>
                     </div>
 

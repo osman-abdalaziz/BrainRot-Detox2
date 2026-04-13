@@ -1973,7 +1973,7 @@ window.buyDoubleXP = async function () {
         );
     }
     // 3. هل يملك المال؟
-    const cost = 1250;
+    const cost = 500; // حدد التكلفة التي تراها مناسبة
     if ((userData.walletCoins || 0) < cost) {
         return CustomDialog.alert(
             `عملاتك لا تكفي. تحتاج إلى ${cost} عملة.`,
@@ -3190,7 +3190,11 @@ window.renderRoomUI = function (room) {
 // دالة حذف الغرفة للقائد (تحل مشكلة الغرفة الـ undefined)
 window.deleteRoom = async function () {
     if (!activeRoomId) return;
-    if (!confirm("هل أنت متأكد من إنهاء الغرفة وطرد الجميع؟")) return;
+    const isSure = await CustomDialog.confirm(
+        "هل أنت متأكد من إنهاء الغرفة وطرد الجميع؟",
+        "تأكيد إنهاء الغرفة",
+    );
+    if (!isSure) return;
 
     try {
         const refToDelete = dbRef(rtdb, `study_rooms/${activeRoomId}`);
@@ -3356,7 +3360,7 @@ window.listenToLobby = function () {
 
         if (!snapshot.exists()) {
             roomsLobbyGrid.innerHTML =
-                '<p style="color: var(--text-muted); text-align: center; grid-column: 1 / -1; margin-top: 50px; font-size: 16px;">ليس هنالك غرف الان كن اول من ينشئ غرفه 🚀</p>';
+                '<p style="color: var(--text-muted); text-align: center; grid-column: 1 / -1; font-size: 16px; margin-top: 50px;">ليس هنالك غرف الان كن اول من ينشئ غرفه 🚀</p>';
             return;
         }
 
@@ -3391,7 +3395,7 @@ window.listenToLobby = function () {
             const roomCard = document.createElement("div");
             roomCard.className = "glass-card";
             roomCard.style.cssText =
-                "padding: 18px; border: 1px solid var(--gold-primary); position: relative; transition: transform 0.2s;";
+                "padding: 18px; border: 1px solid var(--gold-primary); position: relative; transition: transform 0.2s; display: flex; flex-direction: column; justify-content: space-between;";
 
             // 3. تصميم محتوى الكرت بالأيقونات
             roomCard.innerHTML = `
@@ -3405,7 +3409,7 @@ window.listenToLobby = function () {
                     <div title="السعة الحالية"><i class="fa-solid fa-users" style="color: #3b82f6; width: 18px;"></i> ${pCount} / ${room.maxUsers}</div>
                 </div>
 
-                <button onclick="joinStudyRoom('${roomId}')" class="gold-btn" style="width: 100%; padding: 10px; font-size: 14px; font-weight: bold;" ${pCount >= room.maxUsers ? "disabled" : ""}>
+                <button onclick="joinStudyRoom('${roomId}')" class="gold-btn" style="width: 100%; padding: 10px; font-size: 14px; font-weight: bold; margin-top: auto;" ${pCount >= room.maxUsers ? "disabled" : ""}>
                     ${pCount >= room.maxUsers ? '<i class="fa-solid fa-lock"></i> الغرفة ممتلئة' : '<i class="fa-solid fa-shield-halved"></i> انضمام '}
                 </button>
             `;
@@ -3421,7 +3425,7 @@ window.listenToLobby = function () {
 
         if (validRoomsCount === 0) {
             roomsLobbyGrid.innerHTML =
-                '<p style="color: var(--text-muted); text-align: center; grid-column: 1 / -1; margin-top: 50px; font-size: 16px;">ليس هنالك غرف الان كن اول من ينشئ غرفه 🚀</p>';
+                '<p style="color: var(--text-muted); text-align: center; grid-column: 1 / -1; font-size: 16px; margin-top: 50px;">ليس هنالك غرف الان كن اول من ينشئ غرفه 🚀</p>';
         }
     });
 };
@@ -3461,7 +3465,8 @@ document
 
             if ((userData.walletCoins || 0) < 25) {
                 btn.disabled = false;
-                btn.innerText = "إنشاء وخصم 25 🪙";
+                btn.innerHTML =
+                    "إنشاء وخصم 25 <i class='fa-solid fa-coins fa-fw'></i>";
                 return CustomDialog.alert(
                     "عملاتك لا تكفي لإنشاء غرفة.",
                     "رصيد غير كافٍ",
@@ -3492,13 +3497,15 @@ document
                 .getElementById("create-room-modal")
                 .classList.remove("show");
             btn.disabled = false;
-            btn.innerText = "إنشاء وخصم 25 🪙";
+            btn.innerHTML =
+                "إنشاء وخصم 25 <i class='fa-solid fa-coins fa-fw'></i>";
 
             enterStudyRoom(newRoomRef.key);
         } catch (error) {
             console.error(error);
             btn.disabled = false;
-            btn.innerText = "إنشاء وخصم 25 🪙";
+            btn.innerHTML =
+                "إنشاء وخصم 25 <i class='fa-solid fa-coins fa-fw'></i>";
         }
     });
 // دالة الانضمام للغرفة
@@ -3665,6 +3672,104 @@ document.getElementById("cancel-room-btn")?.addEventListener("click", () => {
     const modal = document.getElementById("create-room-modal");
     modal.classList.remove("show");
     // إعادة ضبط نص الزر تحسباً للمرة القادمة
-    document.getElementById("confirm-create-room-btn").innerText =
-        "إنشاء وخصم 25 🪙";
+    document.getElementById("confirm-create-room-btn").innerHTML =
+        `إنشاء وخصم 25 <i class="fa-solid fa-coins fa-fw"></i>`;
 });
+
+// ==========================================
+// 7. محرك أزرار الإدخال الرقمي والحماية
+// ==========================================
+
+// دالة الزيادة والنقصان (مع احترام الحد الأدنى والأقصى)
+window.adjustNumberInput = function (inputId, change) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+
+    let val = parseInt(input.value) || 0;
+    const min = parseInt(input.getAttribute("min")) || 1;
+    const max = parseInt(input.getAttribute("max")) || 999;
+
+    val += change;
+
+    if (val < min) val = min;
+    if (val > max) val = max;
+
+    input.value = val;
+};
+
+// دالة الحماية: منع كتابة أي أحرف والسماح بالأرقام فقط
+window.validateNumberInput = function (event) {
+    const charCode = event.which ? event.which : event.keyCode;
+    // إذا لم يكن الزر المضغوط رقماً (0-9) يتم منعه فوراً
+    if (charCode > 31 && (charCode < 48 || charCode > 57)) {
+        event.preventDefault();
+        return false;
+    }
+    return true;
+};
+
+// الحماية الفورية أثناء الكتابة (يمنع تخطي الحد الأقصى)
+window.enforceMaxInput = function (input) {
+    let max = parseInt(input.getAttribute("max"));
+    let val = parseInt(input.value);
+
+    if (val > max) {
+        input.value = max; // إجباره على الحد الأقصى فوراً
+    }
+};
+
+// الحماية عند الخروج من الحقل (يمنع تركه فارغاً أو أقل من الحد الأدنى)
+window.enforceMinBlur = function (input) {
+    let min = parseInt(input.getAttribute("min")) || 1;
+    let val = parseInt(input.value);
+
+    if (isNaN(val) || val < min) {
+        input.value = min; // إجباره على الحد الأدنى
+    }
+};
+
+// ==========================================
+// 8. محرك الضغط المطول (Long Press) للأرقام
+// ==========================================
+let adjustInterval;
+let adjustTimeout;
+let isAdjusting = false;
+let currentActiveButton = null; // متغير لتذكر الزر المضغوط حالياً
+
+window.startAdjust = function (btnElement, inputId, change, event) {
+    if (event && event.type === "touchstart") {
+        event.preventDefault();
+    }
+
+    if (isAdjusting) return;
+    isAdjusting = true;
+    currentActiveButton = btnElement; // حفظ الزر
+
+    // 1. تلوين الزر للضغطة العادية فوراً
+    currentActiveButton.classList.add("is-active");
+
+    adjustNumberInput(inputId, change);
+
+    adjustTimeout = setTimeout(() => {
+        // 2. تغيير لون الزر للضغطة المطولة بعد 400 ملي ثانية
+        if (currentActiveButton) {
+            currentActiveButton.classList.add("is-long-press");
+        }
+
+        adjustInterval = setInterval(() => {
+            adjustNumberInput(inputId, change);
+        }, 120);
+    }, 400);
+};
+
+window.stopAdjust = function () {
+    clearTimeout(adjustTimeout);
+    clearInterval(adjustInterval);
+    isAdjusting = false;
+
+    // 3. إزالة كل الألوان وإعادة الزر لشكله الطبيعي عند رفع الإصبع
+    if (currentActiveButton) {
+        currentActiveButton.classList.remove("is-active", "is-long-press");
+        currentActiveButton = null;
+    }
+};
