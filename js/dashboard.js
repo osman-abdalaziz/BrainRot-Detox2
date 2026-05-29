@@ -1,5 +1,5 @@
 import { auth, db, storage, messaging } from "./firebase-config.js";
-import dailyQuestions from "./daily-questions.js";
+import dailyQuestions from "./daily-questions.js?v=2";
 import {
     getToken,
     onMessage,
@@ -1851,19 +1851,18 @@ function getRankDetails(score) {
 // محرك التنقل الموحد (التبديل الصامت بدون ريفريش)
 // ==========================================
 
-// دالة التحديث الصامت لصفحة المهام (Silent Fetch)
 window.silentRefreshTasks = async function () {
-    if (!currentUser) return;
+    // 🛑 تطبيق القفل هنا أيضاً
+    if (!currentUser || window.isUIUpdating) return;
 
+    window.isUIUpdating = true;
     const tasksList = document.getElementById("tasks-list");
-    // تأثير بصري خفيف يوضح للمستخدم أن هناك تحديث يجري في الخلفية
     if (tasksList) tasksList.style.opacity = "0.4";
 
     try {
         const realNow = getRealNow();
         const todayStr = getCairoDateString(realNow);
 
-        // جلب بيانات المستخدم وسجل اليوم في نفس الوقت (لأقصى سرعة)
         const [userDocSnap, todayLogSnap] = await Promise.all([
             getDoc(doc(db, "users", currentUser.uid)),
             getDoc(doc(db, `users/${currentUser.uid}/dailyLogs`, todayStr)),
@@ -1879,19 +1878,18 @@ window.silentRefreshTasks = async function () {
             isTodayFinalized = false;
         }
 
-        // تحديث النقاط في الواجهة العلوية
         const pointsDisplay = document.getElementById("today-points");
         if (pointsDisplay)
             pointsDisplay.innerText = todayLogData
                 ? todayLogData.pointsEarned || 0
                 : 0;
 
-        // إعادة رسم المهام بناءً على البيانات الطازجة
         await loadTasks(todayLogData, userData);
     } catch (error) {
         console.error("فشل التحديث الصامت:", error);
     } finally {
-        if (tasksList) tasksList.style.opacity = "1"; // إرجاع الشفافية
+        if (tasksList) tasksList.style.opacity = "1";
+        window.isUIUpdating = false; // 🔓 فتح القفل
     }
 };
 
@@ -3056,8 +3054,6 @@ window.renderRoomUI = function (room) {
     const participantsCount = room.participants
         ? Object.keys(room.participants).length
         : 0;
-    document.getElementById("current-online-count").innerText =
-        participantsCount;
 
     // الحماية الصارمة: من هو القائد؟
     const isHost = room.hostUid === currentUser.uid;
@@ -3099,9 +3095,14 @@ window.renderRoomUI = function (room) {
     // رسم قائمة المتواجدين (الملك للهوست فقط)
     const list = document.getElementById("room-participants-list");
     list.innerHTML = "";
+    let realParticipantsCount = 0; // 1. إنشاء العداد الحقيقي
     if (room.participants) {
         Object.keys(room.participants).forEach((uid) => {
             const p = room.participants[uid];
+            // 🛑 الحل القطعي: فلترة الأشباح (إذا كان العضو لا يملك اسماً، تجاهله ولا ترسمه)
+            if (!p || !p.name) return;
+            realParticipantsCount++; // 2. زيادة العداد الحقيقي
+
             const isHost = room.hostUid === uid; // فحص صارم عن طريق الـ ID وليس الاسم
             // المنطق الجديد: أخضر لو مركز، أحمر لو يلهو، رمادي لو أوفلاين
             let statusColor = "#9ca3af"; // رمادي افتراضي
@@ -3119,6 +3120,10 @@ window.renderRoomUI = function (room) {
             `;
         });
     }
+
+    // تحديث عدد المتواجدين في الغرفة
+    document.getElementById("current-online-count").innerText =
+        realParticipantsCount;
 
     manageTimerState(room, isHost); // تمرير صلاحية القائد للمؤقت
 };
@@ -3419,9 +3424,19 @@ window.listenToLobby = function () {
                 room.breakDuration * (room.totalSessions - 1);
             const totalHours = (totalMinutes / 60).toFixed(1);
 
-            const pCount = room.participants
-                ? Object.keys(room.participants).length
-                : 0;
+            // const pCount = room.participants
+            //     ? Object.keys(room.participants).length
+            //     : 0;
+
+            // 🛑 فلترة الأشباح للوبي: عد الأشخاص الحقيقيين الذين يملكون اسماً فقط
+            let pCount = 0;
+            if (room.participants) {
+                Object.keys(room.participants).forEach((uid) => {
+                    if (room.participants[uid] && room.participants[uid].name) {
+                        pCount++;
+                    }
+                });
+            }
 
             // 2. شارة الحالة (Badge)
             let statusBadge = "";
@@ -3559,9 +3574,14 @@ window.joinStudyRoom = async function (roomId) {
 
     if (!room) return CustomDialog.alert("هذه الغرفة لم تعد موجودة.", "خطأ");
 
-    const pCount = room.participants
-        ? Object.keys(room.participants).length
-        : 0;
+    let pCount = 0;
+    if (room.participants) {
+        Object.keys(room.participants).forEach((uid) => {
+            if (room.participants[uid] && room.participants[uid].name) {
+                pCount++;
+            }
+        });
+    }
     if (pCount >= room.maxUsers) {
         return CustomDialog.alert("عذراً، الغرفة ممتلئة.", "دخول مرفوض");
     }
@@ -4209,15 +4229,18 @@ function initFloatingTimer() {
 initFloatingTimer();
 
 // ==========================================
-// 11. محرك المزامنة الشامل الفولاذي (يُحدث كل شيء حرفياً)
+// 11. محرك المزامنة الشامل הפولاذي (مزود بنظام القفل لمنع التداخل)
 // ==========================================
-window.syncUserUI = async function () {
-    if (!currentUser) return;
+window.isUIUpdating = false; // المتغير المسؤول عن القفل
 
+window.syncUserUI = async function () {
+    // 🛑 القفل: إذا لم يكن هناك مستخدم، أو كانت المزامنة جارية بالفعل، ارفض التنفيذ فوراً
+    if (!currentUser || window.isUIUpdating) return;
+
+    window.isUIUpdating = true; // إغلاق القفل
     document.body.style.opacity = "0.8";
 
     try {
-        // 1. مزامنة بيانات الحساب (Firestore)
         const userDocSnap = await getDoc(doc(db, "users", currentUser.uid));
         if (!userDocSnap.exists()) return;
         const userData = userDocSnap.data();
@@ -4228,33 +4251,31 @@ window.syncUserUI = async function () {
             renderDailyTrivia(userData);
         }
 
-        // 2. تحديث التحدي الحالي والأيام المتبقية والهدف اليومي فوراً
         const challengeDoc = await getDoc(
             doc(db, "settings", "currentChallenge"),
         );
         if (challengeDoc.exists() && challengeDoc.data().isActive) {
             const challengeData = challengeDoc.data();
             const endDate = challengeData.endDate.toDate();
-            // حساب الأيام بالوقت الحقيقي
             const diffDays = Math.ceil(
                 (endDate - getRealNow()) / (1000 * 60 * 60 * 24),
             );
             const displayDays = diffDays > 0 ? diffDays : "انتهى";
 
-            // رسم البيانات الجديدة في الواجهة
             const titleEl = document.getElementById("challenge-title");
-            const targetEl = document.getElementById("daily-target");
-            const costEl = document.getElementById("life-saver-cost");
-            const daysEl = document.getElementById("days-left");
-
             if (titleEl) titleEl.innerText = "تحدي: " + challengeData.title;
+
+            const targetEl = document.getElementById("daily-target");
             if (targetEl) targetEl.innerText = challengeData.dailyTargetPoints;
+
+            const costEl = document.getElementById("life-saver-cost");
             if (costEl)
                 costEl.innerText = challengeData.dailyTargetPoints * 1.5;
+
+            const daysEl = document.getElementById("days-left");
             if (daysEl) daysEl.innerText = displayDays;
         }
 
-        // 3. التحقق مما إذا كان المستخدم داخل الغرفة النشطة الآن
         const roomView = document.getElementById("active-room-view");
         const isRoomVisible =
             roomView && (roomView.offsetWidth > 0 || roomView.offsetHeight > 0);
@@ -4270,9 +4291,7 @@ window.syncUserUI = async function () {
                 if (typeof renderRoomUI === "function")
                     renderRoomUI(snap.val());
             }
-        }
-        // 4. إذا لم يكن في الغرفة، نقوم بتحديث التاب النشط
-        else {
+        } else {
             const activeTab =
                 localStorage.getItem("dashboardActiveTab") || "tasks-page";
 
@@ -4310,6 +4329,7 @@ window.syncUserUI = async function () {
         console.error("فشل المزامنة الشاملة:", error);
     } finally {
         document.body.style.opacity = "1";
+        window.isUIUpdating = false; // 🔓 فتح القفل بعد انتهاء كل شيء
     }
 };
 // // ==========================================

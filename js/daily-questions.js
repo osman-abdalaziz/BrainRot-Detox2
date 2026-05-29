@@ -1053,7 +1053,7 @@ const dailyQuestions = [
     {
         id: 15,
         q: "تُوفِّيَت فاطمةُ رضيَ اللهُ عنها:",
-        link: "https://cutt.us/awY72\n",
+        link: "https://cutt.us/awY72",
         answers: [
             {
                 answer: "بعدَ مَوتِ النبيِّ صلَّى اللهُ عليه وسلَّم بسَنَتينِ",
@@ -1262,7 +1262,7 @@ const dailyQuestions = [
     },
     {
         id: 17,
-        q: "كان الوَحيُ ثَقيلًا على النَّبيِّ ﷺ:\n ",
+        q: "كان الوَحيُ ثَقيلًا على النَّبيِّ ﷺ:",
         link: "https://www.dorar.net/hadith/sharh/23142",
         answers: [
             {
@@ -1431,7 +1431,7 @@ const dailyQuestions = [
     {
         id: 4,
         q: 'قيلَ لزَيدِ بنِ أرْقَمَ: "كم غَزا النبيُّ صلَّى اللهُ عليه وسلَّم من غزوةٍ؟ فقال:',
-        link: "https://cutt.us/MJJM1\n",
+        link: "https://cutt.us/MJJM1",
         answers: [
             {
                 answer: "أربعَ عَشْرةَ",
@@ -1641,7 +1641,7 @@ const dailyQuestions = [
     {
         id: 1,
         q: "أوَّلُ شيءٍ فعلَهُ أبو بكرٍ رضيَ اللهُ عنه بعدَ تَولِّيه الخِلافةَ",
-        link: "https://cutt.us/JFecc\n",
+        link: "https://cutt.us/JFecc",
         answers: [
             {
                 answer: "إِنفاذُ جَيشِ أُسامةَ",
@@ -1683,7 +1683,7 @@ const dailyQuestions = [
     {
         id: 3,
         q: "الذي غَسَّل فاطمةَ رضيَ اللهُ عنها:",
-        link: "https://cutt.us/awY72\n",
+        link: "https://cutt.us/awY72",
         answers: [
             {
                 answer: "عليٌّ رضيَ اللهُ عنه والحسنُ والحُسينُ",
@@ -1893,7 +1893,7 @@ const dailyQuestions = [
     {
         id: 4,
         q: " انتهَزَ فرصةَ إهمالِ الرُّماةِ وصيةَ نبيِّهم لهم حين نزَلوا يحصُدونَ الغنائمَ فالْتَفَّ خلفَهم وأعمَلَ الحربَ فيهم:",
-        link: "https://cutt.us/K1JQl\n",
+        link: "https://cutt.us/K1JQl",
         answers: [
             {
                 answer: "عِكرمةُ بن أبي جهلٍ",
@@ -1997,7 +1997,7 @@ const dailyQuestions = [
     },
     {
         id: 18,
-        q: "ممَّا لا يُشتَرَطُ في صِحَّةِ اللِّعانِ:\n ",
+        q: "ممَّا لا يُشتَرَطُ في صِحَّةِ اللِّعانِ: ",
         link: "https://www.dorar.net/feqhia/4912",
         answers: [
             {
@@ -2061,7 +2061,7 @@ const dailyQuestions = [
     {
         id: 7,
         q: "معنى (عَليم) في قولِه تعالى: {إِنَّا نُبَشِّرُكَ بِغُلَامٍ عَلِيمٍ}:",
-        link: "https://www.dorar.net/tafseer/15/7\n",
+        link: "https://www.dorar.net/tafseer/15/7 ",
         answers: [
             {
                 answer: "عَليمٌ بأُمور الدُّنيا",
@@ -2186,7 +2186,7 @@ const dailyQuestions = [
     },
     {
         id: 6,
-        q: "العِبْرة بالمَكان الذي يُقوِّم فيه التاجِرُ عُروضَه التِّجاريَّة\n ",
+        q: "العِبْرة بالمَكان الذي يُقوِّم فيه التاجِرُ عُروضَه التِّجاريَّة  ",
         link: "http://host1.octal.com.sa/feqhia/2196",
         answers: [
             {
@@ -2250,7 +2250,7 @@ const dailyQuestions = [
     {
         id: 7,
         q: "قال جِبريلُ للنبيِّ صلَّى اللهُ عليه وسلَّم في شأنِها: فإذا أتتْكَ فاقْرأْ عليها السلامَ من ربِّها ومنِّي، وبشِّرْها ببيتٍ في الجنةِ من قصبٍ لا صَخَبَ فيه ولا نَصَبَ. ",
-        link: "https://cutt.us/YCa1T\n",
+        link: "https://cutt.us/YCa1T ",
         answers: [
             {
                 answer: "خديجةُ بنتُ خوَيلدٍ",
@@ -2292,7 +2292,7 @@ const dailyQuestions = [
     {
         id: 8,
         q: "رحَل إلى رسولِ اللهِ صلَّى اللهُ عليه وسلَّم من يَثربَ في بيعةِ العَقَبةِ الثانيةِ:",
-        link: "https://cutt.us/EfU1u\n",
+        link: "https://cutt.us/EfU1u ",
         answers: [
             {
                 answer: "سبعونَ رَجلًا",
@@ -2313,7 +2313,7 @@ const dailyQuestions = [
     {
         id: 1,
         q: "دَعا إبراهيمُ ربَّه أنْ يَجعَلَ مكَّةَ:",
-        link: "https://www.dorar.net/tafseer/14/10\n",
+        link: "https://www.dorar.net/tafseer/14/10 ",
         answers: [
             {
                 answer: "بلَدًا آمِنًا",
@@ -2418,7 +2418,7 @@ const dailyQuestions = [
     {
         id: 4,
         q: "دلَّ قولُه تَعالَى: {فَلَا نُقِيمُ لَهُمْ يَوْمَ الْقِيَامَةِ وَزْنًا}:",
-        link: "https://www.dorar.net/tafseer/18/26\n",
+        link: "https://www.dorar.net/tafseer/18/26",
         answers: [
             {
                 answer: "أنَّ الكافرَ لا يُوزَن عَمَلُه يومَ القِيامَة",
@@ -2565,7 +2565,7 @@ const dailyQuestions = [
     {
         id: 6,
         q: "معنى كلمةِ (البالغةُ) في قولِه تَعالَى: {قُلْ فَلِلَّهِ الْحُجَّةُ الْبَالِغَةُ}:",
-        link: " \nhttps: //www.dorar.net/tafseer/6/39",
+        link: " https: //www.dorar.net/tafseer/6/39",
         answers: [
             {
                 answer: "التي تبلُغُ مُرادَه في ثُبوتِها على مَنِ احتجَّ بها عَليهِ من خَلقِه",
@@ -2669,7 +2669,7 @@ const dailyQuestions = [
     },
     {
         id: 7,
-        q: "العُروضُ غَيرُ المُعَدَّةِ لِلتِّجارة\n ",
+        q: "العُروضُ غَيرُ المُعَدَّةِ لِلتِّجارة ",
         link: "http://host1.octal.com.sa/feqhia/2169",
         answers: [
             {
@@ -2985,7 +2985,7 @@ const dailyQuestions = [
     {
         id: 5,
         q: "المُخاطَب بقَولِه تَعالَى: {فَاصْبِرْ إِنَّ الْعَاقِبَةَ لِلْمُتَّقِينَ}:",
-        link: " \nhttps://www.dorar.net/tafseer/11/11",
+        link: " https://www.dorar.net/tafseer/11/11",
         answers: [
             {
                 answer: "هود عليه السَّلامُ",
