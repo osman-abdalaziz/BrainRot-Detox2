@@ -151,7 +151,7 @@ body {
 
 /* Sidebar */
 .sidebar {
-    width: 250px;
+    width: 250px !important;
     background-color: rgba(10, 5, 20, 0.7);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
@@ -2321,4 +2321,44 @@ input[type="number"] {
         opacity: 1;
         transform: scale(1);
     }
+}
+
+/* ========================================= */
+/* 🛑 محرك المناطق (Zone Engine UI Friction) */
+/* ========================================= */
+
+/* عقوبة المنطقة الحمراء: سحب الألوان بالكامل */
+body.red-zone {
+    filter: grayscale(100%);
+    transition: filter 0.5s ease-in-out;
+}
+
+/* حظر الوصول للمتصدرين والمتجر في المنطقة الحمراء */
+body.red-zone [data-target="leaderboard-page"],
+body.red-zone [data-target="store-page"] {
+    display: none !important;
+    pointer-events: none;
+}
+
+/* لافتات الإنذار */
+.zone-alert {
+    padding: 15px;
+    margin-bottom: 20px;
+    border-radius: 8px;
+    font-weight: bold;
+    text-align: center;
+    display: none; /* مخفي افتراضياً في الأخضر */
+    animation: fadeIn 0.3s ease;
+}
+.zone-alert.yellow {
+    background: rgba(245, 158, 11, 0.1);
+    color: #f59e0b;
+    border: 1px solid #f59e0b;
+    display: block;
+}
+.zone-alert.red {
+    background: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+    border: 1px solid #ef4444;
+    display: block;
 }

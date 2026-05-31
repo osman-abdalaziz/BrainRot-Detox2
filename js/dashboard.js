@@ -1,4 +1,8 @@
-import { auth, db, storage, messaging } from "./firebase-config.js";
+import { auth, db, storage, messaging, app } from "./firebase-config.js";
+import {
+    getFunctions,
+    httpsCallable,
+} from "https://www.gstatic.com/firebasejs/10.8.1/firebase-functions.js";
 import dailyQuestions from "./daily-questions.js?v=2";
 import {
     getToken,
@@ -40,7 +44,7 @@ import {
     get as rtdbGet,
     off,
 } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-
+const functions = getFunctions(app);
 let activeRoomId = null; // رقم الغرفة الحالية
 let activeRoomListener = null; // رادار الغرفة (لكي نقتله عند الخروج)
 let roomTimerInterval = null; // محرك الوقت (لكي نوقفه عند الخروج)
@@ -254,6 +258,7 @@ onAuthStateChanged(auth, async (user) => {
 
         loadLeaderboard();
         loadAnalytics();
+        applyZoneUI(userData.currentZone || "green");
         const loader = document.getElementById("global-loader");
         if (loader) loader.classList.add("hidden");
         // ==========================================
@@ -327,10 +332,25 @@ function updateProfileUI(userData) {
     const badgesContainer = document.getElementById("badges-container");
     if (userData.badges && userData.badges.length > 0) {
         badgesContainer.innerHTML = "";
-        userData.badges.forEach((badge) => {
-            badgesContainer.innerHTML += `<div style="background: rgba(168, 85, 247, 0.1); border: 1px solid var(--border-color); padding: 15px; border-radius: 12px; width: 130px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.2);">
-                <div style="display: flex; justify-content: center; align-items: center; font-size: 35px; margin-bottom: 10px; text-shadow: 0 0 10px var(--gold-glow);"><img src="${badge.icon}" alt="${badge.title}" style="width: 100%; height: 100%; object-fit: cover;"></div>
-                <h4 style="font-size: 13px; color: var(--text-main); margin-bottom: 5px;">${badge.title}</h4><span style="font-size: 11px; color: var(--gold-primary); font-weight: bold;">${badge.date}</span></div>`;
+
+        // ترتيب الأوسمة بحيث يظهر الأحدث أولاً
+        const sortedBadges = [...userData.badges].sort(
+            (a, b) => new Date(b.date) - new Date(a.date),
+        );
+
+        sortedBadges.forEach((badge) => {
+            const dateStr = new Date(badge.date).toLocaleDateString("en-GB"); // صيغة DD/MM/YYYY
+            const imgPath =
+                badge.imagePath || badge.icon || "images/badge.webp"; // التوافق مع القديم والجديد
+
+            badgesContainer.innerHTML += `
+            <div style="background: rgba(168, 85, 247, 0.1); border: 1px solid var(--border-color); padding: 15px; border-radius: 12px; width: 130px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.2);">
+                <div style="display: flex; justify-content: center; align-items: center; font-size: 35px; margin-bottom: 10px; text-shadow: 0 0 10px var(--gold-glow);">
+                    <img src="${imgPath}" alt="${badge.title}" style="width: 80px; height: 80px; object-fit: contain; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.4));">
+                </div>
+                <h4 style="font-size: 13px; color: var(--text-main); margin-bottom: 5px; line-height: 1.3;">${badge.title}</h4>
+                <span style="font-size: 11px; color: var(--gold-primary); font-weight: bold;">${dateStr}</span>
+            </div>`;
         });
     }
     // ==============================
@@ -397,6 +417,52 @@ function updateProfileUI(userData) {
     }
 }
 
+function applyZoneUI(zone) {
+    const banner = document.getElementById("zone-warning-banner");
+    const normalTasksContainer = document.getElementById("tasks-list");
+    const submitDayBtn = document.getElementById("submit-day-btn");
+    const unchainingContainer = document.getElementById(
+        "unchaining-task-container",
+    );
+
+    if (!banner) return;
+
+    // تصفير الحالات الافتراضية للواجهة
+    document.body.classList.remove("red-zone");
+    banner.className = "zone-alert";
+    banner.innerHTML = "";
+
+    if (unchainingContainer) unchainingContainer.style.display = "none";
+    if (normalTasksContainer) normalTasksContainer.style.display = "block";
+    if (submitDayBtn) submitDayBtn.style.display = "block";
+
+    if (zone === "yellow") {
+        banner.classList.add("yellow");
+        banner.innerHTML =
+            "⚠️ <b>إنذار أصفر:</b> لقد فشلت بالأمس وتم تصفير الستريك. أثبت جديتك اليوم لتخرج من هنا.";
+    } else if (zone === "red") {
+        document.body.classList.add("red-zone");
+        banner.classList.add("red");
+        banner.innerHTML =
+            "🛑 <b>أنت في المنطقة الحمراء:</b> لقد انهار الستريك. تم حجب المهام والمتجر والمتصدرين. أنجز مهمة فك القيود للعودة.";
+
+        // إخفاء المهام العادية وزر الاعتماد، وإظهار واجهة فك القيود
+        if (normalTasksContainer) normalTasksContainer.style.display = "none";
+        if (submitDayBtn) submitDayBtn.style.display = "none";
+        if (unchainingContainer) unchainingContainer.style.display = "block";
+
+        // الطرد من الصفحات المحظورة
+        const activePage = document.querySelector(".page-section.active");
+        if (
+            activePage &&
+            (activePage.id === "leaderboard-page" ||
+                activePage.id === "store-page")
+        ) {
+            document.querySelector('[data-target="tasks-page"]').click();
+        }
+    }
+}
+
 function renderRegistrationPhase(isJoined) {
     const container = document.querySelector(".tasks-container");
     const infoBox = document.getElementById("challenge-info");
@@ -452,6 +518,13 @@ async function processActiveParticipant(userData, userDocRef, displayDays) {
     document.getElementById("daily-target").innerText = dailyTargetPoints;
     document.getElementById("life-saver-cost").innerText = lifeSaverCost;
     document.getElementById("days-left").innerText = displayDays;
+
+    // سحب الـ IDs للمهام الأساسية لاستخدامها في تقييم المنقذ الذكي
+    const relSnap = await getDocs(query(collection(db, "religiousTasks")));
+    globalImportantRelTaskIds = [];
+    relSnap.forEach((d) => {
+        if (d.data().isImportant) globalImportantRelTaskIds.push(d.id);
+    });
 
     const realNow = getRealNow();
     const todayStr = getCairoDateString(realNow);
@@ -518,13 +591,30 @@ async function processActiveParticipant(userData, userDocRef, displayDays) {
             let pointsEarned = 0;
             let selections = {};
 
+            // if (logSnap.exists()) {
+            //     const logData = logSnap.data();
+            //     pointsEarned = logData.pointsEarned || 0;
+            //     selections = logData.selections || {};
+            // }
+
+            let religiousSelections = {};
             if (logSnap.exists()) {
                 const logData = logSnap.data();
                 pointsEarned = logData.pointsEarned || 0;
                 selections = logData.selections || {};
+                religiousSelections = logData.religiousSelections || {};
             }
 
-            if (pointsEarned >= dailyTargetPoints) {
+            // التحقق القاطع: هل أنهى جميع المهام الدينية الأساسية في هذا اليوم؟
+            let allImportantDone = true;
+            for (let id of globalImportantRelTaskIds) {
+                if (!religiousSelections[id]) {
+                    allImportantDone = false;
+                    break;
+                }
+            }
+
+            if (pointsEarned >= dailyTargetPoints && allImportantDone) {
                 let earnedCoins = Math.floor(pointsEarned / 1.5);
                 let earnedXP = pointsEarned;
                 let xpLabel = "";
@@ -691,6 +781,7 @@ async function processActiveParticipant(userData, userDocRef, displayDays) {
     loadTasks(todayLogData, userData);
     startDoomsdayClock();
     renderDailyTrivia(userData);
+    loadReligiousTasks(todayLogData);
 }
 
 async function loadTasks(todayLogData, userData) {
@@ -861,6 +952,86 @@ async function loadTasks(todayLogData, userData) {
     setTimeout(startTour, 800);
 }
 
+let globalImportantRelTaskIds = [];
+
+async function loadReligiousTasks(todayLogData) {
+    const list = document.getElementById("religious-tasks-list");
+    if (!list) return;
+
+    const q = query(collection(db, "religiousTasks"), orderBy("order", "asc"));
+    const snap = await getDocs(q);
+
+    list.innerHTML = "";
+
+    let savedRel =
+        todayLogData && todayLogData.religiousSelections
+            ? todayLogData.religiousSelections
+            : {};
+
+    if (snap.empty) {
+        list.innerHTML =
+            "<p style='text-align: center; color: var(--text-muted);'>لا توجد مهام حالياً.</p>";
+        return;
+    }
+
+    snap.forEach((docSnap) => {
+        const task = docSnap.data();
+        const taskId = docSnap.id;
+
+        const isChecked = savedRel[taskId] ? "checked" : "";
+        const borderStyle = task.isImportant
+            ? "border: 1px solid #f59e0b;"
+            : "border: 1px solid var(--border-color);";
+        const badge = task.isImportant
+            ? `<span style="font-size: 10px; color: #f59e0b; background: rgba(245, 158, 11, 0.1); padding: 2px 6px; border-radius: 4px;">أساسية إجبارية</span>`
+            : `<span style="font-size: 10px; color: #a855f7; background: rgba(168, 85, 247, 0.1); padding: 2px 6px; border-radius: 4px;">إضافية مستحبة</span>`;
+
+        const div = document.createElement("div");
+        div.className = "task-item";
+        div.style.cssText = `flex-direction: row; justify-content: space-between; align-items: center; ${borderStyle} margin-bottom: 10px; padding: 15px;`;
+
+        div.innerHTML = `
+            <div style="display: flex; flex-direction: column; gap: 5px;">
+                <span style="font-size: 16px; font-weight: bold; color: var(--text-main);">${task.title} ${badge}</span>
+                ${task.note ? `<span style="font-size: 12px; color: var(--text-muted);">${task.note}</span>` : ""}
+            </div>
+            <input type="checkbox" class="rel-task-checkbox" data-task-id="${taskId}" ${isChecked} ${isTodayFinalized ? "disabled" : ""} style="accent-color: var(--gold-primary); width: 22px; height: 22px; cursor: pointer; margin: 0; flex-shrink: 0;">
+        `;
+        list.appendChild(div);
+    });
+
+    // الحفظ التلقائي عند تحديد أي مهمة دينية
+    document.querySelectorAll(".rel-task-checkbox").forEach((cb) => {
+        cb.addEventListener("change", async function () {
+            if (isTodayFinalized) {
+                this.checked = !this.checked;
+                return;
+            }
+            await autoSaveReligiousTasks();
+        });
+    });
+}
+
+async function autoSaveReligiousTasks() {
+    if (!currentUser || isTodayFinalized) return;
+
+    let selections = {};
+    document.querySelectorAll(".rel-task-checkbox").forEach((cb) => {
+        selections[cb.getAttribute("data-task-id")] = cb.checked;
+    });
+
+    const realNow = getRealNow();
+    const today = getCairoDateString(realNow);
+    await setDoc(
+        doc(db, `users/${currentUser.uid}/dailyLogs`, today),
+        {
+            religiousSelections: selections,
+            timestamp: realNow,
+        },
+        { merge: true },
+    );
+}
+
 function initializeCustomSelects() {
     document.querySelectorAll(".custom-select-wrapper").forEach((wrapper) => {
         const select = wrapper.querySelector(".custom-select");
@@ -985,6 +1156,27 @@ document
 
         // 1. حساب النقاط
         const { totalPoints, selections } = getCurrentSelectionsAndPoints();
+
+        // التحقق من إتمام الجانب الديني الإجباري قبل السماح بالاعتماد
+        const currentRelSelections = {};
+        document.querySelectorAll(".rel-task-checkbox").forEach((cb) => {
+            currentRelSelections[cb.getAttribute("data-task-id")] = cb.checked;
+        });
+
+        let missingImportant = false;
+        for (let i = 0; i < globalImportantRelTaskIds.length; i++) {
+            if (!currentRelSelections[globalImportantRelTaskIds[i]]) {
+                missingImportant = true;
+                break;
+            }
+        }
+
+        if (missingImportant) {
+            return await CustomDialog.alert(
+                "الأساسيات قبل المكملات! لا يمكنك إنهاء يومك الدنيوي وتسجيل النقاط قبل إتمام جميع المهام الدينية الأساسية الإجبارية. اذهب لقسم الجانب الديني وأنجزها أولاً.",
+                "مرفوض 🛑",
+            );
+        }
 
         // 2. إصلاح مشكلة الكلمات (التي تسببت في الخطأ غير المتوقع)
         const reflectionInput = document.getElementById(
@@ -1234,15 +1426,15 @@ async function loadLeaderboard() {
 
         usersArray = usersArray.filter((u) => u.role !== "tester"); // استبعاد التيستر من المتصدرين
 
-        // 1. خوارزمية الفرز المزدوجة (تعتمد على الزر المضغوط)
+        // 1. خوارزمية الفرز المزدوجة التنافسية (تعتمد على الدورة الأسبوعية)
         usersArray.sort((a, b) => {
             if (currentLeaderboardMode === "challenge") {
-                const xpA = a.currentXP || 0;
-                const xpB = b.currentXP || 0;
+                const scoreA = a.cycleScore || 0; // التعديل الجذري: استخدام نقاط الدورة
+                const scoreB = b.cycleScore || 0;
                 const streakA = a.currentStreak || 0;
                 const streakB = b.currentStreak || 0;
 
-                if (xpA !== xpB) return xpB - xpA;
+                if (scoreA !== scoreB) return scoreB - scoreA;
                 if (streakA !== streakB) return streakB - streakA;
             } else {
                 const scoreA = a.lifetimeScore || 0;
@@ -1274,7 +1466,8 @@ async function loadLeaderboard() {
 
                 if (currentLeaderboardMode === "challenge") {
                     samePrimary =
-                        (user.currentXP || 0) === (previousUser.currentXP || 0);
+                        (user.cycleScore || 0) ===
+                        (previousUser.cycleScore || 0);
                     sameSecondary =
                         (user.currentStreak || 0) ===
                         (previousUser.currentStreak || 0);
@@ -1295,8 +1488,9 @@ async function loadLeaderboard() {
         });
 
         const getDisplayScore = (u) => {
+            // التعديل هنا: عرض علامة الكأس ونقاط الدورة في التبويب الحالي
             return currentLeaderboardMode === "challenge"
-                ? `${u.currentXP || 0} XP`
+                ? `${u.cycleScore || 0} 🏆`
                 : `${u.lifetimeScore || 0} 🎖️`;
         };
 
@@ -1385,15 +1579,31 @@ function openUserProfileModal(user) {
         user.photoURL || "images/profile.webp";
     const badgesContainer = document.getElementById("modal-badges-container");
     if (user.badges && user.badges.length > 0) {
-        badgesContainer.innerHTML = user.badges
-            .map(
-                (badge) =>
-                    `<div style="background: rgba(168, 85, 247, 0.1); border: 1px solid var(--border-color); padding: 15px; border-radius: 12px; width: 110px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.2);"><div style="display: flex; justify-content: center; align-items: center; font-size: 30px; margin-bottom: 5px; text-shadow: 0 0 10px var(--gold-glow);"><img src="${badge.icon}" alt="${badge.title}" style="width: 100px; object-fit: contain;"></div><h4 style="font-size: 12px; color: var(--text-main); margin-bottom: 5px;">${badge.title}</h4><span style="font-size: 10px; color: var(--gold-primary); font-weight: bold;">${badge.date}</span></div>`,
-            )
+        const sortedBadges = [...user.badges].sort(
+            (a, b) => new Date(b.date) - new Date(a.date),
+        );
+        badgesContainer.innerHTML = sortedBadges
+            .map((badge) => {
+                const dateStr = new Date(badge.date).toLocaleDateString(
+                    "en-GB",
+                );
+                const imgPath =
+                    badge.imagePath || badge.icon || "images/badge.webp";
+
+                return `
+                <div style="background: rgba(168, 85, 247, 0.1); border: 1px solid var(--border-color); padding: 15px; border-radius: 12px; width: 110px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.2);">
+                    <div style="display: flex; justify-content: center; align-items: center; font-size: 30px; margin-bottom: 5px; text-shadow: 0 0 10px var(--gold-glow);">
+                        <img src="${imgPath}" alt="${badge.title}" style="width: 70px; height: 70px; object-fit: contain;">
+                    </div>
+                    <h4 style="font-size: 12px; color: var(--text-main); margin-bottom: 5px; line-height: 1.3;">${badge.title}</h4>
+                    <span style="font-size: 10px; color: var(--gold-primary); font-weight: bold;">${dateStr}</span>
+                </div>`;
+            })
             .join("");
-    } else
+    } else {
         badgesContainer.innerHTML =
             '<p style="color: var(--text-muted); font-size: 15px; width: 100%; text-align: center; padding: 20px 0;">هذا المحارب لم يثبت نفسه ولم يحصد أي أوسمة بعد! 🏳️</p>';
+    }
     modal.classList.add("show");
 }
 
@@ -1885,6 +2095,7 @@ window.silentRefreshTasks = async function () {
                 : 0;
 
         await loadTasks(todayLogData, userData);
+        await loadReligiousTasks(todayLogData);
     } catch (error) {
         console.error("فشل التحديث الصامت:", error);
     } finally {
@@ -4600,3 +4811,119 @@ window.syncUserUI = async function () {
         }
     });
 })();
+
+// =========================================
+// 🔓 محرك مهام فك القيود
+// =========================================
+const unchainingFileInput = document.getElementById("unchaining-proof-file");
+const uploadUnchainingBtn = document.getElementById("upload-unchaining-btn");
+const unchainingPreviewContainer = document.getElementById(
+    "unchaining-preview-container",
+);
+const unchainingPreviewImg = document.getElementById("unchaining-preview-img");
+const submitUnchainingBtn = document.getElementById("submit-unchaining-btn");
+
+let unchainingImageFile = null;
+
+uploadUnchainingBtn?.addEventListener("click", () => {
+    unchainingFileInput.click();
+});
+
+// معاينة الصورة عند اختيارها
+unchainingFileInput?.addEventListener("change", (e) => {
+    const file = e.target.files[0];
+    if (file) {
+        unchainingImageFile = file;
+        const reader = new FileReader();
+        reader.onload = function (event) {
+            unchainingPreviewImg.src = event.target.result;
+            unchainingPreviewContainer.style.display = "block";
+            submitUnchainingBtn.style.display = "block";
+            uploadUnchainingBtn.innerText = "تغيير الصورة 🔄";
+        };
+        reader.readAsDataURL(file);
+    }
+});
+
+// إرسال الإثبات للقاضي الآلي (مع التحقق المسبق الصارم)
+submitUnchainingBtn?.addEventListener("click", async () => {
+    if (!unchainingImageFile || !currentUser) return;
+
+    // ==========================================
+    // 🛡️ جدار الحماية المحلي (Pre-AI Firewall) - بتحديث السهر
+    // ==========================================
+    const now = new Date();
+    const currentHour = now.getHours();
+
+    // 1. التحقق من الوقت: مسموح بالرفع فقط من 10 مساءً (22) وحتى 4 فجراً (4)
+    // بما أن الساعة الآن 2 صباحاً، هذا الشرط سيسمح لك بالمرور لتجربته.
+    if (!(currentHour >= 22 || currentHour < 4)) {
+        return CustomDialog.alert(
+            "لا يمكنك فك القيود الآن. يجب رفع الإثبات في نهاية اليوم (بين 10 مساءً و 4 فجراً).",
+            "مرفوض 🛑",
+        );
+    }
+
+    // 2. فحص حداثة الصورة (يجب أن تكون التقطت خلال آخر 30 دقيقة كحد أقصى)
+    // هذا يغنينا عن مشاكل اختلاف التاريخ بعد منتصف الليل، ويمنع التلاعب نهائياً.
+    const fileTime = new Date(unchainingImageFile.lastModified);
+    const diffMinutes = (now - fileTime) / (1000 * 60);
+
+    if (diffMinutes > 30 || diffMinutes < 0) {
+        return CustomDialog.alert(
+            "هذا الإثبات قديم. يجب التقاط لقطة الشاشة ورفعها فوراً (خلال 30 دقيقة كحد أقصى). التقط واحدة جديدة الآن.",
+            "إثبات باطل ❌",
+        );
+    }
+    // ==========================================
+
+    const confirmSubmit = await CustomDialog.confirm(
+        "تجاوزت الفحص الأولي. سيتم الآن عرض صورتك على قاضي ذكاء اصطناعي صارم للتحقق من خلوها من التعديلات ومطابقتها للشروط. هل أنت جاهز؟",
+        "تحليل الذكاء الاصطناعي 🤖",
+    );
+    if (!confirmSubmit) return;
+
+    const originalText = submitUnchainingBtn.innerText;
+    submitUnchainingBtn.innerText =
+        "جاري التحليل بواسطة الذكاء الاصطناعي... 🤖⏳";
+    submitUnchainingBtn.disabled = true;
+
+    try {
+        // 1. رفع الصورة لـ Storage وجلب الرابط مباشرة
+        const storagePath = `unchaining_proofs/${currentUser.uid}_${Date.now()}`;
+        const storageRefPath = ref(storage, storagePath);
+        await uploadBytes(storageRefPath, unchainingImageFile);
+        const imageUrl = await getDownloadURL(storageRefPath);
+
+        // 2. إرسال المسار والرابط للقاضي الآلي
+        const verifyProof = httpsCallable(functions, "verifyUnchainingProof");
+        const result = await verifyProof({
+            storagePath: storagePath,
+            imageUrl: imageUrl,
+        });
+
+        // 3. استقبال الحكم
+        if (result.data.success) {
+            await CustomDialog.alert(
+                "تم قبول الإثبات! لقد تحررت وعدت إلى المنطقة الخضراء.",
+                "تم فك القيود ✅",
+            );
+            window.location.reload();
+        } else {
+            await CustomDialog.alert(
+                `تم الرفض بواسطة الذكاء الاصطناعي 🤖:\n\n${result.data.message}`,
+                "مرفوض ❌",
+            );
+            submitUnchainingBtn.innerText = originalText;
+            submitUnchainingBtn.disabled = false;
+        }
+    } catch (error) {
+        console.error("Error calling AI verification:", error);
+        await CustomDialog.alert(
+            "حدث خطأ أثناء التواصل مع القاضي الآلي. تأكد من اتصالك بالإنترنت.",
+            "خطأ ❌",
+        );
+        submitUnchainingBtn.innerText = originalText;
+        submitUnchainingBtn.disabled = false;
+    }
+});

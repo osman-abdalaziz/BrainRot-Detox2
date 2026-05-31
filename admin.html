@@ -86,6 +86,7 @@
                 <li data-target="tasks-page">إدارة المهام</li>
                 <li data-target="challenges-page">إدارة التحديات</li>
                 <li data-target="users-page">إدارة الأعضاء</li>
+                <li data-target="religious-tasks-page">الجانب الديني</li>
                 <li data-target="redeem-codes-page">أكواد الهدايا</li>
                 <li data-target="dashboard-page">الرئيسية</li>
             </ul>
@@ -252,7 +253,69 @@
                         <i class="fa-solid fa-file-pdf"></i> استخراج التقرير الشامل
                     </button>
                 </div>
+                <div class="glass-card" style="margin-top: 20px; border-color: var(--danger);">
+                    <h3 style="color: var(--danger); margin-bottom: 10px;">
+                        <i class="fa-solid fa-triangle-exclamation"></i> صيانة وتحديث النظام (Migration)
+                    </h3>
+                    <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 15px;">
+                        استخدم هذا الزر <b>مرة واحدة فقط</b> للانتقال إلى نظام "الدوري المستمر والمناطق". سيقوم النظام
+                        بإنشاء ملفات
+                        التتبع الجديدة وتحديث بيانات جميع المستخدمين لإضافة الحقول المطلوبة (cycleScore, badges, zones)
+                        دون المساس
+                        بالنقاط التراكمية أو العملات القديمة.
+                    </p>
+                    <button id="migrate-system-btn" class="gold-btn"
+                        style="background: var(--danger); border-color: var(--danger);">
+                        تحديث قاعدة البيانات للنظام الجديد 🚀
+                    </button>
+                </div>
             </section>
+
+            <section id="religious-tasks-page" class="page-section">
+                <h2 class="gold-text" style="margin-bottom: 15px;">إدارة الجانب الديني (المهام الروحية)</h2>
+
+                <div class="glass-card">
+                    <div style="display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap;">
+                        <input type="number" id="rel-task-order" placeholder="الترتيب" style="margin: 0; width: 80px;">
+                        <input type="text" id="rel-task-name" placeholder="عنوان المهمة (مثال: الصلوات الخمس)"
+                            style="margin: 0; flex-grow: 1;">
+                        <input type="text" id="rel-task-note" placeholder="ملاحظة/شرح (اختياري)"
+                            style="margin: 0; flex-grow: 2;">
+                    </div>
+
+                    <div
+                        style="display: flex; gap: 10px; margin-top: 10px; align-items: center; background: rgba(255,255,255,0.05); padding: 10px; border-radius: 8px;">
+                        <input type="checkbox" id="rel-task-important"
+                            style="accent-color: var(--gold-primary); width: 16px; height: 16px; cursor: pointer; margin: 0 5px 0 0;">
+                        <label for="rel-task-important" class="gold-text"
+                            style="font-size: 14px; cursor: pointer; margin: 0;">مهمة
+                            أساسية (إجبارية ولا يمكن إنهاء اليوم بدونها)</label>
+                    </div>
+
+                    <div style="display: flex; gap: 10px; margin-top: 15px;" id="rel-task-btn-container">
+                        <button id="add-rel-task-btn" class="gold-btn"
+                            style="margin: 0; flex-grow: 1; white-space: nowrap;">حفظ
+                            المهمة الدينية</button>
+                    </div>
+                </div>
+
+                <div class="glass-card" style="overflow-x: auto; margin-top: 20px;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>الترتيب</th>
+                                <th>المهمة</th>
+                                <th>ملاحظة</th>
+                                <th>النوع</th>
+                                <th>إجراء</th>
+                            </tr>
+                        </thead>
+                        <tbody id="religious-tasks-table-body">
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
             <section id="users-page" class="page-section">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                     <h2 class="gold-text" style="margin: 0;">إدارة الأعضاء (المحاربين)</h2>

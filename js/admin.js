@@ -135,6 +135,7 @@ onAuthStateChanged(auth, async (user) => {
             loadCurrentChallenge();
             loadUsers();
             loadRedeemCodes(); // <--- أضف هذا السطر
+            loadReligiousTasks(); // <--- أضف هذا السطر هنا
         }
     } else {
         window.location.href = "index.html";
@@ -1392,3 +1393,242 @@ navItems.forEach((item) => {
         localStorage.setItem("dashboardActiveTab", target);
     });
 });
+
+// ==============================
+// 🕌 إدارة الجانب الديني (المهام الروحية)
+// ==============================
+let editingRelTaskId = null;
+
+async function loadReligiousTasks() {
+    const tbody = document.getElementById("religious-tasks-table-body");
+    if (!tbody) return;
+
+    tbody.innerHTML =
+        "<tr><td colspan='5' style='text-align:center;'>جاري التحميل... ⏳</td></tr>";
+
+    const q = query(collection(db, "religiousTasks"), orderBy("order", "asc"));
+    const snap = await getDocs(q);
+
+    tbody.innerHTML = "";
+
+    if (snap.empty) {
+        tbody.innerHTML =
+            "<tr><td colspan='5' style='text-align:center; color: var(--text-muted);'>لا توجد مهام دينية مضافة حتى الآن.</td></tr>";
+        return;
+    }
+
+    snap.forEach((docSnap) => {
+        const data = docSnap.data();
+        const typeBadge = data.isImportant
+            ? `<span class="badge badge-inactive" style="background: rgba(245, 158, 11, 0.2); color: #f59e0b;">أساسية إجبارية ⚠️</span>`
+            : `<span class="badge badge-active" style="background: rgba(168, 85, 247, 0.2); color: #c084fc;">إضافية مستحبة</span>`;
+
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+            <td style="font-weight: bold; color: var(--gold-primary);">${data.order || 99}</td>
+            <td style="font-weight: bold; font-size: 15px;">${data.title}</td>
+            <td style="color: var(--text-muted); font-size: 13px;">${data.note || "---"}</td>
+            <td>${typeBadge}</td>
+            <td>
+                <button class="action-btn btn-edit" style="background: #f59e0b; border: none;" onclick="editReligiousTask('${docSnap.id}')">تعديل ✏️</button>
+                <button class="action-btn btn-delete" onclick="deleteReligiousTask('${docSnap.id}')">حذف ❌</button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+document
+    .getElementById("add-rel-task-btn")
+    ?.addEventListener("click", async () => {
+        const title = document.getElementById("rel-task-name").value.trim();
+        const note = document.getElementById("rel-task-note").value.trim();
+        const isImportant =
+            document.getElementById("rel-task-important").checked;
+        const orderInput = document.getElementById("rel-task-order").value;
+        const order = orderInput === "" ? 99 : parseInt(orderInput);
+
+        if (!title)
+            return await CustomDialog.alert(
+                "يجب إدخال عنوان المهمة الدينية على الأقل.",
+            );
+
+        const btn = document.getElementById("add-rel-task-btn");
+        btn.innerText = "جاري الحفظ... ⏳";
+        btn.disabled = true;
+
+        try {
+            if (editingRelTaskId) {
+                // تحديث مهمة موجودة
+                await updateDoc(doc(db, "religiousTasks", editingRelTaskId), {
+                    title,
+                    note,
+                    isImportant,
+                    order,
+                });
+                await CustomDialog.alert(
+                    "تم تحديث المهمة الدينية بنجاح!",
+                    "نجاح ✅",
+                );
+            } else {
+                // إضافة مهمة جديدة
+                await addDoc(collection(db, "religiousTasks"), {
+                    title,
+                    note,
+                    isImportant,
+                    order,
+                    createdAt: new Date(),
+                });
+                await CustomDialog.alert(
+                    "تمت إضافة المهمة الدينية بنجاح!",
+                    "نجاح ✅",
+                );
+            }
+
+            cancelRelEditMode();
+            loadReligiousTasks();
+        } catch (error) {
+            console.error("Error saving religious task:", error);
+            await CustomDialog.alert("حدث خطأ أثناء حفظ المهمة.");
+        } finally {
+            btn.innerText = editingRelTaskId
+                ? "تحديث المهمة ✏️"
+                : "حفظ المهمة الدينية";
+            btn.disabled = false;
+        }
+    });
+
+window.editReligiousTask = async (taskId) => {
+    try {
+        const docRef = await getDoc(doc(db, "religiousTasks", taskId));
+        if (docRef.exists()) {
+            const data = docRef.data();
+            editingRelTaskId = taskId;
+
+            document.getElementById("rel-task-name").value = data.title;
+            document.getElementById("rel-task-note").value = data.note || "";
+            document.getElementById("rel-task-order").value =
+                data.order !== undefined ? data.order : "";
+            document.getElementById("rel-task-important").checked =
+                data.isImportant || false;
+
+            const btn = document.getElementById("add-rel-task-btn");
+            btn.innerText = "تحديث المهمة ✏️";
+            btn.style.background = "#f59e0b"; // برتقالي
+
+            let cancelBtn = document.getElementById("cancel-rel-edit-btn");
+            if (!cancelBtn) {
+                cancelBtn = document.createElement("button");
+                cancelBtn.id = "cancel-rel-edit-btn";
+                cancelBtn.innerText = "إلغاء ❌";
+                cancelBtn.style.cssText =
+                    "background: transparent; color: var(--danger); border: 1px solid var(--danger); padding: 12px 20px; border-radius: 8px; cursor: pointer; flex-grow: 0;";
+                cancelBtn.onclick = cancelRelEditMode;
+                document
+                    .getElementById("rel-task-btn-container")
+                    .appendChild(cancelBtn);
+            }
+            cancelBtn.style.display = "block";
+
+            // تمرير سلس للأعلى
+            document
+                .getElementById("religious-tasks-page")
+                .scrollIntoView({ behavior: "smooth" });
+        }
+    } catch (error) {
+        console.error("Error fetching religious task:", error);
+        await CustomDialog.alert("حدث خطأ أثناء جلب بيانات المهمة.");
+    }
+};
+
+function cancelRelEditMode() {
+    editingRelTaskId = null;
+    document.getElementById("rel-task-name").value = "";
+    document.getElementById("rel-task-note").value = "";
+    document.getElementById("rel-task-order").value = "";
+    document.getElementById("rel-task-important").checked = false;
+
+    const btn = document.getElementById("add-rel-task-btn");
+    btn.innerText = "حفظ المهمة الدينية";
+    btn.style.background = ""; // إعادة لونه الأصلي للـ gradient
+
+    const cancelBtn = document.getElementById("cancel-rel-edit-btn");
+    if (cancelBtn) cancelBtn.style.display = "none";
+}
+
+window.deleteReligiousTask = async (taskId) => {
+    if (
+        await CustomDialog.confirm(
+            "هل أنت متأكد من حذف هذه المهمة الدينية نهائياً؟",
+            "حذف مهمة",
+        )
+    ) {
+        await deleteDoc(doc(db, "religiousTasks", taskId));
+        loadReligiousTasks();
+    }
+};
+
+// ==============================
+// 🚀 أداة ترحيل النظام (Migration Script) - المرحلة الأولى
+// ==============================
+document
+    .getElementById("migrate-system-btn")
+    ?.addEventListener("click", async () => {
+        const confirmMigrate = await CustomDialog.confirm(
+            "هل أنت متأكد من تحديث قاعدة البيانات للنظام الجديد؟ (تأكد من تعديل قواعد الحماية في Firebase أولاً).",
+            "تحذير أمني ⚠️",
+        );
+        if (!confirmMigrate) return;
+
+        const btn = document.getElementById("migrate-system-btn");
+        const originalText = btn.innerText;
+        btn.innerText = "جاري التحديث... ⏳";
+        btn.disabled = true;
+
+        try {
+            // نستخدم WriteBatch لضمان أمان العملية (نجاح كامل أو فشل كامل)
+            const batch = writeBatch(db);
+
+            // 1. إنشاء أو تحديث مستند إعدادات النظام (System Config)
+            const systemRef = doc(db, "configs", "system");
+            const systemSnap = await getDoc(systemRef);
+            if (!systemSnap.exists()) {
+                batch.set(systemRef, {
+                    currentCycle: 1,
+                    lastReset: new Date().toISOString(),
+                });
+            }
+
+            // 2. تحديث ملفات جميع المستخدمين
+            const usersSnap = await getDocs(collection(db, "users"));
+            let count = 0;
+
+            usersSnap.forEach((userDoc) => {
+                const userRef = doc(db, "users", userDoc.id);
+                batch.update(userRef, {
+                    currentZone: "green", // المنطقة الافتراضية
+                    cycleScore: 0, // نقاط الدورة التنافسية
+                    earnedStreakBadges: [], // سجل أوسمة الستريك لمنع التكرار
+                    badges: [], // الأوسمة المرئية
+                    coreTasksCompletedToday: false, // تتبع الصلوات اليومي
+                });
+                count++;
+            });
+
+            // 3. تنفيذ حزمة التحديثات
+            await batch.commit();
+            await CustomDialog.alert(
+                `تم تحديث النظام بنجاح! تم إضافة الحقول الجديدة لـ ${count} مستخدم.`,
+                "نجاح ✅",
+            );
+        } catch (error) {
+            console.error("Migration Error:", error);
+            await CustomDialog.alert(
+                "حدث خطأ أثناء التحديث: " + error.message,
+                "خطأ ❌",
+            );
+        } finally {
+            btn.innerText = originalText;
+            btn.disabled = false;
+        }
+    });

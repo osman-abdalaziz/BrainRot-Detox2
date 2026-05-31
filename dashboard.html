@@ -46,7 +46,6 @@
 
 <body>
     <div id="global-loader" class="global-loader">
-        <!-- <div class="spinner"></div> -->
         <span class="loader"></span>
         <h3
             style="color: var(--gold-primary); margin-top: 20px; text-shadow: 0 0 10px var(--gold-glow); font-family: 'Cairo', sans-serif;">
@@ -60,14 +59,15 @@
             </div>
             <ul class="nav-links">
                 <li class="active" data-target="tasks-page"> <i class="fa-solid fa-tasks fa-fw"></i> المهام اليومية</li>
+                <li data-target="religious-tasks-page"> <i class="fa-solid fa-mosque fa-fw"></i> الجانب الديني</li>
                 <li id="nav-todo-link" data-target="todo-page" style="display: none;"> <i
                         class="fa-solid fa-list fa-fw"></i> المهام الحرة</li>
                 <li data-target="store-page"><i class="fa-solid fa-store fa-fw"></i> المتجر</li>
-                <li class="nav-item" data-target="study-rooms-page">
+                <!-- <li class="nav-item" data-target="study-rooms-page">
                     <i class="fa-solid fa-users-viewfinder fa-fw"></i> غرف الدراسة
-                </li>
+                </li> -->
                 <li data-target="leaderboard-page"> <i class="fa-solid fa-trophy fa-fw"></i> قائمة المتصدرين</li>
-                <li data-target="analytics-page"> <i class="fa-solid fa-chart-line fa-fw"></i> تحليل التقدم</li>
+                <!-- <li data-target="analytics-page"> <i class="fa-solid fa-chart-line fa-fw"></i> تحليل التقدم</li> -->
             </ul>
         </aside>
 
@@ -117,10 +117,6 @@
                                 <i class="fa-solid fa-bolt"></i> 2x XP مُفعل لليوم
                             </p>
                         </div>
-                        <!-- <div class="challenge-stats">
-                            <p>الهدف اليومي: <span id="daily-target" class="gold-text">0</span></p>
-                            <p>نقاطك اليوم: <span id="today-points" style="color: var(--success);">0</span></p>
-                        </div> -->
                         <div class="challenge-stats">
                             <p>الهدف اليومي: <span id="daily-target" class="gold-text">0</span></p>
                             <p>نقاطك اليوم: <span id="today-points" style="color: var(--success);">0</span></p>
@@ -133,41 +129,65 @@
                 </div>
 
                 <div class="tasks-container">
-                    <div id="daily-trivia-container" style="margin-bottom: 25px;"></div>
                     <h3>مهام اليوم</h3>
+                    <div id="zone-warning-banner" class="zone-alert"></div>
+                    <div id="unchaining-task-container"
+                        style="display: none; text-align: center; padding: 20px; border-color: var(--danger); margin-bottom: 20px;"
+                        class="glass-card">
+                        <h3 style="color: var(--danger); margin-bottom: 15px;"><i class="fa-solid fa-lock"></i> مهمة فك
+                            القيود</h3>
+                        <p style="color: var(--text-muted); margin-bottom: 20px; font-size: 14px; line-height: 1.6;">
+                            أنت الآن مقيد في المنطقة الحمراء. لا يمكنك جمع النقاط ولا المنافسة.
+                            <br><strong style="color: var(--text-main);">المهمة:</strong> قم بتقليل الـ Screen Time
+                            الخاص بك اليوم إلى أقل
+                            من ساعة، أو قم بأداء تمرين رياضي شاق.
+                            <br>ارفع لقطة شاشة (Screenshot) تثبت إنجازك لفك القيود والعودة للساحة.
+                        </p>
+
+                        <input type="file" id="unchaining-proof-file" accept="image/*" style="display: none;">
+                        <button id="upload-unchaining-btn" class="gold-btn"
+                            style="background: transparent; border: 1px solid var(--danger); color: var(--danger); margin-bottom: 15px; width: 100%;">
+                            <i class="fa-solid fa-image"></i> اختر صورة الإثبات
+                        </button>
+
+                        <div id="unchaining-preview-container" style="display: none; margin-bottom: 15px;">
+                            <img id="unchaining-preview-img"
+                                style="max-width: 100%; border-radius: 8px; border: 1px solid var(--danger);">
+                        </div>
+
+                        <button id="submit-unchaining-btn" class="gold-btn"
+                            style="background: var(--danger); border-color: var(--danger); display: none; width: 100%;">
+                            إرسال الإثبات وفك القيود 🚀
+                        </button>
+                    </div>
                     <div class="tasks-list-class" id="tasks-list">
                     </div>
-
-                    <!-- المحاكمة الذاتيه (متوقف مؤقتا) -->
-                    <!-- <div id="reflection-container" class="reflection-container-class glass-card"
-                        style="margin-top: 25px; border-color: var(--gold-primary);">
-                        <h4 class="gold-text" style="margin-bottom: 10px;">محاكمة الذات ⚖️ <span
-                                style="font-size: 12px; color: var(--text-muted); font-weight: normal;">(اختياري)</span>
-                        </h4>
-                        <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 15px;">لخص إنجازاتك،
-                            إخفاقاتك، وأسباب تخاذلك
-                            اليوم. لن يقرأ الموجه تقريراً أقل من 30 كلمة.</p>
-
-                        <textarea id="daily-reflection-text" rows="4"
-                            placeholder="كيف كان أداؤك اليوم؟ كن صريحاً ومباشراً، الموجه يكره الأعذار..."
-                            style="width: 100%; background: rgba(0,0,0,0.3); border: 1px dashed var(--border-color); color: var(--text-main); padding: 12px; border-radius: 8px; resize: none; font-family: 'Cairo', sans-serif; font-size: 14px; outline: none; transition: border 0.3s;"></textarea>
-
-                        <div
-                            style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px;">
-                            <span id="word-count-error"
-                                style="color: var(--danger); font-size: 11px; display: none;">يجب أن يكون النص
-                                بين 30 و 300 كلمة.</span>
-                            <div style="font-size: 12px; color: var(--text-muted); margin-right: auto;">
-                                الكلمات: <span id="word-count-display">0</span> / 300
-                            </div>
-                        </div>
-                    </div> -->
-
                     <button id="submit-day-btn" class="gold-btn" style="margin-top: 20px;">إنهاء اليوم وتسجيل
                         النقاط</button>
                 </div>
             </section>
 
+            <section id="religious-tasks-page" class="page-section">
+                <h2 class="gold-text" style="margin-bottom: 20px;">الجانب الديني (الأساس) 🕌</h2>
+
+                <div id="daily-trivia-container" style="margin-bottom: 25px;"></div>
+
+                <div class="glass-card" style="border-color: var(--gold-primary); margin-bottom: 20px;">
+                    <h3 style="margin-bottom: 10px; color: var(--gold-primary);">توضيح هام ⚠️</h3>
+                    <p style=" font-size: 14px; color: var(--text-muted); line-height: 1.6;">
+                        هذه المهام هي زادك الحقيقي. المهام المحددة كـ <strong style="color: #f59e0b;">"أساسية
+                            إجبارية"</strong> هي
+                        شروط لا يقبل النظام المساومة عليها (مثل الصلوات الخمس). لن يفتح لك النظام باب اعتماد مهامك
+                        الدنيوية في قسم
+                        "المهام اليومية" حتى تُتم أساسياتك هنا. المهام الإضافية بينك وبين ربك ولا تعطيك نقاطاً للتفاخر.
+                    </p>
+                </div>
+
+                <div class="tasks-list-class" id="religious-tasks-list">
+                    <p style="text-align: center; color: var(--text-muted);">جاري تحميل المهام الروحية...</p>
+                </div>
+            </section>
+            <!-- 
             <div id="study-rooms-page" class="page-section hidden">
 
                 <h2 class="gold-text" style="margin-bottom: 20px;">ساحة الدراسة المشتركة (Beta)</h2>
@@ -386,7 +406,7 @@
                         </button>
                     </div>
                 </div>
-            </div>
+            </div> -->
 
             <section id="leaderboard-page" class="page-section">
                 <h2 class="gold-text leaderboard-title">🏆 قاعة العظماء</h2>
