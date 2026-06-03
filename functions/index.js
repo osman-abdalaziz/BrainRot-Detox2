@@ -1,4 +1,3 @@
-const { onDocumentCreated } = require("firebase-functions/v2/firestore");
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
@@ -9,81 +8,11 @@ const { defineSecret } = require("firebase-functions/params");
 // تعريف المفتاح السري
 const geminiApiKey = defineSecret("GEMINI_API_KEY");
 
-// admin.initializeApp();
-
 // إذا لم تكن هذه الأسطر موجودة، أضفها في الأعلى
 if (!admin.apps.length) {
     admin.initializeApp();
 }
 const db = admin.firestore();
-// استدعاء الموديل مع تمرير المفتاح السري من بيئة السيرفر الآمنة
-// const genAI = new GoogleGenerativeAI(geminiApiKey);
-
-// exports.processDailyReflection = onDocumentCreated(
-//     {
-//         document: "users/{userId}/ai_reflections/{dateStr}",
-//         secrets: ["GEMINI_API_KEY"], // السماح للدالة باستخدام المفتاح السري
-//     },
-//     async (event) => {
-//         const snap = event.data;
-//         if (!snap) return;
-
-//         const data = snap.data();
-
-//         // 1. حاجز أمني لمنع الدخول في حلقة مفرغة
-//         if (data.status !== "processing") return null;
-
-//         try {
-//             // 2. التلقين الصارم والداعم
-//             const systemPrompt = `
-//             أنت "موجه الانضباط" في منصة (BrainRot Detox). دورك هو مساعدة المحاربين على التخلص من المشتتات وبناء عادات حقيقية بأسلوب "الحزم الداعم" (Tough Love).
-
-//             قواعد التحليل والرد:
-//             1. إذا نجح في التحدي: احتفل بإنجازه! أكد له أن التزامه اليوم هو انتصار يستحق الفخر، وشجعه للحفاظ على الزخم غداً.
-//             2. إذا فشل واختلق أعذاراً واهية: كن حازماً ومباشراً. ذكره بأن الأعذار لن تبني مستقبله. لا تهنه، بل أيقظه.
-//             3. إذا فشل لكنه كان صريحاً وتحمل المسؤولية: ادعمه بقوة. أخبره أن التعثر جزء من الرحلة، وطالبه بخطة تعويض.
-//             4. الأسلوب: احترافي، محفز، مباشر. لا تلقي التحية أبداً.
-//             5. الحد الأقصى للرد: 80 كلمة فقط.
-//             `;
-
-//             const model = genAI.getGenerativeModel({
-//                 model: "gemini-2.5-flash",
-//                 systemInstruction: systemPrompt,
-//             });
-
-//             // 3. دمج بيانات المستخدم لإرسالها
-//             const userState = data.passed
-//                 ? "نجح في الوصول للهدف اليومي"
-//                 : "فشل في الوصول للهدف اليومي";
-//             const promptText = `
-//             - النتيجة: ${userState}
-//             - إجمالي النقاط: ${data.points}
-//             - تقرير المحارب: "${data.userText}"
-//             `;
-
-//             // 4. الاتصال بـ Gemini
-//             const result = await model.generateContent(promptText);
-//             const aiResponseText = result.response.text();
-
-//             // 5. تحديث المستند في قاعدة البيانات بالرد النهائي
-//             return snap.ref.update({
-//                 status: "completed",
-//                 aiResponse: aiResponseText,
-//             });
-//         } catch (error) {
-//             console.error("Gemini AI Error:", error);
-//             // في حالة فشل الـ API، نضع رداً احتياطياً وننهي العملية
-//             const fallbackMessage = data.passed
-//                 ? "عمل ممتاز اليوم! لقد حققت هدفك وهذا إنجاز حقيقي. (ملاحظة: الموجه غير متاح حالياً للتحليل التفصيلي، لكن إنجازك محفوظ. استمر!)"
-//                 : "التعثر يحدث للجميع. المهم هو أن تنهض غداً بخطة أقوى. (ملاحظة: الموجه غير متاح حالياً، راجع أهدافك وانطلق من جديد).";
-
-//             return snap.ref.update({
-//                 status: "completed",
-//                 aiResponse: fallbackMessage,
-//             });
-//         }
-//     },
-// );
 
 // ==========================================
 // 1. إشعارات مخصصة من لوحة الإدارة (التحديات والتسجيل) - إصدار V2
@@ -242,39 +171,54 @@ exports.doomsdayWarning = onSchedule(
         return null;
     },
 );
+
 // ========================================================
-// 🚀 القاضي الآلي: تقييم الجمعة، توزيع الأوسمة، وتصفير الدورة (V2)
+// 🚀 القاضي الآلي: تقييم الجمعة، توزيع الأوسمة، وتصفير الدورة (V2 - المحصنة بالكامل)
 // ========================================================
 exports.weeklyWipeAndEvaluate = onSchedule(
     {
-        schedule: "1 0 * * 6", // الدقيقة 1، الساعة 0 (منتصف الليل)، كل يوم سبت
+        schedule: "1 0 * * 6",
         timeZone: "Africa/Cairo",
     },
     async (event) => {
         const db = admin.firestore();
         const batch = db.batch();
-        const targetPoints = 100; // ⚠️ عدل هذا الرقم إذا كان التارجت اليومي الخاص بك مختلفاً
 
         try {
-            // 1. جلب رقم الدورة الحالية
             const sysRef = db.doc("configs/system");
             const sysDoc = await sysRef.get();
             const currentCycle = sysDoc.exists
                 ? sysDoc.data().currentCycle || 1
                 : 1;
 
-            // 2. جلب جميع المهام (العادية والأساسية) من كولكشن tasks
+            const challengeDoc = await db
+                .doc("settings/currentChallenge")
+                .get();
+            const targetPoints =
+                challengeDoc.exists && challengeDoc.data().dailyTargetPoints
+                    ? challengeDoc.data().dailyTargetPoints
+                    : 100;
+
+            // 🛑 إصلاح المهام الدنيوية: تجاهل المهام المعطلة (isActive: false)
             const tasksSnap = await db.collection("tasks").get();
             const allTasks = {};
             const importantTaskIds = [];
-
             tasksSnap.forEach((doc) => {
                 const data = doc.data();
                 allTasks[doc.id] = data;
-                if (data.isImportant) importantTaskIds.push(doc.id); // تحديد المهام الإجبارية
+                if (data.isImportant && data.isActive !== false)
+                    importantTaskIds.push(doc.id);
             });
 
-            // 3. تحديد تاريخ البارحة (مستهدف التقييم)
+            // 🛑 إصلاح المهام الدينية: تجاهل المهام المعطلة
+            const relTasksSnap = await db.collection("religiousTasks").get();
+            const importantRelTaskIds = [];
+            relTasksSnap.forEach((doc) => {
+                const data = doc.data();
+                if (data.isImportant && data.isActive !== false)
+                    importantRelTaskIds.push(doc.id);
+            });
+
             const now = new Date();
             now.setHours(now.getHours() - 2);
             const formatter = new Intl.DateTimeFormat("en-CA", {
@@ -285,7 +229,6 @@ exports.weeklyWipeAndEvaluate = onSchedule(
             });
             const targetDateStr = formatter.format(now);
 
-            // 4. معالجة جميع المستخدمين
             const usersSnap = await db.collection("users").get();
             let usersList = [];
 
@@ -298,68 +241,92 @@ exports.weeklyWipeAndEvaluate = onSchedule(
                 let earnedStreakBadges = userData.earnedStreakBadges || [];
                 let badges = userData.badges || [];
                 let cycleScore = userData.cycleScore || 0;
+                let freezeCount = userData.freezeCount || 0; // 🛑 سحب رصيد التجميد
 
-                // --- [أ] المنقذ الذكي ---
                 const logRef = db
                     .collection(`users/${uid}/dailyLogs`)
                     .doc(targetDateStr);
                 const logDoc = await logRef.get();
 
-                // التحقق باستخدام isFinalized الصحيحة
                 if (!logDoc.exists || !logDoc.data().isFinalized) {
                     let logData = logDoc.exists ? logDoc.data() : {};
                     let selections = logData.selections || {};
+                    let religiousSelections = logData.religiousSelections || {};
 
-                    // فحص المهام الإجبارية بناءً على نظام الخيارات (Index > 0)
+                    let missingRel = false;
+                    for (let id of importantRelTaskIds) {
+                        if (!religiousSelections[id]) {
+                            missingRel = true;
+                            break;
+                        }
+                    }
+
                     let missingImportant = false;
                     for (let id of importantTaskIds) {
                         let sel = selections[id];
                         let isDone = false;
                         if (Array.isArray(sel)) {
-                            // Checklist: منجزة إذا اختار أي شيء غير الصفر
                             if (
                                 sel.length > 1 ||
                                 (sel.length === 1 && sel[0] !== 0)
                             )
                                 isDone = true;
                         } else {
-                            // Select: منجزة إذا كان الاندكس أكبر من صفر
                             if (sel > 0) isDone = true;
                         }
-
                         if (!isDone) {
                             missingImportant = true;
                             break;
                         }
                     }
 
-                    // حساب النقاط الصحيح من نظام الـ Options
                     let calcPoints = 0;
                     for (let [taskId, sel] of Object.entries(selections)) {
                         let task = allTasks[taskId];
                         if (task && task.options) {
                             let selArray = Array.isArray(sel) ? sel : [sel];
                             for (let idx of selArray) {
-                                if (task.options[idx]) {
+                                if (task.options[idx])
                                     calcPoints += task.options[idx].points || 0;
-                                }
                             }
                         }
                     }
 
-                    // التقييم والحكم
-                    if (!missingImportant && calcPoints >= targetPoints) {
+                    const passedToday =
+                        !missingImportant &&
+                        !missingRel &&
+                        calcPoints >= targetPoints;
+
+                    if (passedToday) {
                         newStreak++;
                         if (newZone === "yellow") newZone = "green";
                         cycleScore += calcPoints;
                     } else {
-                        newStreak = 0;
-                        if (newZone === "green") newZone = "yellow";
-                        else if (newZone === "yellow") newZone = "red";
+                        // 🛑 إصلاح الكارثة: حماية المستخدم إذا كان يمتلك تجميد
+                        if (freezeCount > 0) {
+                            freezeCount--; // استهلاك التجميد والستريك يبقى كما هو
+                        } else {
+                            newStreak = 0;
+                            if (newZone === "green") newZone = "yellow";
+                            else if (newZone === "yellow") newZone = "red";
+                        }
                     }
+
+                    batch.set(
+                        logRef,
+                        {
+                            date: targetDateStr,
+                            isFinalized: true,
+                            passed: passedToday,
+                            pointsEarned: calcPoints,
+                            selections: selections,
+                            religiousSelections: religiousSelections,
+                            timestamp: new Date().toISOString(),
+                        },
+                        { merge: true },
+                    );
                 }
 
-                // --- [ب] منح أوسمة الستريك ---
                 const milestones = [7, 14, 21, 28, 35, 42, 50, 60, 90, 100];
                 for (let m of milestones) {
                     if (newStreak >= m && !earnedStreakBadges.includes(m)) {
@@ -367,7 +334,7 @@ exports.weeklyWipeAndEvaluate = onSchedule(
                         badges.push({
                             id: `streak_${m}`,
                             title: `بطل صمود - ${m} أيام`,
-                            imagePath: `images/badge.webp`, // مسار الوسام الافتراضي الموحد للستريك
+                            imagePath: `images/badge.webp`,
                             date: new Date().toISOString(),
                             type: "streak",
                         });
@@ -379,18 +346,17 @@ exports.weeklyWipeAndEvaluate = onSchedule(
                     cycleScore,
                     newStreak,
                     newZone,
+                    freezeCount,
                     earnedStreakBadges,
                     badges,
                 });
             }
 
-            // --- [ج] ترتيب الـ Top 3 وتصفير الدورة ---
             usersList.sort((a, b) => b.cycleScore - a.cycleScore);
 
             let rank = 1;
             for (let i = 0; i < usersList.length; i++) {
                 let u = usersList[i];
-
                 if (rank <= 3 && u.cycleScore > 0) {
                     u.badges.push({
                         id: `top${rank}_cycle_${currentCycle}`,
@@ -406,10 +372,12 @@ exports.weeklyWipeAndEvaluate = onSchedule(
                 batch.update(uRef, {
                     currentStreak: u.newStreak,
                     currentZone: u.newZone,
+                    freezeCount: u.freezeCount, // 🛑 تحديث رصيد التجميد في قاعدة البيانات
                     earnedStreakBadges: u.earnedStreakBadges,
                     badges: u.badges,
                     cycleScore: 0,
                     coreTasksCompletedToday: false,
+                    lastEvalDate: targetDateStr,
                 });
             }
 
@@ -422,7 +390,7 @@ exports.weeklyWipeAndEvaluate = onSchedule(
             console.log(`تم إغلاق الدورة ${currentCycle} بنجاح.`);
             return null;
         } catch (error) {
-            console.error("حدث خطأ كارثي أثناء تصفير الدورة:", error);
+            console.error("حدث خطأ أثناء تصفير الدورة:", error);
             return null;
         }
     },
