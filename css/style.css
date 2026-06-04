@@ -151,7 +151,9 @@ body {
 
 /* Sidebar */
 .sidebar {
-    width: 250px !important;
+    width: 250px;
+    flex: 0 0 250px; /* 0 تمدد، 0 انكماش، الأساس 250 بكسل */
+    min-width: 250px;
     background-color: rgba(10, 5, 20, 0.7);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
@@ -960,6 +962,25 @@ select:focus {
     background: rgba(0, 0, 0, 0.5);
 }
 
+.task-item.important .rel-custom-select-wrapper .custom-select-trigger {
+    border-color: rgba(245, 158, 11, 0.4);
+}
+.task-item.important .rel-custom-select-wrapper .custom-select-trigger:hover,
+.task-item.important .custom-select.open .custom-select-trigger {
+    box-shadow: 0 0 10px rgba(245, 158, 11, 0.1);
+    border-color: rgba(245, 158, 11, 0.6);
+}
+.task-item.important .custom-options {
+    border-color: rgba(245, 158, 11, 0.4);
+    background-color: rgba(10, 7, 1, 0.781);
+}
+
+.task-item.important .custom-option:hover,
+.task-item.important .custom-option.selected {
+    background: rgba(245, 158, 11, 0.1);
+    color: #f59e0b;
+}
+
 .custom-select-trigger i {
     color: var(--text-muted);
     transition:
@@ -970,6 +991,10 @@ select:focus {
 .custom-select.open .custom-select-trigger i {
     transform: rotate(180deg);
     color: var(--gold-primary);
+}
+
+.task-item.important .custom-select.open .custom-select-trigger i {
+    color: rgba(245, 158, 11, 1);
 }
 
 .custom-options {
@@ -1038,6 +1063,10 @@ select:focus {
 .custom-options::-webkit-scrollbar-thumb {
     background: var(--gold-primary);
     border-radius: 10px;
+}
+
+.task-item.important .custom-options::-webkit-scrollbar-thumb {
+    background: rgba(245, 158, 11, 0.6);
 }
 
 /* ==========================================
@@ -1489,6 +1518,10 @@ select:focus {
     }
     .info-div {
         gap: 5px;
+    }
+
+    .dialog-input::placeholder {
+        font-size: 13px !important;
     }
 
     .leaderboard-item {

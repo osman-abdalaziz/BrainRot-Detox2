@@ -1395,25 +1395,23 @@ navItems.forEach((item) => {
 });
 
 // ==============================
-// 🕌 إدارة الجانب الديني (المهام الروحية)
+// 🕌 إدارة الجانب الديني (المهام الروحية) المطورة
 // ==============================
 let editingRelTaskId = null;
 
 async function loadReligiousTasks() {
     const tbody = document.getElementById("religious-tasks-table-body");
     if (!tbody) return;
-
     tbody.innerHTML =
-        "<tr><td colspan='5' style='text-align:center;'>جاري التحميل... ⏳</td></tr>";
+        "<tr><td colspan='4' style='text-align:center;'>جاري التحميل... ⏳</td></tr>";
 
     const q = query(collection(db, "religiousTasks"), orderBy("order", "asc"));
     const snap = await getDocs(q);
-
     tbody.innerHTML = "";
 
     if (snap.empty) {
         tbody.innerHTML =
-            "<tr><td colspan='5' style='text-align:center; color: var(--text-muted);'>لا توجد مهام دينية مضافة حتى الآن.</td></tr>";
+            "<tr><td colspan='4' style='text-align:center; color: var(--text-muted);'>لا توجد مهام دينية مضافة حتى الآن.</td></tr>";
         return;
     }
 
@@ -1423,12 +1421,23 @@ async function loadReligiousTasks() {
             ? `<span class="badge badge-inactive" style="background: rgba(245, 158, 11, 0.2); color: #f59e0b;">أساسية إجبارية ⚠️</span>`
             : `<span class="badge badge-active" style="background: rgba(168, 85, 247, 0.2); color: #c084fc;">إضافية مستحبة</span>`;
 
+        let optionsHtml =
+            '<ul style="list-style: none; padding: 0; margin: 0; font-size: 13px;">';
+        if (data.options && data.options.length > 0) {
+            data.options.forEach((opt) => {
+                optionsHtml += `<li style="margin-bottom: 5px;">- ${opt.name}</li>`;
+            });
+        }
+        optionsHtml += "</ul>";
+
         const tr = document.createElement("tr");
         tr.innerHTML = `
-            <td style="font-weight: bold; color: var(--gold-primary);">${data.order || 99}</td>
-            <td style="font-weight: bold; font-size: 15px;">${data.title}</td>
-            <td style="color: var(--text-muted); font-size: 13px;">${data.note || "---"}</td>
-            <td>${typeBadge}</td>
+            <td>
+                <span style="font-weight: bold; font-size: 15px;">${data.title}</span>
+                <br><span style="color: var(--text-muted); font-size: 11px;">${data.note || ""}</span>
+            </td>
+            <td>${optionsHtml}</td>
+            <td>${typeBadge}<br><span style="font-size: 10px; color: gray;">${data.isMultiSelect ? "متعدد الاختيار" : "اختيار واحد"}</span></td>
             <td>
                 <button class="action-btn btn-edit" style="background: #f59e0b; border: none;" onclick="editReligiousTask('${docSnap.id}')">تعديل ✏️</button>
                 <button class="action-btn btn-delete" onclick="deleteReligiousTask('${docSnap.id}')">حذف ❌</button>
@@ -1439,18 +1448,51 @@ async function loadReligiousTasks() {
 }
 
 document
+    .getElementById("add-rel-option-row-btn")
+    ?.addEventListener("click", () => {
+        const container = document.getElementById("rel-options-container");
+        const row = document.createElement("div");
+        row.className = "rel-option-row";
+        row.style.cssText = "display: flex; gap: 10px; margin-bottom: 8px;";
+        row.innerHTML = `
+        <input type="text" class="rel-opt-name" placeholder="اسم الخيار الإضافي" style="margin: 0; flex-grow: 1;">
+        <button class="remove-rel-opt-btn" style="background: var(--danger); color: white; border: none; padding: 0 15px; border-radius: 8px; cursor: pointer;">X</button>
+    `;
+        container.appendChild(row);
+        row.querySelector(".remove-rel-opt-btn").addEventListener("click", () =>
+            row.remove(),
+        );
+    });
+
+document
     .getElementById("add-rel-task-btn")
     ?.addEventListener("click", async () => {
         const title = document.getElementById("rel-task-name").value.trim();
         const note = document.getElementById("rel-task-note").value.trim();
         const isImportant =
             document.getElementById("rel-task-important").checked;
+        const isMultiSelect =
+            document.getElementById("rel-task-is-multi").checked;
         const orderInput = document.getElementById("rel-task-order").value;
         const order = orderInput === "" ? 99 : parseInt(orderInput);
 
         if (!title)
+            return await CustomDialog.alert("يجب إدخال عنوان المهمة الدينية.");
+
+        const optionRows = document.querySelectorAll(".rel-option-row");
+        const options = [];
+        let hasError = false;
+
+        optionRows.forEach((row) => {
+            const optName = row.querySelector(".rel-opt-name").value.trim();
+            if (optName)
+                options.push({ name: optName, points: 0 }); // Points always 0 for religious
+            else hasError = true;
+        });
+
+        if (hasError || options.length === 0)
             return await CustomDialog.alert(
-                "يجب إدخال عنوان المهمة الدينية على الأقل.",
+                "يرجى تعبئة أسماء الخيارات (خيار واحد على الأقل).",
             );
 
         const btn = document.getElementById("add-rel-task-btn");
@@ -1459,36 +1501,31 @@ document
 
         try {
             if (editingRelTaskId) {
-                // تحديث مهمة موجودة
                 await updateDoc(doc(db, "religiousTasks", editingRelTaskId), {
                     title,
                     note,
                     isImportant,
+                    isMultiSelect,
                     order,
+                    options,
                 });
-                await CustomDialog.alert(
-                    "تم تحديث المهمة الدينية بنجاح!",
-                    "نجاح ✅",
-                );
+                await CustomDialog.alert("تم تحديث المهمة الدينية بنجاح!");
             } else {
-                // إضافة مهمة جديدة
                 await addDoc(collection(db, "religiousTasks"), {
                     title,
                     note,
                     isImportant,
+                    isMultiSelect,
                     order,
+                    options,
+                    isActive: true,
                     createdAt: new Date(),
                 });
-                await CustomDialog.alert(
-                    "تمت إضافة المهمة الدينية بنجاح!",
-                    "نجاح ✅",
-                );
+                await CustomDialog.alert("تمت إضافة المهمة الدينية بنجاح!");
             }
-
             cancelRelEditMode();
             loadReligiousTasks();
         } catch (error) {
-            console.error("Error saving religious task:", error);
             await CustomDialog.alert("حدث خطأ أثناء حفظ المهمة.");
         } finally {
             btn.innerText = editingRelTaskId
@@ -1499,45 +1536,62 @@ document
     });
 
 window.editReligiousTask = async (taskId) => {
-    try {
-        const docRef = await getDoc(doc(db, "religiousTasks", taskId));
-        if (docRef.exists()) {
-            const data = docRef.data();
-            editingRelTaskId = taskId;
+    const docRef = await getDoc(doc(db, "religiousTasks", taskId));
+    if (docRef.exists()) {
+        const data = docRef.data();
+        editingRelTaskId = taskId;
 
-            document.getElementById("rel-task-name").value = data.title;
-            document.getElementById("rel-task-note").value = data.note || "";
-            document.getElementById("rel-task-order").value =
-                data.order !== undefined ? data.order : "";
-            document.getElementById("rel-task-important").checked =
-                data.isImportant || false;
+        document.getElementById("rel-task-name").value = data.title;
+        document.getElementById("rel-task-note").value = data.note || "";
+        document.getElementById("rel-task-order").value =
+            data.order !== undefined ? data.order : "";
+        document.getElementById("rel-task-important").checked =
+            data.isImportant || false;
+        document.getElementById("rel-task-is-multi").checked =
+            data.isMultiSelect || false;
 
-            const btn = document.getElementById("add-rel-task-btn");
-            btn.innerText = "تحديث المهمة ✏️";
-            btn.style.background = "#f59e0b"; // برتقالي
-
-            let cancelBtn = document.getElementById("cancel-rel-edit-btn");
-            if (!cancelBtn) {
-                cancelBtn = document.createElement("button");
-                cancelBtn.id = "cancel-rel-edit-btn";
-                cancelBtn.innerText = "إلغاء ❌";
-                cancelBtn.style.cssText =
-                    "background: transparent; color: var(--danger); border: 1px solid var(--danger); padding: 12px 20px; border-radius: 8px; cursor: pointer; flex-grow: 0;";
-                cancelBtn.onclick = cancelRelEditMode;
-                document
-                    .getElementById("rel-task-btn-container")
-                    .appendChild(cancelBtn);
-            }
-            cancelBtn.style.display = "block";
-
-            // تمرير سلس للأعلى
-            document
-                .getElementById("religious-tasks-page")
-                .scrollIntoView({ behavior: "smooth" });
+        const container = document.getElementById("rel-options-container");
+        container.innerHTML = "";
+        if (data.options && data.options.length > 0) {
+            data.options.forEach((opt) => {
+                const row = document.createElement("div");
+                row.className = "rel-option-row";
+                row.style.cssText =
+                    "display: flex; gap: 10px; margin-bottom: 8px;";
+                row.innerHTML = `
+                    <input type="text" class="rel-opt-name" value="${opt.name}" style="margin: 0; flex-grow: 1;">
+                    <button class="remove-rel-opt-btn" style="background: var(--danger); color: white; border: none; padding: 0 15px; border-radius: 8px; cursor: pointer;">X</button>
+                `;
+                container.appendChild(row);
+                row.querySelector(".remove-rel-opt-btn").addEventListener(
+                    "click",
+                    () => row.remove(),
+                );
+            });
+        } else {
+            document.getElementById("add-rel-option-row-btn").click();
         }
-    } catch (error) {
-        console.error("Error fetching religious task:", error);
-        await CustomDialog.alert("حدث خطأ أثناء جلب بيانات المهمة.");
+
+        const btn = document.getElementById("add-rel-task-btn");
+        btn.innerText = "تحديث المهمة ✏️";
+        btn.style.background = "#f59e0b";
+
+        let cancelBtn = document.getElementById("cancel-rel-edit-btn");
+        if (!cancelBtn) {
+            cancelBtn = document.createElement("button");
+            cancelBtn.id = "cancel-rel-edit-btn";
+            cancelBtn.innerText = "إلغاء ❌";
+            cancelBtn.style.cssText =
+                "background: transparent; color: var(--danger); border: 1px solid var(--danger); padding: 12px 20px; border-radius: 8px; cursor: pointer;";
+            cancelBtn.onclick = cancelRelEditMode;
+            document
+                .getElementById("rel-task-btn-container")
+                .appendChild(cancelBtn);
+        }
+        cancelBtn.style.display = "block";
+        document
+            .getElementById("religious-tasks-page")
+            .scrollIntoView({ behavior: "smooth" });
     }
 };
 
@@ -1547,11 +1601,15 @@ function cancelRelEditMode() {
     document.getElementById("rel-task-note").value = "";
     document.getElementById("rel-task-order").value = "";
     document.getElementById("rel-task-important").checked = false;
+    document.getElementById("rel-task-is-multi").checked = false;
+    document.getElementById("rel-options-container").innerHTML = `
+        <div class="rel-option-row" style="display: flex; gap: 10px; margin-bottom: 8px;">
+            <input type="text" class="rel-opt-name" placeholder="اسم الخيار" style="margin: 0; flex-grow: 1;">
+        </div>`;
 
     const btn = document.getElementById("add-rel-task-btn");
     btn.innerText = "حفظ المهمة الدينية";
-    btn.style.background = ""; // إعادة لونه الأصلي للـ gradient
-
+    btn.style.background = "";
     const cancelBtn = document.getElementById("cancel-rel-edit-btn");
     if (cancelBtn) cancelBtn.style.display = "none";
 }

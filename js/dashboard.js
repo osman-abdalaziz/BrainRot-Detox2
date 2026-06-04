@@ -204,9 +204,8 @@ function getCairoDateString(dateObj) {
 }
 
 let currentUser = null;
-let currentChallengeData = null;
+let currentCycle = 1; // الدورة الأسبوعية الحالية
 let dailyTargetPoints = 0;
-let lifeSaverCost = 0;
 let isTodayFinalized = false;
 
 onAuthStateChanged(auth, async (user) => {
@@ -224,57 +223,157 @@ onAuthStateChanged(auth, async (user) => {
 
         const userData = userDoc.data();
         updateProfileUI(userData);
+        // جلب الهدف اليومي (سنحتفظ بهذا المستند كإعدادات عامة فقط)
         const challengeDoc = await getDoc(
             doc(db, "settings", "currentChallenge"),
         );
+        if (challengeDoc.exists()) {
+            dailyTargetPoints = challengeDoc.data().dailyTargetPoints || 100;
+        } else {
+            dailyTargetPoints = 100;
+        }
 
-        if (challengeDoc.exists() && challengeDoc.data().isActive) {
-            currentChallengeData = challengeDoc.data();
-            dailyTargetPoints = currentChallengeData.dailyTargetPoints;
-            lifeSaverCost = dailyTargetPoints * 1.5;
-            const endDate = currentChallengeData.endDate.toDate();
-            // استخدام الوقت الحقيقي لحساب الأيام المتبقية
-            const diffDays = Math.ceil(
-                (endDate - getRealNow()) / (1000 * 60 * 60 * 24),
-            );
-            const displayDays = diffDays > 0 ? diffDays : "انتهى";
-            const isJoined =
-                userData.joinedChallengeId === currentChallengeData.challengeId;
-            const hasFailed = userData.challengeStatus === "failed" && isJoined;
+        // جلب رقم الدورة الأسبوعية الحالية من السيرفر
+        const sysDoc = await getDoc(doc(db, "configs", "system"));
+        if (sysDoc.exists()) {
+            currentCycle = sysDoc.data().currentCycle || 1;
+        }
 
-            if (currentChallengeData.status === "registration")
-                renderRegistrationPhase(isJoined);
-            else if (currentChallengeData.status === "active") {
-                if (hasFailed) renderFailedState(displayDays);
-                else if (isJoined)
-                    await processActiveParticipant(
-                        userData,
-                        userDocRef,
-                        displayDays,
-                    );
-                else renderSpectatorState(displayDays);
-            }
-        } else renderNoChallengeState();
+        // إخفاء نافذة الانضمام القديمة نهائياً
+        const joinModal = document.getElementById("join-challenge-modal");
+        if (joinModal)
+            joinModal.style.setProperty("display", "none", "important");
+
+        // الدخول المباشر للمعركة للجميع
+        await processActiveParticipant(userData, userDocRef);
+        await checkAndCelebrateBadges(userData, userDocRef);
 
         loadLeaderboard();
         loadAnalytics();
         applyZoneUI(userData.currentZone || "green");
         const loader = document.getElementById("global-loader");
         if (loader) loader.classList.add("hidden");
-        // // ==========================================
-        // // 6. الإقلاع الذكي (توجيه المستخدم لمكانه الصحيح)
-        // // ==========================================
-        // const savedRoomId = localStorage.getItem("activeStudyRoomId");
-        // if (savedRoomId) {
-        //     // لو كان مسجلاً في غرفة، أعده إليها غصباً عن الواجهة
-        //     enterStudyRoom(savedRoomId);
-        // } else {
-        //     // غير ذلك، شغل رادار اللوبي
-        //     if (typeof listenToLobby === "function") listenToLobby();
-        // }
+        window.syncUserUI();
         // إخفاء شاشة التحميل بنعومة بعد الانتهاء من تجهيز وتحديث كل الواجهات
     } else window.location.href = "index.html";
 });
+
+// ==========================================
+// 🎉 محرك الاحتفال الأسطوري (صندوق الهدايا + تخطي حظر الصوت)
+// ==========================================
+async function checkAndCelebrateBadges(userData, userDocRef) {
+    const allBadges = userData.badges || [];
+    if (allBadges.length === 0) return;
+
+    const celebratedIds = userData.celebratedBadgeIds || [];
+    const newBadges = allBadges.filter((b) => !celebratedIds.includes(b.id));
+
+    if (newBadges.length > 0) {
+        const container = document.getElementById("new-badges-container");
+        const overlay = document.getElementById("badge-celebration-overlay");
+        const giftBox = document.getElementById("badge-gift-box");
+        const revealContent = document.getElementById("badge-reveal-content");
+        const glowBg = document.getElementById("epic-glow-bg");
+        const openBtn = document.getElementById("open-gift-btn");
+        const closeBtn = document.getElementById("close-celebration-btn");
+
+        if (!container || !overlay || !openBtn) return;
+
+        // تجهيز شكل الأوسمة للظهور لاحقاً
+        container.innerHTML = newBadges
+            .map(
+                (badge) => `
+            <div style="background: rgba(30, 20, 50, 0.6); border: 1px solid #eab308; padding: 20px 15px; border-radius: 16px; width: 130px; text-align: center; box-shadow: 0 0 20px rgba(234, 179, 8, 0.2); animation: floatBadge 3s ease-in-out infinite;">
+                <img src="${badge.imagePath || badge.icon || "images/badge.webp"}" alt="Badge" style="width: 80px; height: 80px; object-fit: contain; margin-bottom: 12px; filter: drop-shadow(0 0 15px rgba(234,179,8,0.8));">
+                <h4 style="font-size: 14px; color: #fef08a; margin: 0; line-height: 1.5; font-weight: bold; text-shadow: 0 2px 4px rgba(0,0,0,0.8);">${badge.title}</h4>
+            </div>
+        `,
+            )
+            .join("");
+
+        // إعادة ضبط الشاشات: إظهار الصندوق المغلق وإخفاء الاحتفال
+        giftBox.style.display = "block";
+        revealContent.style.display = "none";
+        glowBg.style.display = "none";
+        overlay.style.display = "flex";
+        overlay.style.opacity = "1";
+        overlay.style.visibility = "visible";
+        let fireworkInterval = null;
+
+        // 🛑 السر هنا: يتم تفعيل الصوت والألعاب النارية فقط بعد "النقرة"
+        openBtn.onclick = () => {
+            // 1. إخفاء الصندوق وإظهار التوهج والأوسمة
+            giftBox.style.display = "none";
+            revealContent.style.display = "block";
+            glowBg.style.display = "block";
+
+            // إضافة حركة الدخول للنافذة الجديدة
+            revealContent.style.animation =
+                "epicDrop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards";
+
+            // 2. تشغيل الصوت (سيعمل 100% الآن لأنه تم بناءً على تفاعل Click)
+            const epicSound = new Audio("../audios/tadaaa.mp3");
+            epicSound.volume = 0.8;
+            epicSound
+                .play()
+                .catch((e) =>
+                    console.log("الصوت محظور إعدادات جهاز المستخدم:", e),
+                );
+
+            // 3. تشغيل الألعاب النارية الذهبية
+            const duration = 5000;
+            const animationEnd = Date.now() + duration;
+            const defaults = {
+                startVelocity: 30,
+                spread: 360,
+                ticks: 60,
+                zIndex: 9999999,
+                colors: ["#eab308", "#facc15", "#fef08a", "#ffffff"],
+            };
+
+            function randomInRange(min, max) {
+                return Math.random() * (max - min) + min;
+            }
+
+            fireworkInterval = setInterval(function () {
+                const timeLeft = animationEnd - Date.now();
+                if (timeLeft <= 0) return clearInterval(fireworkInterval);
+
+                const particleCount = 50 * (timeLeft / duration);
+                confetti(
+                    Object.assign({}, defaults, {
+                        particleCount,
+                        origin: {
+                            x: randomInRange(0.1, 0.3),
+                            y: Math.random() - 0.2,
+                        },
+                    }),
+                );
+                confetti(
+                    Object.assign({}, defaults, {
+                        particleCount,
+                        origin: {
+                            x: randomInRange(0.7, 0.9),
+                            y: Math.random() - 0.2,
+                        },
+                    }),
+                );
+            }, 250);
+        };
+
+        // تحديث الداتابيز لكي لا يظهر الاحتفال مجدداً في الأجهزة الأخرى
+        const newIds = newBadges.map((b) => b.id);
+        await updateDoc(userDocRef, {
+            celebratedBadgeIds: arrayUnion(...newIds),
+        });
+
+        // إغلاق الشاشة بالكامل عند الضغط على الاستلام
+        closeBtn.onclick = () => {
+            overlay.style.display = "none";
+            if (fireworkInterval) clearInterval(fireworkInterval);
+        };
+    }
+}
 
 function updateProfileUI(userData) {
     const firstName = userData.name.split(" ")[0];
@@ -327,6 +426,33 @@ function updateProfileUI(userData) {
     if (pointsEl) {
         pointsEl.style.display = "inline-flex";
         pointsEl.innerHTML = `${coins} <i class="fa-solid fa-wallet fa-fw"></i>`;
+    }
+
+    // ==============================
+    // 🛑 نظام إغلاق المتجر بسبب الديون (Debt Lock)
+    // ==============================
+    const storeDebtBanner = document.getElementById("store-debt-banner");
+    const storeBtns = document.querySelectorAll(".store-item .gold-btn");
+
+    if (coins < 0) {
+        if (storeDebtBanner) {
+            storeDebtBanner.style.display = "block";
+            storeDebtBanner.innerHTML = `⚠️ أنت مديون للنظام بـ <span style="font-size: 22px;">${Math.abs(coins)}</span> عملة.<br> التزم بمهامك اليومية لتسديد ديون التخاذل قبل أن تتمكن من شراء أي عتاد مجدداً.`;
+        }
+        // تعطيل جميع أزرار المتجر بهدوء
+        storeBtns.forEach((btn) => {
+            btn.disabled = true;
+            btn.style.opacity = "0.4";
+            btn.style.cursor = "not-allowed";
+        });
+    } else {
+        if (storeDebtBanner) storeDebtBanner.style.display = "none";
+        // إعادة تفعيل الأزرار إذا تم سداد الدين
+        storeBtns.forEach((btn) => {
+            btn.disabled = false;
+            btn.style.opacity = "1";
+            btn.style.cursor = "pointer";
+        });
     }
 
     const badgesContainer = document.getElementById("badges-container");
@@ -424,6 +550,7 @@ function applyZoneUI(zone) {
     const unchainingContainer = document.getElementById(
         "unchaining-task-container",
     );
+    const dopamineCard = document.getElementById("dopamine-analyzer-card"); // 🛑 تم إضافة البطاقة
 
     if (!banner) return;
 
@@ -435,6 +562,7 @@ function applyZoneUI(zone) {
     if (unchainingContainer) unchainingContainer.style.display = "none";
     if (normalTasksContainer) normalTasksContainer.style.display = "block";
     if (submitDayBtn) submitDayBtn.style.display = "block";
+    if (dopamineCard) dopamineCard.style.display = "block"; // 🛑 إظهار افتراضي
 
     if (zone === "yellow") {
         banner.classList.add("yellow");
@@ -449,6 +577,7 @@ function applyZoneUI(zone) {
         // إخفاء المهام العادية وزر الاعتماد، وإظهار واجهة فك القيود
         if (normalTasksContainer) normalTasksContainer.style.display = "none";
         if (submitDayBtn) submitDayBtn.style.display = "none";
+        if (dopamineCard) dopamineCard.style.display = "none"; // 🛑 إخفاء وقت العقاب
         if (unchainingContainer) unchainingContainer.style.display = "block";
 
         // الطرد من الصفحات المحظورة
@@ -463,89 +592,87 @@ function applyZoneUI(zone) {
     }
 }
 
-function renderRegistrationPhase(isJoined) {
-    const container = document.querySelector(".tasks-container");
-    const infoBox = document.getElementById("challenge-info");
-    infoBox.innerHTML = `<h2 style="color: var(--gold-primary); text-align: center; margin-bottom: 10px;">⏳ يوم التسجيل مفتوح</h2><p style="text-align: center; font-size: 18px;">تحدي: <strong>${currentChallengeData.title}</strong></p><p style="text-align: center; color: var(--text-muted);">المدة: ${currentChallengeData.durationDays} أيام | الهدف اليومي: ${currentChallengeData.dailyTargetPoints} نقطة</p>`;
-    if (isJoined)
-        container.innerHTML = `<div style="text-align: center; padding: 40px;"><h3 style="color: var(--success); font-size: 24px;">✅ أنت مسجل ومستعد!</h3><p style="color: var(--text-muted); margin-top: 10px;">سيتم فتح المهام بمجرد أن يطلق الإدمن إشارة البدء. استعد.</p></div>`;
-    else {
-        container.innerHTML = `<div style="text-align: center; padding: 30px; background: rgba(168, 85, 247, 0.1); border: 1px dashed var(--gold-primary); border-radius: 12px;"><h3 style="margin-bottom: 15px;">التسجيل متاح الآن</h3><p style="margin-bottom: 20px; color: var(--text-muted);">إذا لم تنضم الآن، فلن تتمكن من الدخول بعد بدء التحدي.</p><button id="join-challenge-btn" class="gold-btn" style="width: auto; padding: 12px 40px; font-size: 18px;">انضمام للتحدي بقوة 🔥</button></div>`;
-        document
-            .getElementById("join-challenge-btn")
-            .addEventListener("click", joinChallenge);
-    }
-}
+// function renderRegistrationPhase(isJoined) {
+//     const container = document.querySelector(".tasks-container");
+//     const infoBox = document.getElementById("challenge-info");
+//     infoBox.innerHTML = `<h2 style="color: var(--gold-primary); text-align: center; margin-bottom: 10px;">⏳ يوم التسجيل مفتوح</h2><p style="text-align: center; font-size: 18px;">تحدي: <strong>${currentChallengeData.title}</strong></p><p style="text-align: center; color: var(--text-muted);">المدة: ${currentChallengeData.durationDays} أيام | الهدف اليومي: ${currentChallengeData.dailyTargetPoints} نقطة</p>`;
+//     if (isJoined)
+//         container.innerHTML = `<div style="text-align: center; padding: 40px;"><h3 style="color: var(--success); font-size: 24px;">✅ أنت مسجل ومستعد!</h3><p style="color: var(--text-muted); margin-top: 10px;">سيتم فتح المهام بمجرد أن يطلق الإدمن إشارة البدء. استعد.</p></div>`;
+//     else {
+//         container.innerHTML = `<div style="text-align: center; padding: 30px; background: rgba(168, 85, 247, 0.1); border: 1px dashed var(--gold-primary); border-radius: 12px;"><h3 style="margin-bottom: 15px;">التسجيل متاح الآن</h3><p style="margin-bottom: 20px; color: var(--text-muted);">إذا لم تنضم الآن، فلن تتمكن من الدخول بعد بدء التحدي.</p><button id="join-challenge-btn" class="gold-btn" style="width: auto; padding: 12px 40px; font-size: 18px;">انضمام للتحدي بقوة 🔥</button></div>`;
+//         document
+//             .getElementById("join-challenge-btn")
+//             .addEventListener("click", joinChallenge);
+//     }
+// }
 
-async function joinChallenge() {
-    const btn = document.getElementById("join-challenge-btn");
-    btn.disabled = true;
-    btn.innerText = "جاري التسجيل...";
-    try {
-        await updateDoc(doc(db, "users", currentUser.uid), {
-            joinedChallengeId: currentChallengeData.challengeId,
-            challengeStatus: "active",
-            streak: 0, // تصفير الستريك مع التحدي الجديد
-        });
-        window.syncUserUI();
-    } catch (error) {
-        await CustomDialog.alert("حدث خطأ أثناء الانضمام.", "خطأ");
-        btn.disabled = false;
-    }
-}
+// async function joinChallenge() {
+//     const btn = document.getElementById("join-challenge-btn");
+//     btn.disabled = true;
+//     btn.innerText = "جاري التسجيل...";
+//     try {
+//         await updateDoc(doc(db, "users", currentUser.uid), {
+//             joinedChallengeId: currentChallengeData.challengeId,
+//             challengeStatus: "active",
+//             streak: 0, // تصفير الستريك مع التحدي الجديد
+//         });
+//         window.syncUserUI();
+//     } catch (error) {
+//         await CustomDialog.alert("حدث خطأ أثناء الانضمام.", "خطأ");
+//         btn.disabled = false;
+//     }
+// }
 
-function renderSpectatorState(displayDays) {
-    document.getElementById("challenge-info").style.display = "none";
-    document.querySelector(".tasks-container").innerHTML =
-        `<div style="text-align: center; padding: 40px; background: rgba(0,0,0,0.2); border-radius: 16px; border: 1px solid var(--border-color);"><h2 style="color: var(--text-muted); font-size: 28px;">التحدي جاري حالياً 🔒</h2><p style="margin-top: 15px; font-size: 18px;">لقد فوتّ يوم التسجيل في تحدي <strong style="color: var(--gold-primary);">${currentChallengeData.title}</strong> (${currentChallengeData.durationDays} أيام).</p><div style="margin: 25px auto; padding: 20px; background: rgba(168, 85, 247, 0.1); border: 1px dashed var(--gold-primary); border-radius: 12px; display: inline-block;"><p style="font-size: 16px; margin: 0; color: var(--text-main);">الوقت المتبقي لانتهاء التحدي وبدء تسجيل جديد:</p><p style="font-size: 32px; font-weight: bold; color: var(--gold-primary); margin: 5px 0 0 0;">${displayDays} <span style="font-size: 16px;">أيام</span></p></div><p style="margin-top: 10px; font-size: 16px; color: var(--text-muted);">يجب عليك الانتظار حتى ينتهي التحدي الحالي للانضمام.</p></div>`;
-}
+// function renderSpectatorState(displayDays) {
+//     document.getElementById("challenge-info").style.display = "none";
+//     document.querySelector(".tasks-container").innerHTML =
+//         `<div style="text-align: center; padding: 40px; background: rgba(0,0,0,0.2); border-radius: 16px; border: 1px solid var(--border-color);"><h2 style="color: var(--text-muted); font-size: 28px;">التحدي جاري حالياً 🔒</h2><p style="margin-top: 15px; font-size: 18px;">لقد فوتّ يوم التسجيل في تحدي <strong style="color: var(--gold-primary);">${currentChallengeData.title}</strong> (${currentChallengeData.durationDays} أيام).</p><div style="margin: 25px auto; padding: 20px; background: rgba(168, 85, 247, 0.1); border: 1px dashed var(--gold-primary); border-radius: 12px; display: inline-block;"><p style="font-size: 16px; margin: 0; color: var(--text-main);">الوقت المتبقي لانتهاء التحدي وبدء تسجيل جديد:</p><p style="font-size: 32px; font-weight: bold; color: var(--gold-primary); margin: 5px 0 0 0;">${displayDays} <span style="font-size: 16px;">أيام</span></p></div><p style="margin-top: 10px; font-size: 16px; color: var(--text-muted);">يجب عليك الانتظار حتى ينتهي التحدي الحالي للانضمام.</p></div>`;
+// }
 
-function renderFailedState(displayDays) {
-    document.getElementById("challenge-info").style.display = "none";
-    document.querySelector(".tasks-container").innerHTML =
-        `<div style="text-align: center; padding: 40px; background: rgba(244, 63, 94, 0.1); border: 1px solid var(--danger); border-radius: 16px;"><h1 style="color: var(--danger); font-size: 40px; text-shadow: 0 0 20px rgba(244,63,94,0.5);">💀 GAME OVER 💀</h1><p style="margin-top: 15px; font-size: 18px;">لقد فشلت في التحدي الحالي وتم إقصاؤك.</p><div style="margin: 25px auto; padding: 20px; background: rgba(0,0,0,0.3); border-radius: 12px; display: inline-block;"><p style="font-size: 16px; margin: 0; color: var(--text-muted);">الوقت المتبقي لانتهاء فترة عقوبتك:</p><p style="font-size: 32px; font-weight: bold; color: var(--danger); margin: 5px 0 0 0;">${displayDays} <span style="font-size: 16px;">أيام</span></p></div><p style="margin-top: 10px; color: var(--text-muted);">رصيدك ونقاطك محفوظة، لكنك ستبقى متفرجاً حتى يتم إعلان تحدٍ جديد.</p></div>`;
-}
+// function renderFailedState(displayDays) {
+//     document.getElementById("challenge-info").style.display = "none";
+//     document.querySelector(".tasks-container").innerHTML =
+//         `<div style="text-align: center; padding: 40px; background: rgba(244, 63, 94, 0.1); border: 1px solid var(--danger); border-radius: 16px;"><h1 style="color: var(--danger); font-size: 40px; text-shadow: 0 0 20px rgba(244,63,94,0.5);">💀 GAME OVER 💀</h1><p style="margin-top: 15px; font-size: 18px;">لقد فشلت في التحدي الحالي وتم إقصاؤك.</p><div style="margin: 25px auto; padding: 20px; background: rgba(0,0,0,0.3); border-radius: 12px; display: inline-block;"><p style="font-size: 16px; margin: 0; color: var(--text-muted);">الوقت المتبقي لانتهاء فترة عقوبتك:</p><p style="font-size: 32px; font-weight: bold; color: var(--danger); margin: 5px 0 0 0;">${displayDays} <span style="font-size: 16px;">أيام</span></p></div><p style="margin-top: 10px; color: var(--text-muted);">رصيدك ونقاطك محفوظة، لكنك ستبقى متفرجاً حتى يتم إعلان تحدٍ جديد.</p></div>`;
+// }
 
-function renderNoChallengeState() {
-    document.getElementById("challenge-info").style.display = "none";
-    document.querySelector(".tasks-container").innerHTML =
-        `<div style="text-align: center; padding: 50px;"><h2 style="color: var(--text-muted);">لا يوجد تحدي نشط حالياً. خذ قسطاً من الراحة واستعد للمعركة القادمة.</h2></div>`;
-}
+// function renderNoChallengeState() {
+//     document.getElementById("challenge-info").style.display = "none";
+//     document.querySelector(".tasks-container").innerHTML =
+//         `<div style="text-align: center; padding: 50px;"><h2 style="color: var(--text-muted);">لا يوجد تحدي نشط حالياً. خذ قسطاً من الراحة واستعد للمعركة القادمة.</h2></div>`;
+// }
 
-async function processActiveParticipant(userData, userDocRef, displayDays) {
+async function processActiveParticipant(userData, userDocRef) {
+    // تحديث الرأسية الديناميكية
     const titleEl = document.getElementById("challenge-title");
-    if (titleEl) titleEl.innerText = "تحدي: " + currentChallengeData.title;
+    if (titleEl)
+        titleEl.innerHTML = `🏆 الدورة التنافسية رقم: <span style="color: var(--gold-primary); font-size: 24px;">${currentCycle}</span>`;
 
     const targetEl = document.getElementById("daily-target");
     if (targetEl) targetEl.innerText = dailyTargetPoints;
 
-    const daysLeftEl = document.getElementById("days-left");
-    if (daysLeftEl) daysLeftEl.innerText = displayDays;
+    // إخفاء ملاحظة "طوق النجاة" القديمة إن وجدت
+    const costEl = document.getElementById("life-saver-cost");
+    if (costEl) {
+        const noteEl =
+            costEl.closest(".challenge-note") || costEl.parentElement;
+        if (noteEl) noteEl.style.display = "none";
+    }
 
-    // ==========================================
-    // 1. جلب المهام الإجبارية (الدينية والدنيوية) لفحصها بأثر رجعي
-    // ==========================================
+    // 1. جلب المهام الإجبارية (النشطة فقط)
     const importantRelTaskIds = [];
     const relSnap = await getDocs(query(collection(db, "religiousTasks")));
     relSnap.forEach((d) => {
-        const data = d.data();
-        // تجاهل المهام المعطلة لكي لا يُعاقب المستخدم عليها بأثر رجعي
-        if (data.isImportant && data.isActive !== false)
+        if (d.data().isImportant && d.data().isActive !== false)
             importantRelTaskIds.push(d.id);
     });
 
     const importantNormTaskIds = [];
     const normSnap = await getDocs(query(collection(db, "tasks")));
     normSnap.forEach((d) => {
-        const data = d.data();
-        // تجاهل المهام المعطلة لكي لا يُعاقب المستخدم عليها بأثر رجعي
-        if (data.isImportant && data.isActive !== false)
+        if (d.data().isImportant && d.data().isActive !== false)
             importantNormTaskIds.push(d.id);
     });
 
-    // ==========================================
-    // 2. تجهيز التواريخ
-    // ==========================================
     const realNow = getRealNow();
     const todayStr = getCairoDateString(realNow);
 
@@ -553,10 +680,8 @@ async function processActiveParticipant(userData, userDocRef, displayDays) {
     yesterdayDate.setDate(yesterdayDate.getDate() - 1);
     const yesterdayStr = getCairoDateString(yesterdayDate);
 
-    const endDateStr = getCairoDateString(
-        currentChallengeData.endDate.toDate(),
-    );
-    const limitStr = yesterdayStr < endDateStr ? yesterdayStr : endDateStr;
+    // سقف التقييم هو دائماً "البارحة"، التحدي لا ينتهي أبداً
+    const limitStr = yesterdayStr;
 
     if (!userData.lastEvalDate) {
         await updateDoc(userDocRef, { lastEvalDate: yesterdayStr });
@@ -564,38 +689,18 @@ async function processActiveParticipant(userData, userDocRef, displayDays) {
     }
     let currentEvalDateStr = userData.lastEvalDate;
 
-    // ==========================================
-    // 3. المنقذ الذكي (مراجعة الأيام الفائتة)
-    // ==========================================
+    // 2. المنقذ الذكي (التقييم بأثر رجعي)
     if (currentEvalDateStr < limitStr) {
-        let currentXP = userData.currentXP || 0;
         let currentStreak = userData.currentStreak || 0;
         let walletCoins = userData.walletCoins || 0;
         let lifetimeScore = userData.lifetimeScore || 0;
-        let cycleScore = userData.cycleScore || 0; // التعديل الجديد
-        let currentZone = userData.currentZone || "green"; // التعديل الجديد
+        let cycleScore = userData.cycleScore || 0;
+        let currentZone = userData.currentZone || "green";
         let freezeCount = userData.freezeCount || 0;
 
         let parts = currentEvalDateStr.split("-");
         let evalDate = new Date(parts[0], parts[1] - 1, parts[2]);
         evalDate.setDate(evalDate.getDate() + 1);
-
-        const challengeStartStr = getCairoDateString(
-            currentChallengeData.startDate.toDate(),
-        );
-        let startParts = challengeStartStr.split("-");
-        let challengeStartDate = new Date(
-            startParts[0],
-            startParts[1] - 1,
-            startParts[2],
-        );
-
-        if (evalDate < challengeStartDate) {
-            evalDate = new Date(challengeStartDate);
-            let prepDate = new Date(challengeStartDate);
-            prepDate.setDate(prepDate.getDate() - 1);
-            currentEvalDateStr = getCairoDateString(prepDate);
-        }
 
         let limitParts = limitStr.split("-");
         let limitDate = new Date(
@@ -629,16 +734,27 @@ async function processActiveParticipant(userData, userDocRef, displayDays) {
                 passedByServer = logData.passed || false;
             }
 
-            // الفحص القاطع للمهام الدينية الإجبارية
+            // الفحص القاطع للمهام الدينية الإجبارية (بالصيغة الجديدة + التوافق العكسي)
             let missingRel = false;
             for (let id of importantRelTaskIds) {
-                if (!religiousSelections[id]) {
+                let sel = religiousSelections[id];
+                let isDone = false;
+
+                if (typeof sel === "boolean") {
+                    isDone = sel; // الأيام القديمة
+                } else if (Array.isArray(sel)) {
+                    if (sel.length > 1 || (sel.length === 1 && sel[0] !== 0))
+                        isDone = true; // التشيك ليست الجديدة
+                } else {
+                    if (sel > 0) isDone = true; // القائمة المنسدلة الجديدة
+                }
+
+                if (!isDone) {
                     missingRel = true;
                     break;
                 }
             }
 
-            // الفحص القاطع للمهام الدنيوية الإجبارية
             let missingNorm = false;
             for (let id of importantNormTaskIds) {
                 let sel = selections[id];
@@ -655,7 +771,6 @@ async function processActiveParticipant(userData, userDocRef, displayDays) {
                 }
             }
 
-            // إذا تم تقييمه من السيرفر سابقاً نعتمد النتيجة، وإلا نقيمه محلياً بصرامة
             let passedToday = isLogFinalized
                 ? passedByServer
                 : pointsEarned >= dailyTargetPoints &&
@@ -663,28 +778,41 @@ async function processActiveParticipant(userData, userDocRef, displayDays) {
                   !missingNorm;
 
             if (passedToday) {
-                // --- النجاح بأثر رجعي ---
-                let earnedCoins = Math.floor(pointsEarned / 1.5);
-                let earnedXP = pointsEarned;
+                currentStreak++;
+                if (currentZone === "yellow") currentZone = "green";
+
+                // 🛑 حساب المضاعف
+                let streakMultiplier = 1.0;
+                if (currentStreak >= 21) streakMultiplier = 2.0;
+                else if (currentStreak >= 14) streakMultiplier = 1.6;
+                else if (currentStreak >= 7) streakMultiplier = 1.4;
+                else if (currentStreak >= 3) streakMultiplier = 1.2;
+
+                const multipliedPoints = Math.floor(
+                    pointsEarned * streakMultiplier,
+                );
+                let earnedCoins = Math.floor(multipliedPoints / 1.5);
+                let earnedXP = multipliedPoints;
                 let xpLabel = "";
 
                 if (userData.hasDoubleXP) {
-                    earnedXP = pointsEarned * 2;
+                    earnedXP *= 2;
                     userData.hasDoubleXP = false;
                     userData.usedDoubleXP = true;
                     xpLabel = " ⚡";
                 }
 
-                currentXP += earnedXP;
                 lifetimeScore += earnedXP;
                 walletCoins += earnedCoins;
-                cycleScore += pointsEarned;
-                currentStreak++;
+                cycleScore += multipliedPoints;
 
-                if (currentZone === "yellow") currentZone = "green"; // الخروج من الإنذار
+                // 🛑 تحديث متغير المضاعف ليتم حفظه لاحقاً في الـ updates
+                userData.currentMultiplier = streakMultiplier;
 
+                let multiMsg =
+                    streakMultiplier > 1 ? `(مضاعف x${streakMultiplier}) ` : "";
                 messages.push(
-                    `✅ يوم ${dateStr}: تم الاعتماد بنجاح (+${earnedXP} XP${xpLabel}) | الستريك: <i class="fa-solid fa-fire fa-fw"></i>${currentStreak}`,
+                    `✅ يوم ${dateStr}: تم الاعتماد بنجاح ${multiMsg}(+${earnedXP} XP${xpLabel}) | الستريك: <i class="fa-solid fa-fire fa-fw"></i>${currentStreak}`,
                 );
 
                 await setDoc(
@@ -701,11 +829,10 @@ async function processActiveParticipant(userData, userDocRef, displayDays) {
                     { merge: true },
                 );
             } else {
-                // --- الفشل بأثر رجعي ---
                 if (freezeCount > 0) {
                     freezeCount--;
                     messages.push(
-                        `❄️ يوم ${dateStr}: تم استخدام "تجميد الستريك"! تم حماية الستريك من الكسر.`,
+                        `❄️ يوم ${dateStr}: تم استخدام "تجميد الستريك"! تم حماية الستريك.`,
                     );
                     await setDoc(
                         logRef,
@@ -723,8 +850,12 @@ async function processActiveParticipant(userData, userDocRef, displayDays) {
                     if (currentZone === "green") currentZone = "yellow";
                     else if (currentZone === "yellow") currentZone = "red";
 
+                    // 🛑 خصم الغرامة الديناميكية والسماح بالديون (السالب)
+                    const penaltyCoins = Math.floor(dailyTargetPoints / 2);
+                    walletCoins -= penaltyCoins;
+
                     messages.push(
-                        `⚠️ يوم ${dateStr}: فشلت! انكسر الستريك 💔 | حالتك الآن: ${currentZone === "yellow" ? "منطقة صفراء ⚠️" : "منطقة حمراء 🛑"}`,
+                        `⚠️ يوم ${dateStr}: فشلت! انكسر الستريك 💔 وتم خصم ${penaltyCoins} عملة كغرامة 📉 | حالتك الآن: ${currentZone === "yellow" ? "منطقة صفراء ⚠️" : "منطقة حمراء 🛑"}`,
                     );
 
                     await setDoc(
@@ -746,18 +877,16 @@ async function processActiveParticipant(userData, userDocRef, displayDays) {
             evalDate.setDate(evalDate.getDate() + 1);
         }
 
-        // حفظ التحديثات في ملف المستخدم
         let updates = {
-            currentXP,
             lifetimeScore,
             walletCoins,
             currentStreak,
             cycleScore,
             currentZone,
             freezeCount,
+            currentMultiplier: userData.currentMultiplier || 1,
             lastEvalDate: currentEvalDateStr,
         };
-
         if (userData.usedDoubleXP) {
             updates.hasDoubleXP = false;
             updates.usedDoubleXP = true;
@@ -776,20 +905,7 @@ async function processActiveParticipant(userData, userDocRef, displayDays) {
         }
     }
 
-    // ==========================================
-    // 4. فحص انتهاء التحدي كلياً
-    // ==========================================
-    if (todayStr > endDateStr) {
-        document.querySelector(".tasks-container").innerHTML = `
-            <div style="text-align: center; padding: 40px; background: rgba(168, 85, 247, 0.1); border-radius: 16px; border: 1px solid var(--gold-primary);">
-                <h2 style="color: var(--gold-primary); font-size: 28px; margin-bottom: 15px;">انتهى التحدي! 🏁</h2>
-                <p style="font-size: 18px; margin-bottom: 10px;">لقد صمدت حتى النهاية، وتوقف عداد المهام الآن.</p>
-                <p style="font-size: 15px; color: var(--text-muted); line-height: 1.6;">نحن في انتظار الإدارة لإنهاء التحدي رسمياً وتوزيع الأوسمة على الصامدين.<br>استرح قليلاً استعداداً للمعركة القادمة.</p>
-            </div>
-        `;
-        return;
-    }
-
+    // 3. جلب بيانات اليوم الحالي للمهام
     const todayLogSnap = await getDoc(
         doc(db, `users/${currentUser.uid}/dailyLogs`, todayStr),
     );
@@ -810,6 +926,7 @@ async function processActiveParticipant(userData, userDocRef, displayDays) {
 
     loadTasks(todayLogData, userData);
     startDoomsdayClock();
+    startCycleCountdown();
     renderDailyTrivia(userData);
     loadReligiousTasks(todayLogData);
 }
@@ -940,41 +1057,6 @@ async function loadTasks(todayLogData, userData) {
                 tasksList.appendChild(taskDiv);
             }
         });
-        // tasks.forEach((task) => {
-        //     const taskDiv = document.createElement("div");
-        //     taskDiv.className = "task-item";
-        //     taskDiv.style.flexDirection = "column";
-        //     taskDiv.style.alignItems = "flex-start";
-
-        //     let selectedIndex = 0;
-        //     if (
-        //         todayLogData &&
-        //         todayLogData.selections &&
-        //         todayLogData.selections[task.id] !== undefined
-        //     ) {
-        //         selectedIndex = todayLogData.selections[task.id];
-        //     }
-
-        //     let nativeSelectHtml = `<select class="task-select hidden-select" data-task-id="${task.id}" style="display:none;">`;
-        //     let customOptionsHtml = "";
-        //     let selectedText = "";
-
-        //     if (task.options && task.options.length > 0) {
-        //         task.options.forEach((opt, index) => {
-        //             const isSelected =
-        //                 index === selectedIndex ? "selected" : "";
-        //             const optText = `${opt.name} (+${opt.points})`;
-        //             if (index === selectedIndex) selectedText = optText;
-        //             nativeSelectHtml += `<option value="${opt.points}" data-index="${index}" ${isSelected}>${optText}</option>`;
-        //             customOptionsHtml += `<span class="custom-option ${isSelected}" data-value="${opt.points}" data-index="${index}">${optText}</span>`;
-        //         });
-        //     }
-        //     nativeSelectHtml += `</select>`;
-
-        //     let customSelectHtml = `<div class="custom-select-wrapper">${nativeSelectHtml}<div class="custom-select"><div class="custom-select-trigger"><span class="trigger-text">${selectedText}</span><i class="fa-solid fa-chevron-down"></i></div><div class="custom-options">${customOptionsHtml}</div></div></div>`;
-        //     taskDiv.innerHTML = `<span style="font-size: 16px; font-weight: bold;">${task.name}</span>${customSelectHtml}`;
-        //     tasksList.appendChild(taskDiv);
-        // });
     }
 
     initializeCustomSelects();
@@ -983,8 +1065,17 @@ async function loadTasks(todayLogData, userData) {
     else autoSaveTasks(false);
 
     setTimeout(startTour, 800);
+    if (
+        document.getElementById("devices-container") &&
+        document.getElementById("devices-container").children.length === 0
+    ) {
+        window.addDeviceBlock();
+    }
 }
 
+// ==========================================
+// 🕌 رسم وتحديث المهام الدينية (بنظام الخيارات المنسدلة)
+// ==========================================
 async function loadReligiousTasks(todayLogData) {
     const list = document.getElementById("religious-tasks-list");
     if (!list) return;
@@ -993,7 +1084,7 @@ async function loadReligiousTasks(todayLogData) {
     const snap = await getDocs(q);
 
     list.innerHTML = "";
-    window.importantRelTaskIds = []; // تصفير وتجهيز مصفوفة المهام الدينية الإجبارية
+    window.importantRelTaskIds = [];
 
     let savedRel =
         todayLogData && todayLogData.religiousSelections
@@ -1010,60 +1101,225 @@ async function loadReligiousTasks(todayLogData) {
         const task = docSnap.data();
         const taskId = docSnap.id;
 
-        // حفظ الـ ID إذا كانت المهمة أساسية إجبارية
         if (task.isImportant && task.isActive !== false) {
             window.importantRelTaskIds.push(taskId);
         }
 
-        const isChecked = savedRel[taskId] ? "checked" : "";
-        const borderStyle = task.isImportant
-            ? "border: 1px solid #f59e0b;"
-            : "border: 1px solid var(--border-color);";
         const badge = task.isImportant
-            ? `<span style="font-size: 10px; color: #f59e0b; background: rgba(245, 158, 11, 0.1); padding: 2px 6px; border-radius: 4px;">أساسية إجبارية</span>`
-            : `<span style="font-size: 10px; color: #a855f7; background: rgba(168, 85, 247, 0.1); padding: 2px 6px; border-radius: 4px;">إضافية مستحبة</span>`;
+            ? `<span style="font-size: 10px; color: #f59e0b; background: rgba(245, 158, 11, 0.1); padding: 2px 6px; border-radius: 4px; margin-right: 5px;">أساسية إجبارية</span>`
+            : `<span style="font-size: 10px; color: #a855f7; background: rgba(168, 85, 247, 0.1); padding: 2px 6px; border-radius: 4px; margin-right: 5px;">إضافية مستحبة</span>`;
 
         const div = document.createElement("div");
-        div.className = "task-item";
-        div.style.cssText = `flex-direction: row; justify-content: space-between; align-items: center; ${borderStyle} margin-bottom: 10px; padding: 15px;`;
+        div.className = task.isImportant ? "task-item important" : "task-item";
+        div.style.cssText = task.isImportant
+            ? "flex-direction: column; align-items: flex-start; border-color: rgba(245, 158, 11, 0.4);"
+            : "flex-direction: column; align-items: flex-start;";
 
-        div.innerHTML = `
-            <div style="display: flex; flex-direction: column; gap: 5px;">
-                <span style="font-size: 16px; font-weight: bold; color: var(--text-main);">${task.title} ${badge}</span>
-                ${task.note ? `<span style="font-size: 12px; color: var(--text-muted);">${task.note}</span>` : ""}
-            </div>
-            <input type="checkbox" class="rel-task-checkbox" data-task-id="${taskId}" ${isChecked} ${isTodayFinalized ? "disabled" : ""} style="accent-color: var(--gold-primary); width: 22px; height: 22px; cursor: pointer; margin: 0; flex-shrink: 0;">
-        `;
+        // توافق عكسي: إذا كان الحفظ القديم true/false نحوله لـ 1 و 0
+        let savedSel = 0;
+        if (savedRel[taskId] !== undefined) {
+            if (typeof savedRel[taskId] === "boolean")
+                savedSel = savedRel[taskId] ? 1 : 0;
+            else savedSel = savedRel[taskId];
+        }
+
+        if (task.isMultiSelect) {
+            let selectionsForTask = Array.isArray(savedSel)
+                ? savedSel
+                : [savedSel];
+            let checkboxesHtml = `<div class="rel-checklist-container" data-task-id="${taskId}" style="width: 100%; margin-top: 10px;">`;
+
+            if (task.options && task.options.length > 0) {
+                task.options.forEach((opt, index) => {
+                    const isChecked = selectionsForTask.includes(index);
+                    const checkedAttr = isChecked ? "checked" : "";
+                    const borderColor = isChecked
+                        ? "var(--gold-primary)"
+                        : "var(--border-color)";
+                    const textColor = isChecked
+                        ? "var(--gold-primary)"
+                        : "var(--text-main)";
+                    checkboxesHtml += `
+                    <label class="rel-checklist-item" style="display:flex; align-items:center; gap:10px; margin-bottom:8px; cursor:pointer; background: rgba(0,0,0,0.2); padding: 10px 15px; border-radius: 8px; border: 1px solid ${borderColor}; transition: 0.2s;">
+                        <input type="checkbox" class="rel-task-checkbox" data-index="${index}" ${checkedAttr} ${isTodayFinalized ? "disabled" : ""} style="accent-color: var(--gold-primary); width: 18px; height: 18px; cursor: pointer; margin: 0;">
+                        <span class="rel-checklist-text" style="font-size: 14px; color: ${textColor}; transition: 0.2s;">${opt.name}</span>
+                    </label>`;
+                });
+            }
+            checkboxesHtml += `</div>`;
+            div.innerHTML = `
+                <div style="display: flex; flex-direction: column; gap: 3px; width: 100%;">
+                    <span style="font-size: 16px; font-weight: bold; color: var(--text-main);">${task.title} ${badge}</span>
+                    ${task.note ? `<span style="font-size: 12px; color: var(--text-muted);">${task.note}</span>` : ""}
+                </div>
+                ${checkboxesHtml}
+            `;
+        } else {
+            let selectedIndex = Array.isArray(savedSel)
+                ? savedSel[0]
+                : savedSel;
+            let nativeSelectHtml = `<select class="rel-task-select hidden-select" data-task-id="${taskId}" style="display:none;" ${isTodayFinalized ? "disabled" : ""}>`;
+            let customOptionsHtml = "";
+            let selectedText = "";
+
+            if (task.options && task.options.length > 0) {
+                task.options.forEach((opt, index) => {
+                    const isSelected =
+                        index === selectedIndex ? "selected" : "";
+                    if (index === selectedIndex) selectedText = opt.name;
+                    nativeSelectHtml += `<option data-index="${index}" ${isSelected}>${opt.name}</option>`;
+                    customOptionsHtml += `<span class="custom-option ${isSelected}" data-index="${index}">${opt.name}</span>`;
+                });
+            }
+            nativeSelectHtml += `</select>`;
+
+            let customSelectHtml = `<div class="custom-select-wrapper rel-custom-select-wrapper ${isTodayFinalized ? "disabled" : ""}">${nativeSelectHtml}<div class="custom-select"><div class="custom-select-trigger"><span class="trigger-text">${selectedText}</span><i class="fa-solid fa-chevron-down"></i></div><div class="custom-options">${customOptionsHtml}</div></div></div>`;
+            div.innerHTML = `
+                <div style="display: flex; flex-direction: column; gap: 3px; width: 100%;">
+                    <span style="font-size: 16px; font-weight: bold; color: var(--text-main);">${task.title} ${badge}</span>
+                    ${task.note ? `<span style="font-size: 12px; color: var(--text-muted);">${task.note}</span>` : ""}
+                </div>
+                ${customSelectHtml}
+            `;
+        }
         list.appendChild(div);
     });
 
-    document.querySelectorAll(".rel-task-checkbox").forEach((cb) => {
-        cb.addEventListener("change", async function () {
-            if (isTodayFinalized) {
-                this.checked = !this.checked;
-                return;
-            }
-            await autoSaveReligiousTasks();
+    // تفعيل المحركات المنفصلة للمهام الدينية (نفس حركة الدنيوية ولكن بدون نقاط)
+    initializeRelCustomSelects();
+    initializeRelChecklists();
+}
+
+function initializeRelCustomSelects() {
+    document
+        .querySelectorAll(".rel-custom-select-wrapper")
+        .forEach((wrapper) => {
+            if (wrapper.classList.contains("disabled")) return;
+            const select = wrapper.querySelector(".custom-select");
+            const trigger = wrapper.querySelector(".custom-select-trigger");
+            const triggerText = wrapper.querySelector(".trigger-text");
+            const options = wrapper.querySelectorAll(".custom-option");
+            const nativeSelect = wrapper.querySelector(".rel-task-select");
+            const taskItemParent = wrapper.closest(".task-item"); // 🛑 تم إضافة الأب هنا
+
+            trigger.addEventListener("click", function (e) {
+                if (isTodayFinalized) return;
+
+                // 🛑 إغلاق باقي القوائم المفتوحة وإعادة طبقاتها (z-index) للوضع الطبيعي
+                document.querySelectorAll(".custom-select").forEach((s) => {
+                    if (s !== select) {
+                        s.classList.remove("open");
+                        const parent = s.closest(".task-item");
+                        if (parent) parent.style.zIndex = "1";
+                    }
+                });
+
+                const isOpen = select.classList.toggle("open");
+
+                // 🛑 رفع القائمة الحالية فوق كل شيء لتجنب اختفائها تحت المهام الأخرى
+                if (taskItemParent) {
+                    taskItemParent.style.position = "relative";
+                    taskItemParent.style.zIndex = isOpen ? "999" : "1";
+                }
+
+                e.stopPropagation();
+            });
+
+            options.forEach((option) => {
+                option.addEventListener("click", function () {
+                    options.forEach((opt) => opt.classList.remove("selected"));
+                    this.classList.add("selected");
+                    triggerText.textContent = this.textContent;
+                    const dataIndex = this.getAttribute("data-index");
+                    Array.from(nativeSelect.options).forEach((opt, idx) => {
+                        opt.selected = idx == dataIndex;
+                    });
+
+                    select.classList.remove("open");
+
+                    // 🛑 إعادة الطبقة للوضع الطبيعي بعد اختيار العنصر
+                    if (taskItemParent) taskItemParent.style.zIndex = "1";
+
+                    autoSaveReligiousTasks();
+                });
+            });
         });
-    });
+}
+
+function initializeRelChecklists() {
+    document
+        .querySelectorAll(".rel-checklist-container")
+        .forEach((container) => {
+            const checkboxes = container.querySelectorAll(".rel-task-checkbox");
+            const labels = container.querySelectorAll(".rel-checklist-item");
+            const texts = container.querySelectorAll(".rel-checklist-text");
+
+            checkboxes.forEach((cb, idx) => {
+                cb.addEventListener("change", function () {
+                    if (isTodayFinalized) {
+                        this.checked = !this.checked;
+                        return;
+                    }
+                    const clickedIndex = parseInt(
+                        this.getAttribute("data-index"),
+                    );
+
+                    if (clickedIndex === 0 && this.checked) {
+                        checkboxes.forEach((otherCb, otherIdx) => {
+                            if (otherIdx !== 0) otherCb.checked = false;
+                        });
+                    } else if (clickedIndex > 0 && this.checked) {
+                        checkboxes[0].checked = false;
+                    }
+
+                    checkboxes.forEach((c, i) => {
+                        labels[i].style.borderColor = c.checked
+                            ? "var(--gold-primary)"
+                            : "var(--border-color)";
+                        texts[i].style.color = c.checked
+                            ? "var(--gold-primary)"
+                            : "var(--text-main)";
+                    });
+
+                    autoSaveReligiousTasks();
+                });
+            });
+        });
 }
 
 async function autoSaveReligiousTasks() {
     if (!currentUser || isTodayFinalized) return;
 
     let selections = {};
-    document.querySelectorAll(".rel-task-checkbox").forEach((cb) => {
-        selections[cb.getAttribute("data-task-id")] = cb.checked;
+
+    // سحب الداتا من قوائم Select
+    document.querySelectorAll(".rel-task-select").forEach((select) => {
+        selections[select.getAttribute("data-task-id")] = parseInt(
+            select.options[select.selectedIndex].getAttribute("data-index"),
+        );
     });
+
+    // سحب الداتا من التشيك ليست
+    document
+        .querySelectorAll(".rel-checklist-container")
+        .forEach((container) => {
+            const taskId = container.getAttribute("data-task-id");
+            const checkedBoxes = container.querySelectorAll(
+                ".rel-task-checkbox:checked",
+            );
+            let taskSelections = [];
+            checkedBoxes.forEach((cb) =>
+                taskSelections.push(parseInt(cb.getAttribute("data-index"))),
+            );
+            if (taskSelections.length === 0) taskSelections = [0];
+            selections[taskId] = taskSelections;
+        });
 
     const realNow = getRealNow();
     const today = getCairoDateString(realNow);
     await setDoc(
         doc(db, `users/${currentUser.uid}/dailyLogs`, today),
-        {
-            religiousSelections: selections,
-            timestamp: realNow,
-        },
+        { religiousSelections: selections, timestamp: realNow },
         { merge: true },
     );
 }
@@ -1120,6 +1376,178 @@ function initializeCustomSelects() {
         }
     });
 }
+
+// ==========================================
+// 📱 محرك استهلاك الدوبامين والأجهزة المتعددة (Canvas Merger)
+// ==========================================
+let deviceCount = 0;
+
+window.addDeviceBlock = function () {
+    const container = document.getElementById("devices-container");
+    if (!container) return;
+
+    deviceCount++;
+    const deviceId = `device-${deviceCount}`;
+    const div = document.createElement("div");
+    div.className = "device-block";
+    div.id = deviceId;
+    div.style.cssText =
+        "background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); padding: 15px; border-radius: 8px; margin-bottom: 15px; position: relative;";
+
+    // زر الحذف يظهر فقط إذا كان هناك أكثر من جهاز
+    const deleteBtnHtml =
+        deviceCount > 1
+            ? `<button onclick="document.getElementById('${deviceId}').remove()" style="position: absolute; top: 10px; left: 10px; background: none; border: none; color: var(--danger); cursor: pointer; font-size: 16px;"><i class="fa-solid fa-trash"></i></button>`
+            : "";
+
+    div.innerHTML = `
+        ${deleteBtnHtml}
+        <h4 style="color: var(--gold-primary); margin-bottom: 15px; font-size: 14px;">جهاز رقم ${deviceCount}</h4>
+        
+        <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+            <div style="flex: 1;">
+                <label style="font-size: 11px; color: var(--text-muted);">إجمالي وقت الشاشة</label>
+                <div style="display: flex; gap: 5px; margin-top: 5px;">
+                    <input type="number" class="dialog-input st-h" min="0" max="24" placeholder="ساعة" style="margin: 0; text-align: center; padding: 8px; flex: 1;">
+                    <span style="display: flex; align-items: center; color: var(--text-muted);">:</span>
+                    <input type="number" class="dialog-input st-m" min="0" max="59" placeholder="دقيقة" style="margin: 0; text-align: center; padding: 8px; flex: 1;">
+                </div>
+            </div>
+            <div style="flex: 1;">
+                <label style="font-size: 11px; color: var(--text-muted);">منها Shorts/Reels</label>
+                <div style="display: flex; gap: 5px; margin-top: 5px;">
+                    <input type="number" class="dialog-input sh-h" min="0" max="24" placeholder="ساعة" style="margin: 0; text-align: center; padding: 8px; flex: 1;">
+                    <span style="display: flex; align-items: center; color: var(--text-muted);">:</span>
+                    <input type="number" class="dialog-input sh-m" min="0" max="59" placeholder="دقيقة" style="margin: 0; text-align: center; padding: 8px; flex: 1;">
+                </div>
+            </div>
+        </div>
+
+        <div>
+            <label style="font-size: 12px; color: var(--text-muted); display: block; margin-bottom: 5px;">صورة الإثبات (Screenshot):</label>
+            <input type="file" accept="image/*" class="device-proof-file" style="width: 100%; font-size: 12px; padding: 8px; border: 1px dashed var(--border-color); border-radius: 6px; background: rgba(0,0,0,0.3); color: white;">
+        </div>
+    `;
+    container.appendChild(div);
+};
+
+// تهيئة أول جهاز عند تحميل المهام
+document.addEventListener("DOMContentLoaded", () => {
+    // استخدمنا setTimeout لضمان أن DOM جاهز تماماً
+    setTimeout(() => {
+        if (
+            document.getElementById("devices-container") &&
+            document.getElementById("devices-container").children.length === 0
+        ) {
+            window.addDeviceBlock();
+        }
+        const addBtn = document.getElementById("add-device-btn");
+        if (addBtn) addBtn.addEventListener("click", window.addDeviceBlock);
+    }, 500);
+});
+
+// دالة جمع الوقت من كل الأجهزة المضافة
+window.calculateTotalDopamineTime = function () {
+    let totalScreenMinutes = 0;
+    let totalShortsMinutes = 0;
+    let isValid = false; // تصبح true لو أدخل بيانات جهاز واحد على الأقل
+    let files = [];
+
+    document.querySelectorAll(".device-block").forEach((block) => {
+        const stH = parseInt(block.querySelector(".st-h").value) || 0;
+        const stM = parseInt(block.querySelector(".st-m").value) || 0;
+        const shH = parseInt(block.querySelector(".sh-h").value) || 0;
+        const shM = parseInt(block.querySelector(".sh-m").value) || 0;
+
+        const fileInput = block.querySelector(".device-proof-file");
+        if (fileInput && fileInput.files.length > 0) {
+            files.push(fileInput.files[0]);
+        }
+
+        const deviceScreenMinutes = stH * 60 + stM;
+        const deviceShortsMinutes = shH * 60 + shM;
+
+        totalScreenMinutes += deviceScreenMinutes;
+        totalShortsMinutes += deviceShortsMinutes;
+
+        // إذا أدخل وقتاً أكبر من صفر، نعتبر الإدخال صالحاً
+        if (deviceScreenMinutes > 0) isValid = true;
+    });
+
+    return { totalScreenMinutes, totalShortsMinutes, isValid, files };
+};
+
+// ==========================================
+// 🎨 دالة دمج الصور في صورة بانورامية واحدة
+// ==========================================
+window.mergeDeviceImagesToCanvas = async function (filesArray) {
+    if (filesArray.length === 0) return null;
+    if (filesArray.length === 1) return filesArray[0]; // لا ندمج لو كان جهاز واحد
+
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+
+    // تحويل الملفات إلى كائنات صور (Images)
+    const images = await Promise.all(
+        filesArray.map((file) => {
+            return new Promise((resolve) => {
+                const img = new Image();
+                img.onload = () => resolve(img);
+                img.src = URL.createObjectURL(file);
+            });
+        }),
+    );
+
+    // تحديد العرض المستهدف لكل صورة لضمان جودة منخفضة وحجم صغير للـ AI
+    const targetWidth = 500;
+    let totalWidth = 0;
+    let maxHeight = 0;
+
+    const scaledImages = images.map((img) => {
+        const ratio = targetWidth / img.width;
+        const height = img.height * ratio;
+        totalWidth += targetWidth;
+        if (height > maxHeight) maxHeight = height;
+        return { img, width: targetWidth, height };
+    });
+
+    canvas.width = totalWidth;
+    canvas.height = maxHeight;
+
+    // خلفية سوداء (في حال كانت الصور بأطوال مختلفة)
+    ctx.fillStyle = "#000000";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    let currentX = 0;
+    scaledImages.forEach((item, index) => {
+        // رسم الصورة
+        ctx.drawImage(item.img, currentX, 0, item.width, item.height);
+
+        // رسم شريط علوي يحمل اسم الجهاز لتسهيل قراءة الذكاء الاصطناعي
+        ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+        ctx.fillRect(currentX, 0, item.width, 40);
+        ctx.fillStyle = "#a855f7";
+        ctx.font = "bold 20px Arial";
+        ctx.fillText(`Device ${index + 1}`, currentX + 15, 28);
+
+        currentX += item.width;
+    });
+
+    // إرجاع النتيجة كملف مضغوط (JPEG)
+    return new Promise((resolve) => {
+        canvas.toBlob(
+            (blob) => {
+                resolve(
+                    new File([blob], "merged_dopamine_proof.jpg", {
+                        type: "image/jpeg",
+                    }),
+                );
+            },
+            "image/jpeg",
+            0.85,
+        );
+    });
+};
 
 // ==========================================
 // 1. دالة حساب النقاط والاختيارات (تمت مراجعتها)
@@ -1204,83 +1632,190 @@ async function autoSaveTasks(saveToDb = true) {
 }
 
 // ==========================================
-// 2. مستمع زر اعتماد اليوم (النظام الجديد الصارم)
+// 2. مستمع زر اعتماد اليوم (النظام الجديد مع تحليل الدوبامين بالـ AI)
 // ==========================================
 document
     .getElementById("submit-day-btn")
     ?.addEventListener("click", async () => {
         if (!currentUser || isTodayFinalized) return;
+        // ==========================================
+        // 🛑 جدار الحماية الزمني (مسموح من 9 مساءً وحتى 4 فجراً فقط)
+        // ==========================================
+        const now = getRealNow();
+        const cairoTimeStr = now.toLocaleString("en-US", {
+            timeZone: "Africa/Cairo",
+            hour12: false,
+        });
+        const cairoDate = new Date(cairoTimeStr);
+        const currentHour = cairoDate.getHours(); // يجلب الساعة من 0 إلى 23
 
-        // 1. استخراج النقاط والمهام
-        const { totalPoints, selections, missingNormalImportant } =
-            getCurrentSelectionsAndPoints();
+        // إذا لم تكن الساعة أكبر من أو تساوي 21 (9 مساءً) ولم تكن أقل من 4 (فجراً)
+        if (!(currentHour >= 21 || currentHour < 4)) {
+            return await CustomDialog.alert(
+                "لا يمكنك اعتماد مهام اليوم الآن. نافذة التقييم تفتح فقط من الساعة 9:00 مساءً وحتى 4:00 فجراً بتوقيت القاهرة.",
+                "نافذة مغلقة 🛑",
+            );
+        }
+        // ==========================================
+        // --- 1. التحقق من محلل الدوبامين ---
+        const dopamineData = calculateTotalDopamineTime();
+        if (!dopamineData.isValid) {
+            return await CustomDialog.alert(
+                "يجب إدخال وقت الشاشة لجهاز واحد على الأقل لتجاوز الفحص.",
+                "تنبيه ⚠️",
+            );
+        }
+        if (dopamineData.files.length === 0) {
+            return await CustomDialog.alert(
+                "يجب إرفاق صورة إثبات (Screenshot) لوقت الشاشة. لا يمكن المرور بدونها.",
+                "إثبات مطلوب 📸",
+            );
+        }
+        const justification = document
+            .getElementById("dopamine-justification")
+            .value.trim();
+        if (!justification) {
+            return await CustomDialog.alert(
+                "يجب كتابة تبرير لاستهلاكك. كن صادقاً، الذكاء الاصطناعي يحلل كل حرف ولن يتهاون.",
+                "التبرير مطلوب ✍️",
+            );
+        }
 
-        // 2. فحص المهام الدينية
+        // --- 2. سحب نقاط المهام الدنيوية والدينية ---
+        const {
+            totalPoints: taskPoints,
+            selections,
+            missingNormalImportant,
+        } = getCurrentSelectionsAndPoints();
+
         const currentRelSelections = {};
-        document.querySelectorAll(".rel-task-checkbox").forEach((cb) => {
-            currentRelSelections[cb.getAttribute("data-task-id")] = cb.checked;
+        document.querySelectorAll(".rel-task-select").forEach((s) => {
+            currentRelSelections[s.getAttribute("data-task-id")] = parseInt(
+                s.options[s.selectedIndex].getAttribute("data-index"),
+            );
+        });
+        document.querySelectorAll(".rel-checklist-container").forEach((c) => {
+            let arr = [];
+            c.querySelectorAll(".rel-task-checkbox:checked").forEach((cb) =>
+                arr.push(parseInt(cb.getAttribute("data-index"))),
+            );
+            if (arr.length === 0) arr = [0];
+            currentRelSelections[c.getAttribute("data-task-id")] = arr;
         });
 
         let missingRelImportant = false;
-        for (let i = 0; i < (window.importantRelTaskIds || []).length; i++) {
-            if (!currentRelSelections[window.importantRelTaskIds[i]]) {
+        for (let id of window.importantRelTaskIds || []) {
+            let sel = currentRelSelections[id];
+            let isDone = false;
+            if (Array.isArray(sel)) {
+                if (sel.length > 1 || (sel.length === 1 && sel[0] !== 0))
+                    isDone = true;
+            } else {
+                if (sel > 0) isDone = true;
+            }
+            if (!isDone) {
                 missingRelImportant = true;
                 break;
             }
         }
 
-        // 3. تحديد النجاح الفعلي
-        const passedToday =
-            totalPoints >= dailyTargetPoints &&
-            !missingRelImportant &&
-            !missingNormalImportant;
-
-        if (!passedToday && totalPoints >= dailyTargetPoints) {
-            const ignore = await CustomDialog.confirm(
-                "لقد وصلت للهدف الرقمي، لكنك تجاهلت مهام أساسية (دينية)! إذا ضغطت تأكيد الآن، سيُحسب هذا اليوم كـ 'فشل' وسينكسر الستريك. هل أنت متأكد من هذا التخاذل؟",
-                "تحذير صارم 🛑",
-            );
-            if (!ignore) return;
-        } else if (!passedToday) {
+        // --- 3. الفحص الإجباري وتأكيد الإرسال ---
+        if (missingNormalImportant || missingRelImportant) {
             const isSure = await CustomDialog.confirm(
-                `مجموعك ${totalPoints} نقطة فقط (أقل من الهدف). هذا يعني الفشل وكسر الستريك. هل أنت متأكد من إنهاء يومك هكذا؟`,
-                "تأكيد الفشل 📝",
+                "لقد تجاهلت مهام إجبارية أساسية. الاعتماد الآن سيؤدي حتماً إلى الفشل وكسر الستريك مهما كانت نقاطك. هل أنت متأكد من هذا التخاذل؟",
+                "تحذير صارم 🛑",
             );
             if (!isSure) return;
         } else {
-            const isSure = await CustomDialog.confirm(
-                `أنجزت الأساسيات وجمعت ${totalPoints} نقطة. هل أنت متأكد من إنهاء اليوم بنجاح؟`,
-                "تأكيد الإنجاز 🏆",
+            const confirmSubmit = await CustomDialog.confirm(
+                "سيتم الآن دمج صور الأجهزة وإرسالها للقاضي الآلي (Gemini) لتقييم استهلاكك واعتماد اليوم. هل أنت مستعد لمواجهة نتيجتك؟",
+                "تحكيم الذكاء الاصطناعي 🤖",
             );
-            if (!isSure) return;
+            if (!confirmSubmit) return;
         }
 
         const btn = document.getElementById("submit-day-btn");
         const originalText = btn.innerText;
-        btn.innerText = "جاري الاعتماد...";
+        btn.innerText = "القاضي الآلي يحلل بياناتك... 🤖⏳";
         btn.disabled = true;
 
-        const realNow = getRealNow();
-        const today = getCairoDateString(realNow);
-
         try {
-            // حفظ سجل اليوم (بدون أي AI Reflections)
+            const realNow = getRealNow();
+            const today = getCairoDateString(realNow);
+
+            // --- 4. دمج الصور ورفعها للسيرفر ---
+            const mergedFile = await window.mergeDeviceImagesToCanvas(
+                dopamineData.files,
+            );
+            const storagePath = `dopamine_proofs/${currentUser.uid}_${Date.now()}.jpg`;
+            const storageRefPath = ref(storage, storagePath);
+            await uploadBytes(storageRefPath, mergedFile);
+            const imageUrl = await getDownloadURL(storageRefPath);
+
+            // --- 5. طلب الحكم من السيرفر السحابي ---
+            const evaluateScreenTimeFunc = httpsCallable(
+                functions,
+                "evaluateScreenTime",
+            );
+            const aiResult = await evaluateScreenTimeFunc({
+                totalScreenMinutes: dopamineData.totalScreenMinutes,
+                totalShortsMinutes: dopamineData.totalShortsMinutes,
+                justification: justification,
+                imageUrl: imageUrl,
+            });
+
+            if (!aiResult.data.success) throw new Error("فشل التحليل الذكي.");
+
+            const wastedScreen = aiResult.data.wastedScreenMinutes;
+            const wastedShorts = aiResult.data.wastedShortsMinutes;
+
+            // --- 6. تطبيق معادلة الدوبامين العكسية (Capped Linear Decay) ---
+            // أقصى نقاط للشاشة: 100 | حد التسامح: 4 ساعات (240 دقيقة)
+            let screenPoints = 100 * (1 - wastedScreen / 240);
+            if (screenPoints < 0) screenPoints = 0;
+
+            // أقصى نقاط للشورتس: 100 | حد التسامح: 30 دقيقة
+            let shortsPoints = 100 * (1 - wastedShorts / 30);
+            if (shortsPoints < 0) shortsPoints = 0;
+
+            const dopaminePoints = Math.floor(screenPoints + shortsPoints);
+            const finalTotalPoints = taskPoints + dopaminePoints;
+
+            // --- 7. تحديد النجاح الفعلي ---
+            const passedToday =
+                finalTotalPoints >= dailyTargetPoints &&
+                !missingRelImportant &&
+                !missingNormalImportant;
+
+            // --- 8. توثيق السجل اليومي ---
             await setDoc(
                 doc(db, `users/${currentUser.uid}/dailyLogs`, today),
                 {
                     date: today,
-                    pointsEarned: totalPoints,
-                    selections,
+                    pointsEarned: finalTotalPoints,
+                    selections: selections,
+                    religiousSelections: currentRelSelections,
                     passed: passedToday,
                     isFinalized: true,
                     timestamp: realNow,
+                    dopamineData: {
+                        // حفظ بيانات الدوبامين للإحصائيات المستقبلية
+                        reportedScreenMinutes: dopamineData.totalScreenMinutes,
+                        reportedShortsMinutes: dopamineData.totalShortsMinutes,
+                        justification: justification,
+                        proofImageUrl: imageUrl,
+                        aiEvaluatedWastedScreen: wastedScreen,
+                        aiEvaluatedWastedShorts: wastedShorts,
+                        pointsAwarded: dopaminePoints,
+                    },
                 },
                 { merge: true },
             );
 
             const pointsDisplay = document.getElementById("today-points");
-            if (pointsDisplay) pointsDisplay.innerText = totalPoints;
+            if (pointsDisplay) pointsDisplay.innerText = finalTotalPoints;
 
+            // --- 9. تحديث الحساب وتطبيق العقوبات أو الجوائز ---
             const userDocRef = doc(db, "users", currentUser.uid);
             const userDocSnap = await getDoc(userDocRef);
             const userDataLocal = userDocSnap.data() || {};
@@ -1290,6 +1825,7 @@ document
             let dbUpdates = { lastEvalDate: today };
 
             if (passedToday) {
+                // حالة النجاح
                 const successSound = new Audio(
                     "https://cdn.pixabay.com/download/audio/2021/08/04/audio_0625c1539c.mp3?filename=success-1-6297.mp3",
                 );
@@ -1319,52 +1855,72 @@ document
 
                 if (currentZone === "yellow") currentZone = "green";
 
-                let earnedCoins = Math.floor(totalPoints / 1.5);
-                let earnedXP = totalPoints;
+                const newStreak = (userDataLocal.currentStreak || 0) + 1;
+                let streakMultiplier = 1.0;
+                if (newStreak >= 21) streakMultiplier = 2.0;
+                else if (newStreak >= 14) streakMultiplier = 1.6;
+                else if (newStreak >= 7) streakMultiplier = 1.4;
+                else if (newStreak >= 3) streakMultiplier = 1.2;
+
+                const multipliedPoints = Math.floor(
+                    finalTotalPoints * streakMultiplier,
+                );
+                let earnedCoins = Math.floor(multipliedPoints / 1.5);
+                let earnedXP = multipliedPoints;
                 let xpLabel = "";
+                let streakLabel =
+                    streakMultiplier > 1
+                        ? `<span style="color:#f97316; display: block; font-size: 14px; margin-top: 5px;">(مضاعف الستريك: x${streakMultiplier} 🔥)</span>`
+                        : "";
 
                 dbUpdates.walletCoins = increment(earnedCoins);
                 dbUpdates.currentStreak = increment(1);
                 dbUpdates.currentZone = currentZone;
-                dbUpdates.cycleScore = increment(totalPoints); // هنا فقط تضاف نقاط المنافسة
+                dbUpdates.cycleScore = increment(multipliedPoints);
+                dbUpdates.currentMultiplier = streakMultiplier;
 
                 if (hasDoubleXP) {
                     earnedXP *= 2;
-                    dbUpdates.currentXP = increment(earnedXP);
                     dbUpdates.lifetimeScore = increment(earnedXP);
                     dbUpdates.hasDoubleXP = false;
                     dbUpdates.usedDoubleXP = true;
-                    xpLabel = `<span style="color:#eab308; display: block;">(مضاعف ⚡)</span>`;
+                    xpLabel = `<span style="color:#eab308; display: block;">(مضاعف المتجر ⚡)</span>`;
                 } else {
-                    dbUpdates.currentXP = increment(earnedXP);
                     dbUpdates.lifetimeScore = increment(earnedXP);
                 }
 
                 await updateDoc(userDocRef, dbUpdates);
                 await CustomDialog.alert(
-                    `<span style="display: block;">🔥 تم الاعتماد بنجاح! لقد كسبت: </span> ${xpLabel} \n <span><span class="win-info-boxs xp">+${earnedXP} XP</span> <span class="win-info-boxs coins">+${earnedCoins} <i class="fa-solid fa-coins fa-fw"></i></span> <span class="win-info-boxs ">+1 <i class="fa-solid fa-fire fa-fw"></i></span></span>`,
+                    `<span style="display: block;">🔥 تم الاعتماد بنجاح!</span> 
+                <span style="font-size: 13px; color: var(--text-muted); display: block; margin-top: 5px;">تقييم القاضي الآلي للدوبامين: +${dopaminePoints} نقطة</span>
+                ${streakLabel} ${xpLabel} \n <span><span class="win-info-boxs xp">+${earnedXP} XP</span> <span class="win-info-boxs coins">+${earnedCoins} <i class="fa-solid fa-coins fa-fw"></i></span> <span class="win-info-boxs ">+1 <i class="fa-solid fa-fire fa-fw"></i></span></span>`,
                     "عمل عظيم ",
                 );
             } else {
+                // حالة الفشل
                 const hasFreeze = (userDataLocal.freezeCount || 0) > 0;
 
                 if (hasFreeze) {
                     dbUpdates.freezeCount = increment(-1);
                     await updateDoc(userDocRef, dbUpdates);
                     await CustomDialog.alert(
-                        `تم استهلاك "تجميد الستريك" ❄️ بنجاح.\nتم حمايتك من السقوط بسبب هذا اليوم الفاشل وحافظت على الستريك الخاص بك.`,
+                        `جمعت ${finalTotalPoints} نقطة فقط. تم استهلاك "تجميد الستريك" ❄️ بنجاح للحماية من السقوط.`,
                         "تفعيل التجميد التلقائي ❄️",
                     );
                 } else {
                     if (currentZone === "green") currentZone = "yellow";
                     else if (currentZone === "yellow") currentZone = "red";
 
+                    const penaltyCoins = Math.floor(dailyTargetPoints / 2);
                     dbUpdates.currentStreak = 0;
                     dbUpdates.currentZone = currentZone;
+                    dbUpdates.walletCoins = increment(-penaltyCoins);
+                    dbUpdates.currentMultiplier = 1.0;
+
                     await updateDoc(userDocRef, dbUpdates);
 
                     await CustomDialog.alert(
-                        `تم اعتماد اليوم كفشل! تم تصفير الستريك. 💔\nأنت الآن في المنطقة: ${currentZone === "yellow" ? "الصفراء ⚠️" : "الحمراء 🛑"}`,
+                        `المجموع ${finalTotalPoints} نقطة (القاضي أعطاك ${dopaminePoints} لدوبامينك). تم اعتماد اليوم كفشل! تصفير الستريك وخصم ${penaltyCoins} عملة ديون. 💔\nأنت الآن في المنطقة: ${currentZone === "yellow" ? "الصفراء ⚠️" : "الحمراء 🛑"}`,
                         "تحذير شديد اللهجة",
                     );
                 }
@@ -1374,8 +1930,9 @@ document
             window.syncUserUI();
             if (typeof applyZoneUI === "function") applyZoneUI(currentZone);
         } catch (error) {
+            console.error(error);
             await CustomDialog.alert(
-                "حدث خطأ غير متوقع: " + error.message,
+                "حدث خطأ أثناء تقييم القاضي الآلي: " + error.message,
                 "خطأ ⚠️",
             );
             btn.innerText = originalText;
@@ -1409,6 +1966,13 @@ function disableSubmitButton() {
         lbl.style.cursor = "not-allowed";
         lbl.style.opacity = "0.5";
     });
+
+    // 🛑 تجميد محلل الدوبامين بالكامل
+    const dopamineCard = document.getElementById("dopamine-analyzer-card");
+    if (dopamineCard) {
+        dopamineCard.style.pointerEvents = "none";
+        dopamineCard.style.opacity = "0.5";
+    }
 }
 
 document
@@ -1459,9 +2023,24 @@ async function loadLeaderboard() {
 
         listContainer.innerHTML = "";
 
+        // 🛑 التعديل الأول: زراعة عنوان ديناميكي يوضح نوع القائمة ورقم الدورة
+        if (currentLeaderboardMode === "challenge") {
+            listContainer.innerHTML = `
+            <div style="text-align: center; margin-bottom: 20px; padding: 12px; background: rgba(168, 85, 247, 0.1); border: 1px dashed var(--gold-primary); border-radius: 12px;">
+                <h3 style="color: var(--gold-primary); font-size: 16px; margin: 0;">🏆 ساحة المعركة - الدورة رقم (${currentCycle})</h3>
+                <p style="font-size: 12px; color: var(--text-muted); margin: 5px 0 0 0;">هذه القائمة تحدد أبطال الأسبوع وتُصَفَّر كل يوم سبت</p>
+            </div>`;
+        } else {
+            listContainer.innerHTML = `
+            <div style="text-align: center; margin-bottom: 20px; padding: 12px; background: rgba(16, 185, 129, 0.1); border: 1px dashed #10b981; border-radius: 12px;">
+                <h3 style="color: #10b981; font-size: 16px; margin: 0;">🎖️ أساطير المعسكر (الترتيب التراكمي)</h3>
+                <p style="font-size: 12px; color: var(--text-muted); margin: 5px 0 0 0;">سجل الشرف الدائم والأوسمة التاريخية</p>
+            </div>`;
+        }
+
         if (usersArray.length === 0) {
-            listContainer.innerHTML =
-                '<p style="text-align: center; color: var(--text-muted);">لا يوجد متصدرين حتى الآن.</p>';
+            listContainer.innerHTML +=
+                '<p style="text-align: center; color: var(--text-muted); margin-top: 20px;">لا يوجد متصدرين حتى الآن.</p>';
             return;
         }
 
@@ -1573,20 +2152,36 @@ function openUserProfileModal(user) {
     const rankInfo = getRankDetails(user.lifetimeScore || 0);
 
     document.getElementById("modal-user-name").innerText = user.name;
-    // إضافة اللقب في الـ Modal
     document.getElementById("modal-user-name").innerHTML +=
         `<br><span class="rank-tag ${rankInfo.tagClass}" style="display: block; margin: auto; font-size: 13px;">${rankInfo.title}</span>`;
 
     document.getElementById("modal-user-rank").innerText = `#${user.rank}`;
-    document.getElementById("modal-user-points").innerText =
-        user.currentXP + " XP ";
-    document.getElementById("modal-user-streak").innerHTML =
-        `<i class="fa-solid fa-fire fa-fw"></i> ${user.currentStreak || 0}`;
+
+    const pointsEl = document.getElementById("modal-user-points");
+    const streakEl = document.getElementById("modal-user-streak");
+
+    if (currentLeaderboardMode === "challenge") {
+        // في الدورة الحالية: نظهر نقاط الدورة والستريك الحالي
+        pointsEl.innerHTML = `${user.cycleScore || 0} <i class="fa-solid fa-trophy" style="color: var(--gold-primary);"></i>`;
+        streakEl.style.display = "inline-block";
+        streakEl.innerHTML = `<i class="fa-solid fa-fire fa-fw"></i> ${user.currentStreak || 0}`;
+        document
+            .getElementById("streak-box")
+            ?.style.setProperty("display", "inline", "important");
+    } else {
+        // في التراكمي: نظهر الـ lifetimeScore ونخفي الستريك لأنه لا يخص الترتيب التراكمي
+        pointsEl.innerHTML = `${user.lifetimeScore || 0} <i class="fa-solid fa-medal" style="color: #10b981;"></i>`;
+        document
+            .getElementById("streak-box")
+            ?.style.setProperty("display", "none", "important");
+        streakEl.style.display = "none";
+    }
 
     const avatarWrapper = document.getElementById("modal-avatar-wrapper");
     avatarWrapper.className = `avatar-wrapper ${getRankFrameClass(user.lifetimeScore)}`;
     document.getElementById("modal-user-avatar").src =
         user.photoURL || "images/profile.webp";
+
     const badgesContainer = document.getElementById("modal-badges-container");
     if (user.badges && user.badges.length > 0) {
         const sortedBadges = [...user.badges].sort(
@@ -1601,13 +2196,13 @@ function openUserProfileModal(user) {
                     badge.imagePath || badge.icon || "images/badge.webp";
 
                 return `
-                <div style="background: rgba(168, 85, 247, 0.1); border: 1px solid var(--border-color); padding: 15px; border-radius: 12px; width: 110px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.2);">
-                    <div style="display: flex; justify-content: center; align-items: center; font-size: 30px; margin-bottom: 5px; text-shadow: 0 0 10px var(--gold-glow);">
-                        <img src="${imgPath}" alt="${badge.title}" style="width: 70px; height: 70px; object-fit: contain;">
-                    </div>
-                    <h4 style="font-size: 12px; color: var(--text-main); margin-bottom: 5px; line-height: 1.3;">${badge.title}</h4>
-                    <span style="font-size: 10px; color: var(--gold-primary); font-weight: bold;">${dateStr}</span>
-                </div>`;
+            <div style="background: rgba(168, 85, 247, 0.1); border: 1px solid var(--border-color); padding: 15px; border-radius: 12px; width: 110px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.2);">
+                <div style="display: flex; justify-content: center; align-items: center; font-size: 30px; margin-bottom: 5px; text-shadow: 0 0 10px var(--gold-glow);">
+                    <img src="${imgPath}" alt="${badge.title}" style="width: 70px; height: 70px; object-fit: contain;">
+                </div>
+                <h4 style="font-size: 12px; color: var(--text-main); margin-bottom: 5px; line-height: 1.3;">${badge.title}</h4>
+                <span style="font-size: 10px; color: var(--gold-primary); font-weight: bold;">${dateStr}</span>
+            </div>`;
             })
             .join("");
     } else {
@@ -2143,6 +2738,13 @@ window.buyFreeze = async function () {
     const currentCoins = userData.walletCoins || 0;
     const hasFreeze = userData.freezeCount > 0;
 
+    if (currentCoins < 0) {
+        return CustomDialog.alert(
+            "أنت مديون للنظام. قم بتسديد ديون التخاذل أولاً قبل محاولة الشراء.",
+            "المتجر مغلق 🛑",
+        );
+    }
+
     if (hasFreeze) {
         return CustomDialog.alert(
             "أنت تمتلك بالفعل تجميداً مخزناً. استهلكه أولاً لتستطيع شراء غيره.",
@@ -2211,6 +2813,12 @@ window.toggleTodoListFeature = async function () {
         }
     } else {
         // حالة الشراء
+        if (currentCoins < 0) {
+            return CustomDialog.alert(
+                "أنت مديون للنظام. قم بتسديد ديون التخاذل أولاً قبل محاولة الشراء.",
+                "المتجر مغلق 🛑",
+            );
+        }
         if (currentCoins < cost) {
             return CustomDialog.alert(
                 `عملاتك لا تكفي. تحتاج إلى ${cost} عملات لفتح هذه الأداة.`,
@@ -2246,7 +2854,13 @@ window.buyDoubleXP = async function () {
     const userRef = doc(db, "users", currentUser.uid);
     const userDoc = await getDoc(userRef);
     const userData = userDoc.data();
-
+    // 3. هل يملك المال وهل هو غير مديون؟
+    if ((userData.walletCoins || 0) < 0) {
+        return CustomDialog.alert(
+            "أنت مديون للنظام. قم بتسديد ديون التخاذل أولاً قبل محاولة الشراء.",
+            "المتجر مغلق 🛑",
+        );
+    }
     // 1. هل استخدمها مسبقاً في هذا التحدي؟
     if (userData.usedDoubleXP) {
         return CustomDialog.alert(
@@ -2806,6 +3420,61 @@ function startDoomsdayClock() {
     }, 1000);
 }
 
+// ==========================================
+// عداد الدورة الأسبوعية (يحسب الوقت حتى منتصف ليل الجمعة/السبت)
+// ==========================================
+function startCycleCountdown() {
+    const daysLeftEl = document.getElementById("days-left");
+    if (!daysLeftEl) return;
+
+    function update() {
+        const now = getRealNow();
+        const currentDay = now.getDay(); // الأحد = 0, الاثنين = 1, ... الجمعة = 5, السبت = 6
+
+        // حساب الأيام المتبقية حتى يوم السبت القادم
+        let daysUntilSat = 6 - currentDay;
+
+        // إذا كان اليوم هو السبت، فالدورة تنتهي السبت القادم (بعد 7 أيام)
+        if (daysUntilSat === 0) {
+            daysUntilSat = 7;
+        }
+
+        // تحديد الهدف: السبت القادم الساعة 00:00:00 (منتصف ليل الجمعة)
+        const targetDate = new Date(
+            now.getFullYear(),
+            now.getMonth(),
+            now.getDate() + daysUntilSat,
+            0,
+            0,
+            0,
+        );
+        const diffMs = targetDate - now;
+
+        if (diffMs <= 0) {
+            daysLeftEl.innerHTML = `<span style="color: var(--danger); font-weight: bold;">جاري المحاسبة والتصفير ⚖️...</span>`;
+            return;
+        }
+
+        const d = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+        const h = Math.floor((diffMs / (1000 * 60 * 60)) % 24);
+        const m = Math.floor((diffMs / 1000 / 60) % 60);
+
+        if (d > 0) {
+            daysLeftEl.innerHTML = `<span style="font-weight:bold; color: var(--gold-primary); font-size: 20px;">${d}</span> أيام و <span style="font-weight:bold; color: var(--gold-primary);">${h}</span> ساعات`;
+            daysLeftEl.style.color = "var(--text-main)";
+            daysLeftEl.style.textShadow = "none";
+        } else {
+            // في اليوم الأخير (الجمعة) يتحول العداد للون الأحمر للتنبيه
+            daysLeftEl.innerHTML = `⚠️ <span style="font-weight:bold; font-size: 20px;">${h}</span> ساعة و <span style="font-weight:bold;">${m}</span> دقيقة`;
+            daysLeftEl.style.color = "var(--danger)";
+            daysLeftEl.style.textShadow = "0 0 10px rgba(244,63,94,0.5)";
+        }
+    }
+
+    update(); // تشغيل فوري
+    setInterval(update, 60000); // تحديث كل دقيقة (كافي جداً لعداد الأيام/الساعات)
+}
+
 function initializeChecklists() {
     document.querySelectorAll(".checklist-container").forEach((container) => {
         const checkboxes = container.querySelectorAll(".task-checkbox");
@@ -3103,52 +3772,6 @@ window.dismissNiyyahReminder = async function () {
 };
 
 // ==========================================
-// 8. محرك الضغط المطول (Long Press) للأرقام
-// ==========================================
-let adjustInterval;
-let adjustTimeout;
-let isAdjusting = false;
-let currentActiveButton = null; // متغير لتذكر الزر المضغوط حالياً
-
-window.startAdjust = function (btnElement, inputId, change, event) {
-    if (event && event.type === "touchstart") {
-        event.preventDefault();
-    }
-
-    if (isAdjusting) return;
-    isAdjusting = true;
-    currentActiveButton = btnElement; // حفظ الزر
-
-    // 1. تلوين الزر للضغطة العادية فوراً
-    currentActiveButton.classList.add("is-active");
-
-    adjustNumberInput(inputId, change);
-
-    adjustTimeout = setTimeout(() => {
-        // 2. تغيير لون الزر للضغطة المطولة بعد 400 ملي ثانية
-        if (currentActiveButton) {
-            currentActiveButton.classList.add("is-long-press");
-        }
-
-        adjustInterval = setInterval(() => {
-            adjustNumberInput(inputId, change);
-        }, 120);
-    }, 400);
-};
-
-window.stopAdjust = function () {
-    clearTimeout(adjustTimeout);
-    clearInterval(adjustInterval);
-    isAdjusting = false;
-
-    // 3. إزالة كل الألوان وإعادة الزر لشكله الطبيعي عند رفع الإصبع
-    if (currentActiveButton) {
-        currentActiveButton.classList.remove("is-active", "is-long-press");
-        currentActiveButton = null;
-    }
-};
-
-// ==========================================
 // تشغيل محرك الكاش (Service Worker)
 // ==========================================
 if ("serviceWorker" in navigator) {
@@ -3177,7 +3800,6 @@ window.syncUserUI = async function () {
     if (!currentUser || window.isUIUpdating) return;
 
     window.isUIUpdating = true; // إغلاق القفل
-    document.body.style.opacity = "0.8";
 
     try {
         const userDocSnap = await getDoc(doc(db, "users", currentUser.uid));
@@ -3186,33 +3808,28 @@ window.syncUserUI = async function () {
 
         updateProfileUI(userData);
 
+        await checkAndCelebrateBadges(
+            userData,
+            doc(db, "users", currentUser.uid),
+        );
+
         if (typeof renderDailyTrivia === "function") {
             renderDailyTrivia(userData);
         }
 
-        const challengeDoc = await getDoc(
-            doc(db, "settings", "currentChallenge"),
-        );
-        if (challengeDoc.exists() && challengeDoc.data().isActive) {
-            const challengeData = challengeDoc.data();
-            const endDate = challengeData.endDate.toDate();
-            const diffDays = Math.ceil(
-                (endDate - getRealNow()) / (1000 * 60 * 60 * 24),
-            );
-            const displayDays = diffDays > 0 ? diffDays : "انتهى";
+        // تحديث الرأسية الديناميكية أثناء المزامنة
+        const titleEl = document.getElementById("challenge-title");
+        if (titleEl)
+            titleEl.innerHTML = `🏆 الدورة التنافسية رقم: <span style="color: var(--gold-primary); font-size: 24px;">${currentCycle}</span>`;
 
-            const titleEl = document.getElementById("challenge-title");
-            if (titleEl) titleEl.innerText = "تحدي: " + challengeData.title;
+        const targetEl = document.getElementById("daily-target");
+        if (targetEl) targetEl.innerText = dailyTargetPoints;
 
-            const targetEl = document.getElementById("daily-target");
-            if (targetEl) targetEl.innerText = challengeData.dailyTargetPoints;
-
-            const costEl = document.getElementById("life-saver-cost");
-            if (costEl)
-                costEl.innerText = challengeData.dailyTargetPoints * 1.5;
-
-            const daysEl = document.getElementById("days-left");
-            if (daysEl) daysEl.innerText = displayDays;
+        const costEl = document.getElementById("life-saver-cost");
+        if (costEl) {
+            const noteEl =
+                costEl.closest(".challenge-note") || costEl.parentElement;
+            if (noteEl) noteEl.style.display = "none";
         }
 
         const roomView = document.getElementById("active-room-view");
@@ -3267,7 +3884,6 @@ window.syncUserUI = async function () {
     } catch (error) {
         console.error("فشل المزامنة الشاملة:", error);
     } finally {
-        document.body.style.opacity = "1";
         window.isUIUpdating = false; // 🔓 فتح القفل بعد انتهاء كل شيء
     }
 };

@@ -173,16 +173,28 @@ exports.doomsdayWarning = onSchedule(
 );
 
 // ========================================================
-// 🚀 القاضي الآلي: تقييم الجمعة، توزيع الأوسمة، وتصفير الدورة (V2 - المحصنة بالكامل)
+// 🚀 القاضي الآلي: تقييم الجمعة، وتصفير الدورة (V4 - محصنة بالكامل ومنظفة)
 // ========================================================
 exports.weeklyWipeAndEvaluate = onSchedule(
     {
-        schedule: "1 0 * * 6",
+        schedule: "1 0 * * 6", // الدقيقة 1، الساعة 0 (منتصف الليل)، كل يوم سبت
         timeZone: "Africa/Cairo",
+        timeoutSeconds: 300, // 5 دقائق لاستيعاب عدد كبير من المستخدمين
     },
     async (event) => {
         const db = admin.firestore();
-        const batch = db.batch();
+
+        // 🛑 نظام السلال المتعددة (Chunking) لتجاوز حد الـ 500 عملية
+        let batch = db.batch();
+        let operationCount = 0;
+
+        async function commitBatchIfNeeded() {
+            if (operationCount >= 450) {
+                await batch.commit();
+                batch = db.batch(); // فتح سلة جديدة
+                operationCount = 0;
+            }
+        }
 
         try {
             const sysRef = db.doc("configs/system");
@@ -199,7 +211,6 @@ exports.weeklyWipeAndEvaluate = onSchedule(
                     ? challengeDoc.data().dailyTargetPoints
                     : 100;
 
-            // 🛑 إصلاح المهام الدنيوية: تجاهل المهام المعطلة (isActive: false)
             const tasksSnap = await db.collection("tasks").get();
             const allTasks = {};
             const importantTaskIds = [];
@@ -210,7 +221,6 @@ exports.weeklyWipeAndEvaluate = onSchedule(
                     importantTaskIds.push(doc.id);
             });
 
-            // 🛑 إصلاح المهام الدينية: تجاهل المهام المعطلة
             const relTasksSnap = await db.collection("religiousTasks").get();
             const importantRelTaskIds = [];
             relTasksSnap.forEach((doc) => {
@@ -229,6 +239,13 @@ exports.weeklyWipeAndEvaluate = onSchedule(
             });
             const targetDateStr = formatter.format(now);
 
+            const limitParts = targetDateStr.split("-");
+            const limitDate = new Date(
+                limitParts[0],
+                limitParts[1] - 1,
+                limitParts[2],
+            );
+
             const usersSnap = await db.collection("users").get();
             let usersList = [];
 
@@ -241,90 +258,169 @@ exports.weeklyWipeAndEvaluate = onSchedule(
                 let earnedStreakBadges = userData.earnedStreakBadges || [];
                 let badges = userData.badges || [];
                 let cycleScore = userData.cycleScore || 0;
-                let freezeCount = userData.freezeCount || 0; // 🛑 سحب رصيد التجميد
+                let freezeCount = userData.freezeCount || 0;
+                let walletCoins = userData.walletCoins || 0;
 
-                const logRef = db
-                    .collection(`users/${uid}/dailyLogs`)
-                    .doc(targetDateStr);
-                const logDoc = await logRef.get();
+                // 🛑 تم تأمين جلب هذه المتغيرات
+                let lifetimeScore = userData.lifetimeScore || 0;
+                let hasDoubleXP = userData.hasDoubleXP || false;
+                let currentMultiplier = userData.currentMultiplier || 1.0;
 
-                if (!logDoc.exists || !logDoc.data().isFinalized) {
-                    let logData = logDoc.exists ? logDoc.data() : {};
-                    let selections = logData.selections || {};
-                    let religiousSelections = logData.religiousSelections || {};
+                let currentEvalDateStr = userData.lastEvalDate;
+                if (!currentEvalDateStr) {
+                    let t = new Date(now);
+                    t.setDate(t.getDate() - 1);
+                    currentEvalDateStr = formatter.format(t);
+                }
 
-                    let missingRel = false;
-                    for (let id of importantRelTaskIds) {
-                        if (!religiousSelections[id]) {
-                            missingRel = true;
-                            break;
-                        }
-                    }
+                let parts = currentEvalDateStr.split("-");
+                let evalDate = new Date(parts[0], parts[1] - 1, parts[2]);
+                evalDate.setDate(evalDate.getDate() + 1);
 
-                    let missingImportant = false;
-                    for (let id of importantTaskIds) {
-                        let sel = selections[id];
-                        let isDone = false;
-                        if (Array.isArray(sel)) {
-                            if (
-                                sel.length > 1 ||
-                                (sel.length === 1 && sel[0] !== 0)
-                            )
-                                isDone = true;
-                        } else {
-                            if (sel > 0) isDone = true;
-                        }
-                        if (!isDone) {
-                            missingImportant = true;
-                            break;
-                        }
-                    }
+                // المراجعة الرجعية
+                while (evalDate <= limitDate) {
+                    const yyyy = evalDate.getFullYear();
+                    const mm = String(evalDate.getMonth() + 1).padStart(2, "0");
+                    const dd = String(evalDate.getDate()).padStart(2, "0");
+                    const dateStr = `${yyyy}-${mm}-${dd}`;
 
-                    let calcPoints = 0;
-                    for (let [taskId, sel] of Object.entries(selections)) {
-                        let task = allTasks[taskId];
-                        if (task && task.options) {
-                            let selArray = Array.isArray(sel) ? sel : [sel];
-                            for (let idx of selArray) {
-                                if (task.options[idx])
-                                    calcPoints += task.options[idx].points || 0;
+                    const logRef = db
+                        .collection(`users/${uid}/dailyLogs`)
+                        .doc(dateStr);
+                    const logDoc = await logRef.get();
+
+                    if (!logDoc.exists || !logDoc.data().isFinalized) {
+                        let logData = logDoc.exists ? logDoc.data() : {};
+                        let selections = logData.selections || {};
+                        let religiousSelections =
+                            logData.religiousSelections || {};
+
+                        // الفحص القاطع للمهام الدينية الإجبارية (بالصيغة الجديدة + التوافق العكسي)
+                        let missingRel = false;
+                        for (let id of importantRelTaskIds) {
+                            let sel = religiousSelections[id];
+                            let isDone = false;
+
+                            if (typeof sel === "boolean") {
+                                isDone = sel;
+                            } else if (Array.isArray(sel)) {
+                                if (
+                                    sel.length > 1 ||
+                                    (sel.length === 1 && sel[0] !== 0)
+                                )
+                                    isDone = true;
+                            } else {
+                                if (sel > 0) isDone = true;
+                            }
+
+                            if (!isDone) {
+                                missingRel = true;
+                                break;
                             }
                         }
-                    }
 
-                    const passedToday =
-                        !missingImportant &&
-                        !missingRel &&
-                        calcPoints >= targetPoints;
-
-                    if (passedToday) {
-                        newStreak++;
-                        if (newZone === "yellow") newZone = "green";
-                        cycleScore += calcPoints;
-                    } else {
-                        // 🛑 إصلاح الكارثة: حماية المستخدم إذا كان يمتلك تجميد
-                        if (freezeCount > 0) {
-                            freezeCount--; // استهلاك التجميد والستريك يبقى كما هو
-                        } else {
-                            newStreak = 0;
-                            if (newZone === "green") newZone = "yellow";
-                            else if (newZone === "yellow") newZone = "red";
+                        let missingImportant = false;
+                        for (let id of importantTaskIds) {
+                            let sel = selections[id];
+                            let isDone = false;
+                            if (Array.isArray(sel)) {
+                                if (
+                                    sel.length > 1 ||
+                                    (sel.length === 1 && sel[0] !== 0)
+                                )
+                                    isDone = true;
+                            } else {
+                                if (sel > 0) isDone = true;
+                            }
+                            if (!isDone) {
+                                missingImportant = true;
+                                break;
+                            }
                         }
-                    }
 
-                    batch.set(
-                        logRef,
-                        {
-                            date: targetDateStr,
-                            isFinalized: true,
-                            passed: passedToday,
-                            pointsEarned: calcPoints,
-                            selections: selections,
-                            religiousSelections: religiousSelections,
-                            timestamp: new Date().toISOString(),
-                        },
-                        { merge: true },
-                    );
+                        let calcPoints = 0;
+                        for (let [taskId, sel] of Object.entries(selections)) {
+                            let task = allTasks[taskId];
+                            if (task && task.options) {
+                                let selArray = Array.isArray(sel) ? sel : [sel];
+                                for (let idx of selArray) {
+                                    if (task.options[idx])
+                                        calcPoints +=
+                                            task.options[idx].points || 0;
+                                }
+                            }
+                        }
+
+                        const passedToday =
+                            !missingImportant &&
+                            !missingRel &&
+                            calcPoints >= targetPoints;
+
+                        if (passedToday) {
+                            newStreak++;
+                            if (newZone === "yellow") newZone = "green";
+
+                            // 🛑 حساب وتحديث المضاعف
+                            if (newStreak >= 21) currentMultiplier = 2.0;
+                            else if (newStreak >= 14) currentMultiplier = 1.6;
+                            else if (newStreak >= 7) currentMultiplier = 1.4;
+                            else if (newStreak >= 3) currentMultiplier = 1.2;
+                            else currentMultiplier = 1.0;
+
+                            const multipliedPoints = Math.floor(
+                                calcPoints * currentMultiplier,
+                            );
+                            let earnedCoins = Math.floor(
+                                multipliedPoints / 1.5,
+                            );
+                            let earnedXP = multipliedPoints;
+
+                            if (hasDoubleXP) {
+                                earnedXP *= 2;
+                                hasDoubleXP = false;
+                            }
+
+                            lifetimeScore += earnedXP;
+                            walletCoins += earnedCoins;
+                            cycleScore += multipliedPoints;
+                        } else {
+                            if (freezeCount > 0) {
+                                freezeCount--;
+                            } else {
+                                newStreak = 0;
+                                if (newZone === "green") newZone = "yellow";
+                                else if (newZone === "yellow") newZone = "red";
+
+                                // 🛑 تصفير المضاعف عند الفشل
+                                currentMultiplier = 1.0;
+
+                                const penaltyCoins = Math.floor(
+                                    targetPoints / 2,
+                                );
+                                walletCoins -= penaltyCoins;
+                            }
+                        }
+
+                        // 🛑 استخدام السلة الديناميكية للحفظ
+                        batch.set(
+                            logRef,
+                            {
+                                date: dateStr,
+                                isFinalized: true,
+                                passed: passedToday,
+                                pointsEarned: calcPoints,
+                                selections: selections,
+                                religiousSelections: religiousSelections,
+                                timestamp: new Date().toISOString(),
+                            },
+                            { merge: true },
+                        );
+
+                        operationCount++;
+                        await commitBatchIfNeeded();
+                    }
+                    currentEvalDateStr = dateStr;
+                    evalDate.setDate(evalDate.getDate() + 1);
                 }
 
                 const milestones = [7, 14, 21, 28, 35, 42, 50, 60, 90, 100];
@@ -341,14 +437,20 @@ exports.weeklyWipeAndEvaluate = onSchedule(
                     }
                 }
 
+                // 🛑 إصلاح الخلل: دفع جميع المتغيرات للمصفوفة لكي لا يتم مسحها لاحقاً
                 usersList.push({
                     uid,
                     cycleScore,
                     newStreak,
                     newZone,
                     freezeCount,
+                    walletCoins,
+                    lifetimeScore,
+                    hasDoubleXP,
+                    currentMultiplier,
                     earnedStreakBadges,
                     badges,
+                    lastEvalDate: currentEvalDateStr,
                 });
             }
 
@@ -369,25 +471,41 @@ exports.weeklyWipeAndEvaluate = onSchedule(
                 }
 
                 const uRef = db.doc(`users/${u.uid}`);
+
+                // 🛑 استخدام السلة الديناميكية للحفظ وتمرير المتغيرات بشكل صحيح
                 batch.update(uRef, {
                     currentStreak: u.newStreak,
                     currentZone: u.newZone,
-                    freezeCount: u.freezeCount, // 🛑 تحديث رصيد التجميد في قاعدة البيانات
+                    freezeCount: u.freezeCount,
+                    walletCoins: u.walletCoins,
+                    lifetimeScore: u.lifetimeScore,
+                    hasDoubleXP: u.hasDoubleXP,
+                    currentMultiplier: u.currentMultiplier,
                     earnedStreakBadges: u.earnedStreakBadges,
                     badges: u.badges,
                     cycleScore: 0,
                     coreTasksCompletedToday: false,
-                    lastEvalDate: targetDateStr,
+                    lastEvalDate: u.lastEvalDate,
                 });
+
+                operationCount++;
+                await commitBatchIfNeeded();
             }
 
             batch.update(sysRef, {
                 currentCycle: currentCycle + 1,
                 lastReset: new Date().toISOString(),
             });
+            operationCount++;
 
-            await batch.commit();
-            console.log(`تم إغلاق الدورة ${currentCycle} بنجاح.`);
+            // 🛑 تفريغ أي عمليات متبقية في السلة الأخيرة
+            if (operationCount > 0) {
+                await batch.commit();
+            }
+
+            console.log(
+                `تم إغلاق الدورة ${currentCycle} بنجاح. تم استخدام ${Math.ceil(operationCount / 450)} سلال حفظ.`,
+            );
             return null;
         } catch (error) {
             console.error("حدث خطأ أثناء تصفير الدورة:", error);
@@ -476,6 +594,115 @@ exports.verifyUnchainingProof = onCall(
             throw new HttpsError(
                 "internal",
                 "حدث خطأ أثناء تحليل الصورة بواسطة الذكاء الاصطناعي.",
+            );
+        }
+    },
+);
+
+// ==========================================
+// 🤖 القاضي الآلي: مُحلل الدوبامين واستهلاك الشاشة (Canvas AI)
+// ==========================================
+exports.evaluateScreenTime = onCall(
+    { secrets: [geminiApiKey] },
+    async (request) => {
+        // 1. حاجز الأمان
+        if (!request.auth) {
+            throw new HttpsError(
+                "unauthenticated",
+                "يجب تسجيل الدخول لإجراء التقييم.",
+            );
+        }
+
+        const {
+            totalScreenMinutes,
+            totalShortsMinutes,
+            justification,
+            imageUrl,
+        } = request.data;
+
+        try {
+            const genAI = new GoogleGenerativeAI(geminiApiKey.value());
+            const model = genAI.getGenerativeModel({
+                model: "gemini-2.5-flash",
+            });
+
+            // 2. سحب الصورة من رابط Firebase Storage (باستخدام fetch المدمج في Node 18+)
+            const response = await fetch(imageUrl);
+            if (!response.ok) throw new Error("فشل في تحميل الصورة من التخزين");
+            const arrayBuffer = await response.arrayBuffer();
+            const buffer = Buffer.from(arrayBuffer);
+
+            const imagePart = {
+                inlineData: {
+                    data: buffer.toString("base64"),
+                    mimeType:
+                        response.headers.get("content-type") || "image/jpeg",
+                },
+            };
+
+            // 3. التلقين الصارم للذكاء الاصطناعي (Strict Prompt)
+            const prompt = `
+أنت قاضي ذكاء اصطناعي صارم جداً في منصة "BrainRot Detox".
+يجب عليك تحليل الصورة المرفقة (والتي قد تكون مدمجة لعدة لقطات شاشة من أجهزة المستخدم) لتحديد "وقت الشاشة المهدر" بدقة.
+
+معلومات أدخلها المستخدم:
+- إجمالي وقت الشاشة المبلغ عنه: ${totalScreenMinutes} دقيقة.
+- وقت Shorts/Reels/TikTok: ${totalShortsMinutes} دقيقة.
+- التبرير المقدم: "${justification}"
+
+القواعد العسكرية للتقييم:
+1. تحقق أن الصور المرفقة هي بالفعل لقطات شاشة توضح وقت الاستهلاك (Screen Time / Digital Wellbeing / Battery Usage).
+2. إذا كانت الصورة لا علاقة لها بوقت الشاشة (صورة سوداء، حائط، سيلفي، احتيال)، قم بمعاقبته فوراً بجعل "الوقت المهدر" 999 دقيقة.
+3. اقرأ التبرير بتمعن. إذا كان منطقياً ويشرح استهلاكاً دراسياً أو عملاً (مثل تطبيقات إنتاجية، Zoom، منصات تعليمية)، اطرح هذا الوقت من الإجمالي لتصل إلى "الوقت المهدر الفعلي".
+4. السوشيال ميديا، الألعاب، والشورتس (TikTok/Reels/Shorts) تعتبر ترفيه وضياع وقت (مهدر كلياً)، ولا يقبل تبريرها تحت أي ظرف دراسي.
+
+الرد المطلوب:
+يجب أن يكون ردك عبارة عن كائن JSON فقط، بدون أي نصوص تمهيدية وبدون علامات Markdown، مطابق لهذا الهيكل بالضبط:
+{
+  "wastedScreenMinutes": [الرقم الصافي للوقت المهدر],
+  "wastedShortsMinutes": [الرقم الصافي لشورتس المهدر]
+}
+`;
+            // 4. استخراج الحكم
+            // const result = await model.generateContent([prompt, imagePart]);
+            // let text = result.response.text().trim();
+
+            // // تنظيف الـ JSON لضمان عدم انهيار الكود
+            // if (text.startsWith("\`\`\`json"))
+            //     text = text.replace(/\`\`\`json/g, "");
+            // if (text.startsWith("\`\`\`")) text = text.replace(/\`\`\`/g, "");
+            // text = text.trim();
+
+            // const aiData = JSON.parse(text);
+            // 4. استخراج الحكم
+            const result = await model.generateContent([prompt, imagePart]);
+            const text = result.response.text().trim();
+
+            // استخراج كائن JSON فقط وتجاهل أي نصوص إضافية أو علامات Markdown حوله
+            const jsonMatch = text.match(/\{[\s\S]*\}/);
+
+            if (!jsonMatch) {
+                console.error("Gemini Raw Response:", text);
+                throw new Error("لم يقم الذكاء الاصطناعي بإرجاع JSON صالح.");
+            }
+
+            const aiData = JSON.parse(jsonMatch[0]);
+            return {
+                success: true,
+                wastedScreenMinutes:
+                    aiData.wastedScreenMinutes !== undefined
+                        ? aiData.wastedScreenMinutes
+                        : totalScreenMinutes,
+                wastedShortsMinutes:
+                    aiData.wastedShortsMinutes !== undefined
+                        ? aiData.wastedShortsMinutes
+                        : totalShortsMinutes,
+            };
+        } catch (error) {
+            console.error("Gemini Dopamine Evaluation Error:", error);
+            throw new HttpsError(
+                "internal",
+                "حدث خطأ أثناء تحليل الذكاء الاصطناعي.",
             );
         }
     },

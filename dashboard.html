@@ -162,6 +162,35 @@
                     </div>
                     <div class="tasks-list-class" id="tasks-list">
                     </div>
+                    <div class="glass-card" style="border-color: #f43f5e; margin-bottom: 25px; margin-top: 20px;"
+                        id="dopamine-analyzer-card">
+                        <h3
+                            style="color: #f43f5e; margin-bottom: 15px; border-bottom: 1px dashed #f43f5e; padding-bottom: 10px;">
+                            <i class="fa-solid fa-mobile-screen"></i> مُحلل استهلاك الدوبامين (إجباري)
+                        </h3>
+                        <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 15px; line-height: 1.5;">
+                            أدخل أوقات الاستهلاك
+                            الصافية لكل جهاز. الذكاء الاصطناعي سيقوم بخصم الأوقات الإنتاجية بناءً على تبريرك وصور
+                            الإثبات.</p>
+
+                        <div id="devices-container">
+                        </div>
+
+                        <button id="add-device-btn" class="dialog-btn-cancel"
+                            style="width: 100%; margin-bottom: 20px; border-style: dashed; padding: 12px; color: var(--gold-light);">
+                            <i class="fa-solid fa-plus"></i> إضافة جهاز آخر (لابتوب، آيباد...)
+                        </button>
+
+                        <div style="margin-top: 15px;">
+                            <label
+                                style="color: var(--text-muted); font-size: 13px; margin-bottom: 8px; display: block;">تبرير
+                                الاستهلاك
+                                الصادق (الكذب سيكسر ستريكك):</label>
+                            <textarea id="dopamine-justification" rows="3"
+                                placeholder="مثال: استهلكت 3 ساعات على اللابتوب في مشاهدة محاضرات الجراحة، وساعة على الهاتف في حل الفلاش كاردز..."
+                                style="width: 100%; padding: 12px; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); color: white; border-radius: 8px; resize: none; font-family: 'Cairo', sans-serif;"></textarea>
+                        </div>
+                    </div>
                     <button id="submit-day-btn" class="gold-btn" style="margin-top: 20px;">إنهاء اليوم وتسجيل
                         النقاط</button>
                 </div>
@@ -513,7 +542,7 @@
                     <h3 class="gold-text" style="text-align: right; margin-bottom: 15px;">🛡️ خزانة الأوسمة (Trophies)
                     </h3>
                     <div id="badges-container"
-                        style="display: flex; gap: 15px; flex-wrap: wrap; justify-content: flex-start;">
+                        style="display: flex; gap: 15px; flex-wrap: wrap; justify-content: center;">
                         <p style="color: var(--text-muted); font-size: 14px; width: 100%; text-align: right;">لا توجد
                             أوسمة حتى
                             الآن. شارك واصمد للنهاية!</p>
@@ -529,6 +558,9 @@
             </section>
 
             <section id="store-page" class="page-section">
+                <div id="store-debt-banner"
+                    style="display: none; background: rgba(244, 63, 94, 0.15); border: 1px dashed var(--danger); color: var(--danger); padding: 15px; border-radius: 12px; margin-top: 20px; text-align: center; font-weight: bold; line-height: 1.6; box-shadow: 0 0 15px rgba(244, 63, 94, 0.2);">
+                </div>
                 <div class="glass-card store-section" style="margin-top: 20px; padding: 20px; text-align: center;">
                     <h3 style="color: var(--gold-primary); margin-bottom: 15px;">🏪 المتجر</h3>
                     <div class="store-grid">
@@ -618,11 +650,11 @@
                     <span style="display: flex; justify-content: center; align-items: center;">المركز: <span
                             id="modal-user-rank"
                             style="color: var(--success); font-size: 16px; margin-right: 5px;">-</span></span>
-                    <span style="display: flex; justify-content: center; align-items: center;">النقاط: <span
-                            id="modal-user-points"
+                    <span style="display: flex; justify-content: center; align-items: center;">النقاط:
+                        <span id="modal-user-points"
                             style="direction: ltr; color: var(--gold-primary); font-size: 16px; margin-right: 5px;">-</span></span>
-                    <span style="display: flex; justify-content: center; align-items: center;">الستريك: <span
-                            id="modal-user-streak"
+                    <span id="streak-box" style="display: flex; justify-content: center; align-items: center;">الستريك:
+                        <span id="modal-user-streak"
                             style="color: #f97316; font-size: 16px; font-weight: bold; text-shadow: 0 0 5px rgba(249, 115, 22, 0.5); margin-right: 5px;">🔥
                             0</span> </span>
                 </p>
@@ -681,6 +713,107 @@
             </button>
         </div>
     </div>
+    <div id="badge-celebration-overlay" class="custom-dialog-overlay"
+        style="z-index: 999999; display: none; background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(10px);">
+
+        <div id="epic-glow-bg"
+            style="display: none; position: absolute; top: 50%; left: 50%; width: 150vw; height: 150vw; background: radial-gradient(circle, rgba(234,179,8,0.15) 0%, rgba(0,0,0,0) 60%); transform: translate(-50%, -50%); pointer-events: none; animation: pulseGlowBg 3s infinite alternate;">
+        </div>
+
+        <div id="badge-gift-box" class="glass-card"
+            style="text-align: center; padding: 50px 20px; max-width: 350px; width: 90%; background: linear-gradient(145deg, rgba(30, 20, 50, 0.95), rgba(15, 10, 30, 0.98)); border: 1px solid #a855f7; box-shadow: 0 0 30px rgba(168, 85, 247, 0.3); animation: epicDrop 0.5s ease forwards;">
+            <div
+                style="font-size: 90px; margin-bottom: 15px; animation: floatBadge 2s infinite; color: var(--gold-primary);">
+                <i class="fa-solid fa-gift"></i>
+            </div>
+            <h2 style="color: #d8b4fe; font-size: 24px; margin-top: 0; margin-bottom: 10px;">صندوق أوسمة مغلق!</h2>
+            <p style="color: #9ca3af; font-size: 14px; margin-bottom: 25px;">المعسكر يكافئ صمودك. لديك أوسمة جديدة لم
+                تكتشفها بعد.</p>
+            <button id="open-gift-btn" class="gold-btn"
+                style="width: 100%; font-size: 18px; box-shadow: 0 0 15px rgba(168, 85, 247, 0.4);">افتح الهدية الآن
+                🔓</button>
+        </div>
+
+        <div id="badge-reveal-content" class="glass-card epic-modal"
+            style="display: none; position: relative; text-align: center; padding: 40px 20px; max-width: 420px; width: 90%; background: linear-gradient(145deg, rgba(30, 20, 50, 0.95), rgba(15, 10, 30, 0.98)); border: 1px solid #eab308; box-shadow: 0 0 50px rgba(234, 179, 8, 0.5), inset 0 0 20px rgba(234, 179, 8, 0.2); overflow: hidden;">
+
+            <div
+                style="position: absolute; top: 0; left: -150%; width: 50%; height: 100%; background: linear-gradient(to right, transparent, rgba(255,255,255,0.4), transparent); transform: skewX(-25deg); animation: lightSweep 3.5s infinite;">
+            </div>
+
+            <h2
+                style="color: #fef08a; font-size: 32px; margin-bottom: 10px; text-shadow: 0 0 20px #eab2089a, 0 0 40px #eab2084b; font-weight: 900; letter-spacing: 1px;">
+                🎉 إنجاز أسطوري! 🎉</h2>
+            <p style="color: #e5e7eb; font-size: 16px; margin-bottom: 25px; position: relative; z-index: 1;">لقد حصدت
+                أوسمة
+                جديدة بفضل صمودك. التاريخ يُكتب الآن:</p>
+
+            <div id="new-badges-container"
+                style="display: flex; flex-wrap: wrap; justify-content: center; gap: 15px; margin-bottom: 30px; position: relative; z-index: 1;">
+            </div>
+
+            <button id="close-celebration-btn" class="gold-btn"
+                style="width: 100%; font-size: 18px; font-weight: bold; position: relative; z-index: 1;">استلام
+                الأوسمة 🏆</button>
+        </div>
+    </div>
+
+    <style>
+        @keyframes epicDrop {
+            0% {
+                transform: scale(0.5) translateY(-200px);
+            }
+
+            70% {
+                transform: scale(1.05) translateY(20px);
+            }
+
+            100% {
+                transform: scale(1) translateY(0);
+            }
+        }
+
+        @keyframes pulseGlowBg {
+            0% {
+                opacity: 0.5;
+                transform: translate(-50%, -50%) scale(0.8);
+            }
+
+            100% {
+                opacity: 1;
+                transform: translate(-50%, -50%) scale(1.1);
+            }
+        }
+
+        @keyframes lightSweep {
+            0% {
+                left: -150%;
+            }
+
+            50% {
+                left: 200%;
+            }
+
+            100% {
+                left: 200%;
+            }
+        }
+
+        @keyframes floatBadge {
+            0% {
+                transform: translateY(0px);
+            }
+
+            50% {
+                transform: translateY(-6px);
+            }
+
+            100% {
+                transform: translateY(0px);
+            }
+        }
+    </style>
+
     <script>
         const navItems = document.querySelectorAll('.nav-links li, #profile-btn');
         const pages = document.querySelectorAll('.page-section');
