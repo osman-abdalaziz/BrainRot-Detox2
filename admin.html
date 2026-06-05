@@ -5,11 +5,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>لوحة تحكم الإدارة | BrainRot Detox</title>
+    <link rel="icon" type="image/webp" href="images/favicon.webp">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cairo:slnt,wght@-11..11,200..1000&display=swap"
         rel="stylesheet">
     <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <style>
         /* تنسيقات إضافية لجداول الإدارة */
         table {
@@ -43,7 +45,6 @@
             border-radius: 6px;
             cursor: pointer;
             color: white;
-            margin-left: 5px;
             white-space: nowrap;
         }
 
@@ -71,6 +72,92 @@
             background: rgba(239, 68, 68, 0.2);
             color: var(--danger);
         }
+
+        /* تحسينات النماذج (Forms) في لوحة الإدارة */
+        .admin-form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .input-group label {
+            font-size: 13px;
+            color: var(--gold-light);
+            font-weight: bold;
+        }
+
+        .admin-input {
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid var(--border-color);
+            color: white;
+            padding: 12px 15px;
+            border-radius: 8px;
+            width: 100%;
+            outline: none;
+            transition: all 0.3s ease;
+            font-family: 'Cairo', sans-serif;
+            box-sizing: border-box;
+        }
+
+        .admin-input:focus {
+            border-color: var(--gold-primary);
+            box-shadow: 0 0 10px rgba(234, 179, 8, 0.2);
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: rgba(255, 255, 255, 0.03);
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .checkbox-group:hover {
+            border-color: var(--gold-primary);
+            background: #a855f71a;
+        }
+
+        .option-row-wrapper {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+            align-items: center;
+            background: rgba(0, 0, 0, 0.2);
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px dashed var(--border-color);
+            transition: 0.3s;
+        }
+
+        .option-row-wrapper:hover {
+            border-color: var(--gold-primary);
+        }
+
+        .btn-icon {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 44px;
+            height: 44px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+
+        .checkbox-group input[type="checkbox"] {
+            margin: 0;
+        }
     </style>
 </head>
 
@@ -82,13 +169,17 @@
                 <h1>الإدارة (Admin)</h1>
             </div>
             <ul class="nav-links">
-                <li class="active" data-target="codes-page">إدارة الأكواد</li>
-                <li data-target="tasks-page">إدارة المهام</li>
-                <li data-target="challenges-page">إدارة التحديات</li>
-                <li data-target="users-page">إدارة الأعضاء</li>
-                <li data-target="religious-tasks-page">الجانب الديني</li>
-                <li data-target="redeem-codes-page">أكواد الهدايا</li>
-                <li data-target="dashboard-page">الرئيسية</li>
+                <li class="active" data-target="codes-page"> <i class="fa-solid fa-barcode fa-fw"></i> إدارة الأكواد
+                </li>
+                <li data-target="tasks-page"> <i class="fa-solid fa-tasks fa-fw"></i> إدارة المهام</li>
+                <li data-target="religious-tasks-page"><i class="fa-solid fa-mosque fa-fw"></i> الجانب الديني
+                </li>
+                <li data-target="challenges-page"><i class="fa-solid fa-trophy fa-fw"></i> إدارة التحدي </li>
+                <li data-target="willpower-page"><i class="fa-solid fa-fire-flame-curved fa-fw"></i> تحديات الإرادة</li>
+                <li data-target="radar-page"> <i class="fa-solid fa-eye fa-fw"></i> رادار المراقبة </li>
+                <li data-target="users-page"> <i class="fa-solid fa-users fa-fw"></i> إدارة الأعضاء</li>
+                <li data-target="redeem-codes-page"> <i class="fa-solid fa-gift fa-fw"></i> أكواد الهدايا</li>
+                <li data-target="dashboard-page"> <i class="fa-solid fa-home fa-fw"></i>الرئيسية</li>
             </ul>
         </aside>
 
@@ -133,52 +224,77 @@
             </section>
 
             <section id="tasks-page" class="page-section">
-                <h2 class="gold-text" style="margin-bottom: 15px;">إدارة المهام (Multi-Options)</h2>
-                <div class="glass-card">
-                    <div style="display: flex; gap: 10px; margin-bottom: 10px;">
-                        <input type="number" id="task-order" placeholder="الترتيب" style="margin: 0; width: 80px;">
-                        <input type="text" id="task-name" placeholder="اسم المهمة الأساسي (مثال: صلاة الفجر)"
-                            style="margin: 0; flex-grow: 1;">
-                        <input type="text" id="task-category" placeholder="القسم (مثال: الجانب الديني)"
-                            style="margin: 0; width: 160px;">
-                    </div>
-                    <h3 style="font-size: 12px; color: var(--text-muted); margin-bottom: 8px;">خيارات المهمة (مثال: في
-                        المسجد، في
-                        المنزل...):</h3>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h2 class="gold-text" style="margin: 0;">إدارة المهام الدنيوية 🎯</h2>
+                </div>
 
-                    <div id="options-container">
-                        <div class="option-row" style="display: flex; gap: 10px; margin-bottom: 8px;">
-                            <input type="text" class="opt-name" placeholder="اسم الخيار (مثال: في المسجد)"
-                                style="margin: 0; flex-grow: 2;">
-                            <input type="number" class="opt-points" placeholder="النقاط (مثال: 20)"
-                                style="margin: 0; flex-grow: 1;">
+                <div class="glass-card" style="padding: 25px;">
+                    <div class="admin-form-grid">
+                        <div class="input-group">
+                            <label>الترتيب الظهوري (Order)</label>
+                            <input type="number" id="task-order" class="admin-input" placeholder="مثال: 1">
                         </div>
+                        <div class="input-group" style="grid-column: span 2;">
+                            <label>اسم المهمة الأساسي</label>
+                            <input type="text" id="task-name" class="admin-input" placeholder="مثال: القراءة اليومية">
+                        </div>
+                        <div class="input-group">
+                            <label>القسم (Category)</label>
+                            <input type="text" id="task-category" class="admin-input" list="category-list"
+                                placeholder="اختر أو اكتب قسم جديد...">
+                            <datalist id="category-list"></datalist>
+                        </div>
+                    </div>
 
-                    </div>
                     <div
-                        style="display: flex; gap: 10px; margin-top: 10px; align-items: center; background: rgba(255,255,255,0.05); padding: 10px; border-radius: 8px;">
-                        <input type="checkbox" id="task-is-multi"
-                            style="accent-color: var(--gold-primary); width: 16px; height: 16px; cursor: pointer; margin: 0 5px 0 0;">
-                        <label for="task-is-multi" class="gold-text"
-                            style="font-size: 14px; cursor: pointer; margin: 0;">السماح باختيار
-                            متعدد (Checklists) - يجمع نقاط كل الخيارات المحددة</label>
+                        style="background: rgba(0,0,0,0.15); padding: 20px; border-radius: 12px; margin-bottom: 20px; border: 1px solid var(--border-color);">
+                        <div
+                            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                            <h3 style="font-size: 14px; color: var(--gold-primary); margin: 0;"><i
+                                    class="fa-solid fa-layer-group"></i> مستويات وخيارات المهمة:</h3>
+                            <button id="add-option-row-btn" class="action-btn"
+                                style="background: #4a227043; color: var(--gold-primary); border: 1px dashed var(--gold-primary);"><i
+                                    class="fa-solid fa-plus"></i> مستوى جديد</button>
+                        </div>
+                        <div id="options-container">
+                            <div class="option-row-wrapper">
+                                <div style="flex-grow: 2;">
+                                    <input type="text" class="opt-name admin-input"
+                                        placeholder="اسم الخيار (مثال: قراءة 10 صفحات)" style="margin: 0;">
+                                </div>
+                                <div style="width: 120px;">
+                                    <input type="number" class="opt-points admin-input" placeholder="النقاط"
+                                        style="margin: 0;">
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <div style="display: flex; gap: 10px; margin-top: 10px;">
-                        <button id="add-option-row-btn"
-                            style="background: var(--card-hover); color: var(--gold-primary); border: 1px dashed var(--gold-primary); width: auto; padding: 6px 12px; border-radius: 6px; cursor: pointer; margin: 0; font-size: 12px; white-space: nowrap;">+
-                            إضافة خيار</button>
-                        <button id="add-task-btn" class="gold-btn"
-                            style="margin: 0; flex-grow: 1; white-space: nowrap;">حفظ المهمة
-                            بالكامل</button>
+
+                    <div class="admin-form-grid" style="grid-template-columns: 1fr;">
+                        <label class="checkbox-group">
+                            <input type="checkbox" id="task-is-multi"
+                                style="accent-color: var(--gold-primary); width: 20px; height: 20px;">
+                            <span class="gold-text" style="font-size: 14px;">السماح باختيار متعدد (Checklists) - النظام
+                                سيجمع نقاط
+                                جميع الخيارات المحددة</span>
+                        </label>
+                    </div>
+
+                    <div style="display: flex; gap: 10px; margin-top: 25px;" id="task-btn-container">
+                        <button id="add-task-btn" class="gold-btn" style="margin: 0; width: 100%; font-size: 16px;">حفظ
+                            المهمة
+                            بالكامل <i class="fa-solid fa-save"></i></button>
                     </div>
                 </div>
-                <div class="filter-container" style="margin-bottom: 20px;">
-                    <label for="task-category-filter" class="gold-text">تصفية حسب القسم:</label>
+
+                <div class="filter-container" style="margin: 25px 0 15px 0;">
+                    <label for="task-category-filter" class="gold-text">تصفية الجدول حسب القسم:</label>
                     <select id="task-category-filter" class="admin-input"
-                        style="width: auto; display: inline-block; margin-right: 10px;">
+                        style="width: 250px; display: inline-block; margin-right: 10px;">
                         <option value="all">كل الأقسام</option>
                     </select>
                 </div>
+
                 <div class="glass-card" style="overflow-x: auto;">
                     <table>
                         <thead>
@@ -196,132 +312,216 @@
             </section>
 
             <section id="challenges-page" class="page-section">
-                <h2 class="gold-text" style="margin-bottom: 15px;">إدارة التحديات النشطة</h2>
-                <div class="glass-card">
-                    <div
-                        style="display: flex; gap: 10px; margin-bottom: 10px; align-items: center; justify-content: space-between;">
-                        <input type="text" id="challenge-title" placeholder="اسم التحدي (مثال: تحدي الـ 7 أيام)"
-                            style="margin: 0; flex-grow: 1;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h2 class="gold-text" style="margin: 0;">إعدادات النظام والدورة التنافسية ⚙️</h2>
+                </div>
 
-                        <div
-                            style="display: flex; align-items: center; gap: 10px; width: auto; justify-content: space-between;">
-                            <label class="profile-label" style="margin: 0; font-size: 12px;">صورة الوسام (PNG):</label>
-                            <input type="file" id="challenge-badge-upload" accept="image/png" style="display: none;">
-                            <button type="button" id="trigger-badge-upload" class="action-btn btn-edit"
-                                style="margin: 0; width: auto;">اختر الصورة</button>
-                            <img id="badge-preview" src=""
-                                style="width: 32px; height: 32px; object-fit: contain; border: 1px solid var(--border-color); border-radius: 6px; padding: 3px;">
+                <div class="glass-card" style="padding: 25px; margin-bottom: 20px;">
+                    <h3 style="color: var(--gold-primary); margin-bottom: 15px; font-size: 16px;">
+                        <i class="fa-solid fa-sliders"></i> المتغيرات الحاكمة (Global Variables)
+                    </h3>
+                    <div class="admin-form-grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));">
+                        <div class="input-group">
+                            <label>الهدف اليومي (النقاط المطلوبة)</label>
+                            <input type="number" id="sys-daily-target" class="admin-input" placeholder="مثال: 100">
+                        </div>
+                        <div class="input-group">
+                            <label>ساعة نهاية اليوم (0-23)</label>
+                            <input type="number" id="sys-day-start" class="admin-input"
+                                placeholder="مثال: 4 (يعني 4 فجراً)">
+                        </div>
+                        <div class="input-group">
+                            <label>ساعة فتح نافذة الاعتماد (0-23)</label>
+                            <input type="number" id="sys-submit-start" class="admin-input"
+                                placeholder="مثال: 21 (يعني 9 مساءً)">
                         </div>
                     </div>
-                    <div style="display: flex; gap: 10px;">
-                        <input type="number" id="challenge-days" placeholder="المدة بالأيام" style="margin: 0;">
-                        <input type="number" id="challenge-daily-target" placeholder="الهدف اليومي" style="margin: 0;">
-                        <button id="start-challenge-btn" class="gold-btn"
-                            style="margin: 0; background: var(--success); color: white; white-space: nowrap;">إطلاق
-                            التحدي</button>
+                    <div style="display: flex; gap: 10px; margin-top: 20px;">
+                        <button id="save-configs-btn" class="gold-btn" style="margin: 0; width: 100%; font-size: 15px;">
+                            حفظ إعدادات النظام <i class="fa-solid fa-save"></i>
+                        </button>
                     </div>
                 </div>
+
+                <div class="glass-card" style="padding: 25px; margin-bottom: 20px;">
+                    <h3 style="color: var(--gold-primary); margin-bottom: 15px; font-size: 16px;">
+                        <i class="fa-solid fa-bell"></i> بث إشعار مخصص (Push Notification)
+                    </h3>
+                    <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 15px;">اكتب رسالتك هنا وسيتم
+                        بثها فوراً
+                        كإشعار على هواتف جميع الجنود المشتركين.</p>
+                    <div class="admin-form-grid" style="grid-template-columns: 1fr;">
+                        <div class="input-group">
+                            <label>عنوان الإشعار</label>
+                            <input type="text" id="notif-title" class="admin-input"
+                                placeholder="مثال: تحذير عاجل من القيادة! ⚠️">
+                        </div>
+                        <div class="input-group">
+                            <label>نص الإشعار</label>
+                            <input type="text" id="notif-body" class="admin-input" placeholder="اكتب رسالتك هنا...">
+                        </div>
+                    </div>
+                    <button id="send-custom-notif-btn" class="gold-btn"
+                        style="margin: 0; width: 100%; background: var(--danger); border-color: var(--danger);">
+                        إرسال الإشعار فوراً <i class="fa-solid fa-paper-plane"></i>
+                    </button>
+                </div>
+
                 <div class="glass-card" style="margin-top: 20px;">
-                    <h3 class="gold-text">بث الإشعارات العاجلة 📢</h3>
-                    <div style="display: flex; gap: 10px; margin-top: 15px;">
-                        <button id="notify-registration-btn" class="gold-btn" style="width: auto;">إشعار: فتح التسجيل
-                            🔓</button>
-                        <button id="notify-challenge-btn" class="gold-btn"
-                            style="width: auto; background: var(--danger);">إشعار: بدء
-                            التحدي ⚔️</button>
+                    <h3 style="margin-bottom: 10px; font-size: 14px;"><i class="fa-solid fa-file-pdf"></i> تقرير القيادة
+                    </h3>
+                    <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 15px;">استخراج تقرير تفصيلي
+                        بأداء الجنود
+                        وإحصائيات إنجاز المهام لتحليل الصعوبة.</p>
+                    <button id="generate-report-btn" class="gold-btn" style="width: auto; padding: 10px 20px;"
+                        onclick="generateComprehensiveReport()">
+                        استخراج التقرير الشامل
+                    </button>
+                </div>
+
+                <!-- زر الهجرة القديم (يمكنك حذفه لاحقاً إذا استقر النظام 100%) -->
+                <details
+                    style="margin-top: 20px; background: rgba(244, 63, 94, 0.1); border: 1px dashed var(--danger); border-radius: 8px; padding: 10px;">
+                    <summary style="color: var(--danger); cursor: pointer; font-size: 13px; font-weight: bold;">أدوات
+                        الصيانة
+                        المتقدمة (لا تلمسها)</summary>
+                    <div style="margin-top: 15px;">
+                        <button id="migrate-system-btn" class="gold-btn"
+                            style="background: var(--danger); border-color: var(--danger); width: auto;">
+                            تحديث قاعدة البيانات للنظام الجديد 🚀
+                        </button>
+                    </div>
+                </details>
+            </section>
+
+            <!-- ========================================== -->
+            <!-- 🔥 بنك تحديات الإرادة (Willpower Challenges) -->
+            <!-- ========================================== -->
+            <section id="willpower-page" class="page-section">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h2 class="gold-text" style="margin: 0;">بنك تحديات الإرادة 🔥</h2>
+                </div>
+
+                <div class="glass-card" style="padding: 25px; margin-bottom: 20px;">
+                    <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 20px;">
+                        <i class="fa-solid fa-circle-info"></i> السيرفر سيقوم باختيار تحدي واحد "متاح" يومياً بشكل
+                        عشوائي لجميع
+                        الجنود.
+                    </p>
+                    <div class="admin-form-grid">
+                        <div class="input-group" style="grid-column: span 2;">
+                            <label>عنوان التحدي (مثال: تحدي الجليد)</label>
+                            <input type="text" id="wp-title" class="admin-input" placeholder="أدخل اسم التحدي هنا">
+                        </div>
+                        <div class="input-group" style="grid-column: span 3;">
+                            <label>وصف التحدي (شرح دقيق للمطلوب)</label>
+                            <input type="text" id="wp-desc" class="admin-input"
+                                placeholder="مثال: استحمام بماء بارد لمدة 3 دقائق متصلة...">
+                        </div>
+                        <div class="input-group" style="grid-column: span 2;">
+                            <label style="color: var(--success);">مكافأة الـ XP ⭐</label>
+                            <input type="number" id="wp-xp" class="admin-input" placeholder="مثال: 50">
+                        </div>
+                        <div class="input-group" style="grid-column: span 2;">
+                            <label style="color: var(--gold-primary);">مكافأة العملات 🪙</label>
+                            <input type="number" id="wp-coins" class="admin-input" placeholder="مثال: 15">
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 10px; margin-top: 25px;" id="wp-btn-container">
+                        <button id="add-wp-btn" class="gold-btn" style="margin: 0; width: 100%; font-size: 16px;">
+                            حفظ التحدي في البنك <i class="fa-solid fa-save"></i>
+                        </button>
                     </div>
                 </div>
+
                 <div class="glass-card" style="overflow-x: auto;">
-                    <h3 style="margin-bottom: 10px; font-size: 14px;">التحدي الحالي</h3>
                     <table>
                         <thead>
                             <tr>
-                                <th>التحدي</th>
-                                <th>الهدف اليومي</th>
-                                <th>تاريخ النهاية</th>
+                                <th>تفاصيل التحدي</th>
+                                <th>المكافأة (XP / عملات)</th>
                                 <th>الحالة</th>
                                 <th>إجراء</th>
                             </tr>
                         </thead>
-                        <tbody id="challenge-table-body">
+                        <tbody id="willpower-table-body">
                         </tbody>
                     </table>
-                </div>
-                <div class="glass-card" style="margin-top: 20px;">
-                    <h3 style="margin-bottom: 10px; font-size: 14px;">تقرير الإدارة</h3>
-                    <button id="generate-report-btn" class="gold-btn" onclick="generateComprehensiveReport()">
-                        <i class="fa-solid fa-file-pdf"></i> استخراج التقرير الشامل
-                    </button>
-                </div>
-                <div class="glass-card" style="margin-top: 20px; border-color: var(--danger);">
-                    <h3 style="color: var(--danger); margin-bottom: 10px;">
-                        <i class="fa-solid fa-triangle-exclamation"></i> صيانة وتحديث النظام (Migration)
-                    </h3>
-                    <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 15px;">
-                        استخدم هذا الزر <b>مرة واحدة فقط</b> للانتقال إلى نظام "الدوري المستمر والمناطق". سيقوم النظام
-                        بإنشاء ملفات
-                        التتبع الجديدة وتحديث بيانات جميع المستخدمين لإضافة الحقول المطلوبة (cycleScore, badges, zones)
-                        دون المساس
-                        بالنقاط التراكمية أو العملات القديمة.
-                    </p>
-                    <button id="migrate-system-btn" class="gold-btn"
-                        style="background: var(--danger); border-color: var(--danger);">
-                        تحديث قاعدة البيانات للنظام الجديد 🚀
-                    </button>
                 </div>
             </section>
 
             <section id="religious-tasks-page" class="page-section">
-                <h2 class="gold-text" style="margin-bottom: 15px;">إدارة الجانب الديني (المهام الروحية)</h2>
+                <h2 class="gold-text" style="margin-bottom: 15px;">إدارة الجانب الديني 🕌</h2>
 
-                <div class="glass-card">
-                    <div style="display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap;">
-                        <input type="number" id="rel-task-order" placeholder="الترتيب" style="margin: 0; width: 80px;">
-                        <input type="text" id="rel-task-name" placeholder="عنوان المهمة (مثال: الصلوات الخمس)"
-                            style="margin: 0; flex-grow: 1;">
-                        <input type="text" id="rel-task-note" placeholder="ملاحظة/شرح (اختياري)"
-                            style="margin: 0; flex-grow: 2;">
-                    </div>
-
-                    <h3 style="font-size: 12px; color: var(--text-muted); margin-bottom: 8px;">خيارات المهمة (يجب أن
-                        يكون الخيار
-                        الأول دائماً هو الرفض/الفشل مثل "لم أصلِ"):</h3>
-                    <div id="rel-options-container">
-                        <div class="rel-option-row" style="display: flex; gap: 10px; margin-bottom: 8px;">
-                            <input type="text" class="rel-opt-name" placeholder="اسم الخيار (مثال: في المسجد)"
-                                style="margin: 0; flex-grow: 1;">
+                <div class="glass-card" style="padding: 25px;">
+                    <div class="admin-form-grid">
+                        <div class="input-group">
+                            <label>الترتيب الظهوري (Order)</label>
+                            <input type="number" id="rel-task-order" class="admin-input" placeholder="مثال: 1">
+                        </div>
+                        <div class="input-group" style="grid-column: span 2;">
+                            <label>عنوان المهمة (مثال: الصلوات الخمس)</label>
+                            <input type="text" id="rel-task-name" class="admin-input" placeholder="أدخل العنوان هنا">
+                        </div>
+                        <div class="input-group" style="grid-column: span 3;">
+                            <label>ملاحظة / شرح إضافي (تظهر تحت العنوان)</label>
+                            <input type="text" id="rel-task-note" class="admin-input"
+                                placeholder="مثال: صلاة الجماعة تضاعف الأجر">
                         </div>
                     </div>
 
                     <div
-                        style="display: flex; gap: 10px; margin-top: 10px; align-items: center; background: rgba(255,255,255,0.05); padding: 10px; border-radius: 8px;">
-                        <input type="checkbox" id="rel-task-is-multi"
-                            style="accent-color: var(--gold-primary); width: 16px; height: 16px; cursor: pointer; margin: 0 5px 0 0;">
-                        <label for="rel-task-is-multi" class="gold-text"
-                            style="font-size: 14px; cursor: pointer; margin: 0;">السماح
-                            باختيار متعدد (Checklists)</label>
+                        style="background: rgba(0,0,0,0.15); padding: 20px; border-radius: 12px; margin-bottom: 20px; border: 1px solid var(--border-color);">
+                        <div
+                            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                            <h3 style="font-size: 14px; color: var(--gold-primary); margin: 0;"><i
+                                    class="fa-solid fa-layer-group"></i> مستويات المهمة الدينية (لا يوجد بها نقاط):</h3>
+                            <button id="add-rel-option-row-btn" class="action-btn"
+                                style="background: #a855f71a; color: var(--gold-primary); border: 1px dashed var(--gold-primary);"><i
+                                    class="fa-solid fa-plus"></i> مستوى جديد</button>
+                        </div>
+                        <div
+                            style="background: rgba(239, 68, 68, 0.1); border-right: 3px solid var(--danger); padding: 10px; border-radius: 6px; margin-bottom: 15px;">
+                            <p style="font-size: 12px; color: #fca5a5; margin: 0;"><i
+                                    class="fa-solid fa-circle-exclamation"></i>
+                                <b>تنبيه فني:</b> الخيار الأول (الأعلى) يجب أن يكون خيار الرفض/التقصير (مثال: لم أصلِ،
+                                لم أفعل).
+                            </p>
+                        </div>
+
+                        <div id="rel-options-container">
+                            <div class="option-row-wrapper">
+                                <div style="flex-grow: 1;">
+                                    <input type="text" class="rel-opt-name admin-input"
+                                        placeholder="اسم الخيار (مثال: في المسجد)" style="margin: 0;">
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
-                    <div
-                        style="display: flex; gap: 10px; margin-top: 10px; align-items: center; background: rgba(255,255,255,0.05); padding: 10px; border-radius: 8px;">
-                        <input type="checkbox" id="rel-task-important"
-                            style="accent-color: var(--gold-primary); width: 16px; height: 16px; cursor: pointer; margin: 0 5px 0 0;">
-                        <label for="rel-task-important" class="gold-text"
-                            style="font-size: 14px; cursor: pointer; margin: 0;">مهمة
-                            أساسية (إجبارية ولا يمكن إنهاء اليوم بدون إنجازها)</label>
+                    <div class="admin-form-grid" style="grid-template-columns: 1fr 1fr;">
+                        <label class="checkbox-group">
+                            <input type="checkbox" id="rel-task-is-multi"
+                                style="accent-color: var(--gold-primary); width: 20px; height: 20px;">
+                            <span class="gold-text" style="font-size: 14px;">مهمة متعددة الاختيارات (Checklists)</span>
+                        </label>
+                        <label class="checkbox-group" style="border-color: rgba(245, 158, 11, 0.4);">
+                            <input type="checkbox" id="rel-task-important"
+                                style="accent-color: #f59e0b; width: 20px; height: 20px;">
+                            <span style="font-size: 14px; color: #f59e0b; font-weight: bold;">مهمة أساسية ⚠️ (إجبارية
+                                ولا يُعتمد
+                                اليوم بدونها)</span>
+                        </label>
                     </div>
 
-                    <div style="display: flex; gap: 10px; margin-top: 15px;" id="rel-task-btn-container">
-                        <button id="add-rel-option-row-btn"
-                            style="background: var(--card-hover); color: var(--gold-primary); border: 1px dashed var(--gold-primary); width: auto; padding: 6px 12px; border-radius: 6px; cursor: pointer; margin: 0; font-size: 12px; white-space: nowrap;">+
-                            إضافة خيار</button>
+                    <div style="display: flex; gap: 10px; margin-top: 25px;" id="rel-task-btn-container">
                         <button id="add-rel-task-btn" class="gold-btn"
-                            style="margin: 0; flex-grow: 1; white-space: nowrap;">حفظ
-                            المهمة الدينية</button>
+                            style="margin: 0; width: 100%; font-size: 16px;">حفظ المهمة
+                            الدينية <i class="fa-solid fa-save"></i></button>
                     </div>
                 </div>
 
-                <div class="glass-card" style="overflow-x: auto; margin-top: 20px;">
+                <div class="glass-card" style="overflow-x: auto;">
                     <table>
                         <thead>
                             <tr>
@@ -337,22 +537,70 @@
                 </div>
             </section>
 
+            <section id="radar-page" class="page-section">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h2 class="gold-text" style="margin: 0;">رادار المراقبة والتدقيق 👁️</h2>
+                </div>
+
+                <div class="glass-card"
+                    style="padding: 20px; margin-bottom: 20px; display: flex; gap: 15px; flex-wrap: wrap; align-items: flex-end;">
+                    <div style="flex: 1; min-width: 200px;">
+                        <label
+                            style="color: var(--text-muted); font-size: 13px; margin-bottom: 5px; display: block;">اختر
+                            تاريخ
+                            المراقبة:</label>
+                        <input type="date" id="radar-date-input" class="admin-input" style="margin: 0; padding: 10px;">
+                    </div>
+                    <button id="fetch-radar-btn" class="gold-btn" style="margin: 0; width: auto; padding: 10px 30px;">
+                        تشغيل الرادار <i class="fa-solid fa-satellite-dish"></i>
+                    </button>
+                </div>
+
+                <h3 class="gold-text"
+                    style="margin-bottom: 15px; font-size: 16px; border-bottom: 1px dashed var(--gold-primary); padding-bottom: 5px;">
+                    <i class="fa-solid fa-mobile-screen"></i> إثباتات الدوبامين (Dopamine Proofs)
+                </h3>
+                <div id="radar-dopamine-container"
+                    style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 15px; margin-bottom: 30px;">
+                    <p style="color: var(--text-muted); grid-column: 1 / -1; text-align: center;">حدد التاريخ واضغط
+                        تشغيل الرادار
+                        لجلب البيانات.</p>
+                </div>
+
+                <h3 class="gold-text"
+                    style="margin-bottom: 15px; font-size: 16px; border-bottom: 1px dashed var(--danger); padding-bottom: 5px; color: var(--danger);">
+                    <i class="fa-solid fa-lock-open"></i> إثباتات فك القيود (Unchaining Proofs)
+                </h3>
+                <div id="radar-unchaining-container"
+                    style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 15px;">
+                    <p style="color: var(--text-muted); grid-column: 1 / -1; text-align: center;">لا توجد بيانات مسحوبة
+                        بعد.</p>
+                </div>
+            </section>
+
+            <div id="image-enlarge-overlay" class="modal-overlay" style="z-index: 9999999;"
+                onclick="this.classList.remove('show')">
+                <img id="enlarged-radar-image" src=""
+                    style="max-width: 95%; max-height: 95%; border-radius: 12px; border: 2px solid var(--gold-primary); box-shadow: 0 0 30px rgba(0,0,0,0.8); cursor: zoom-out;">
+            </div>
+
             <section id="users-page" class="page-section">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                    <h2 class="gold-text" style="margin: 0;">إدارة الأعضاء (المحاربين)</h2>
+                    <h2 class="gold-text" style="margin: 0;">إدارة الأعضاء (المحاربين) 🛡️</h2>
                     <button id="factory-reset-btn"
-                        style="background: var(--danger); border: none; padding: 8px 16px; border-radius: 6px; color: white; cursor: pointer; font-weight: bold; font-size: 14px;">إعادة
-                        ضبط المصنع للجميع ☢️</button>
+                        style="background: var(--danger); border: 1px solid #ff0000; padding: 10px 20px; border-radius: 8px; color: white; cursor: pointer; font-weight: bold; font-size: 14px; box-shadow: 0 0 10px rgba(220, 38, 38, 0.4);">
+                        إعادة ضبط المصنع للجميع ☢️
+                    </button>
                 </div>
                 <div class="glass-card" style="overflow-x: auto;">
                     <table>
                         <thead>
                             <tr>
-                                <th>الاسم / الإيميل</th>
-                                <th>النقاط</th>
-                                <th>الحالة</th>
-                                <th>التحدي</th>
-                                <th>إجراءات الإدارة</th>
+                                <th>المحارب</th>
+                                <th>الاقتصاد (XP / عملات)</th>
+                                <th>المعركة (دورة / ستريك)</th>
+                                <th>المنطقة والحالة</th>
+                                <th>إجراءات القيادة</th>
                             </tr>
                         </thead>
                         <tbody id="users-table-body">

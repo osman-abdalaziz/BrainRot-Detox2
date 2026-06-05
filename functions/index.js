@@ -401,6 +401,10 @@ exports.weeklyWipeAndEvaluate = onSchedule(
                             }
                         }
 
+                        // إنشاء طابع زمني منطقي لنهاية اليوم لضمان سلامة الإحصائيات
+                        const logicalTimestamp = new Date(evalDate);
+                        logicalTimestamp.setHours(23, 59, 59);
+
                         // 🛑 استخدام السلة الديناميكية للحفظ
                         batch.set(
                             logRef,
@@ -411,7 +415,7 @@ exports.weeklyWipeAndEvaluate = onSchedule(
                                 pointsEarned: calcPoints,
                                 selections: selections,
                                 religiousSelections: religiousSelections,
-                                timestamp: new Date().toISOString(),
+                                timestamp: logicalTimestamp.toISOString(),
                             },
                             { merge: true },
                         );
@@ -558,35 +562,75 @@ exports.verifyUnchainingProof = onCall(
             });
 
             const prompt = `أنت قاضٍ آلي صارم في منصة تحديات قاسية. 
-المستخدم معاقب، وللخروج من العقوبة يجب أن يرفع إثباتاً عبارة عن لقطة شاشة (Screenshot) توضح أن وقت استخدام الهاتف (Screen Time) اليوم أقل من ساعة، أو صورة واضحة تثبت تواجده في الجيم لأداء تمرين رياضي شاق.
+المستخدم معاقب، وللخروج من العقوبة يجب أن يرفع إثباتاً عبارة عن لقطة شاشة (Screenshot) توضح إجمالي وقت استخدام الهاتف (Screen Time) وتفصيل التطبيقات.
 
 قم بتحليل الصورة بدقة بناءً على هذه القواعد الصارمة التي لا تقبل الاستثناء:
-1. دقق في الساعة الظاهرة في شريط إشعارات الهاتف (أعلى الشاشة). يجب أن يكون الوقت الظاهر ليلاً (حصراً بين الساعة 10:00 PM وحتى 04:00 AM). إذا كانت الساعة في الصورة تشير للنهار أو العصر (مثلاً 2:00 PM)، ارفضها فوراً لأنها صورة قديمة.
-2. هل هي صورة حقيقية لـ Screen time يقل عن ساعة؟ أو تمرين رياضي؟
-3. هل تبدو معدلة ببرامج، أو صورة عامة من الإنترنت، أو شاشة سوداء؟
-4. لا تقبل الصور التي تحتوي على نصوص أو علامات مائية تشير إلى أنها من الإنترنت أو معدلة.
+1. يجب أن تكون الصورة لقطة شاشة حقيقية لإعدادات "وقت الشاشة" (Screen Time / Digital Wellbeing) من هاتف أو حاسوب المستخدم.
+2. يجب أن يكون "إجمالي وقت الشاشة" (Total Screen Time) الظاهر في الصورة أقل من ساعتين (أي أقصى حد مسموح هو 1 ساعة و 59 دقيقة).
+3. يجب أن يكون الوقت المستهلك على تطبيقات الفيديوهات القصيرة (TikTok, Reels, Shorts, Instagram, YouTube) أقل من 30 دقيقة.
+4. لا تشترط وقتاً معيناً في ساعة الهاتف الظاهرة في الصورة، ركز فقط على أرقام الاستهلاك.
+5. هل تبدو معدلة ببرامج، أو صورة عامة من الإنترنت، أو شاشة سوداء؟ ارفضها فوراً.
 
 التعليمات الصارمة للإجابة:
-- إذا كانت الصورة إثباتاً حقيقياً ومقنعاً والوقت فيها سليم، اكتب كلمة واحدة فقط: قبول
-- إذا كانت الصورة احتيالية، قديمة، وقتها غير مطابق، أو لا علاقة لها بالمطلوب، اكتب: رفض: [اكتب سبب الرفض باختصار شديد]`;
+- إذا كانت الصورة إثباتاً حقيقياً ومقنعاً وحققت الشرطين (الشاشة < ساعتين، والشورتس < 30 دقيقة)، اكتب كلمة واحدة فقط: قبول
+- إذا كانت الصورة احتيالية، أو الشاشة ساعتين فأكثر، أو الشورتس 30 دقيقة فأكثر، أو لا علاقة لها بالمطلوب، اكتب: رفض: [اكتب سبب الرفض باختصار شديد يوضح الرقم الذي تجاوزه المستخدم]`;
 
             const result = await model.generateContent([prompt, ...imageParts]);
             const responseText = result.response.text().trim();
 
-            // 5. اتخاذ القرار برمجياً
+            // 5. اتخاذ القرار برمجياً وحفظه في سجلات اليوم (dailyLogs) للرادار
+            const imageUrl = request.data.imageUrl || "";
+
+            // توليد تاريخ القاهرة لربط المحاولة بسجل اليوم
+            const now = new Date();
+            const formatter = new Intl.DateTimeFormat("en-CA", {
+                timeZone: "Africa/Cairo",
+                year: "numeric",
+                month: "2-digit",
+                day: "2-digit",
+            });
+            const todayStr = formatter.format(now);
+            const logRef = admin
+                .firestore()
+                .doc(`users/${uid}/dailyLogs/${todayStr}`);
+
             if (responseText.startsWith("قبول")) {
-                // فك القيود وتحديث قاعدة البيانات من الخادم (آمن 100%)
-                const imageUrl = request.data.imageUrl || ""; // نستقبل الرابط الجاهز من العميل
+                // فك القيود للمستخدم
                 await admin.firestore().collection("users").doc(uid).update({
                     currentZone: "green",
                     currentStreak: 0,
-                    lastUnchainingProof: imageUrl,
-                    unchainingTimestamp: new Date().toISOString(),
                 });
+
+                // توثيق المحاولة الناجحة للرادار
+                await logRef.set(
+                    {
+                        unchainingData: {
+                            proofImageUrl: imageUrl,
+                            status: "accepted",
+                            message: "تم فك القيود والعودة للمنطقة الخضراء",
+                            timestamp: now.toISOString(),
+                        },
+                    },
+                    { merge: true },
+                );
+
                 return { success: true, message: "تمت الموافقة" };
             } else {
-                // الرفض وإرسال السبب للمستخدم
+                // توثيق المحاولة الفاشلة للرادار (لا نغير منطقة المستخدم)
                 const reason = responseText.replace("رفض:", "").trim();
+
+                await logRef.set(
+                    {
+                        unchainingData: {
+                            proofImageUrl: imageUrl,
+                            status: "rejected",
+                            message: reason,
+                            timestamp: now.toISOString(),
+                        },
+                    },
+                    { merge: true },
+                );
+
                 return { success: false, message: reason };
             }
         } catch (error) {

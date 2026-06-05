@@ -20,6 +20,7 @@ import {
     query,
     orderBy,
     writeBatch,
+    where, // <--- أضف هذه الكلمة هنا
 } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 import {
     ref,
@@ -132,10 +133,11 @@ onAuthStateChanged(auth, async (user) => {
             loadCodes();
             populateCategoryFilter(); // <--- أضف هذا السطر لملء فلتر الأقسام عند تحميل الصفحة
             loadTasks();
-            loadCurrentChallenge();
+            loadSystemConfigs();
             loadUsers();
             loadRedeemCodes(); // <--- أضف هذا السطر
             loadReligiousTasks(); // <--- أضف هذا السطر هنا
+            loadWillpowerChallenges(); // <--- سحب بنك التحديات
         }
     } else {
         window.location.href = "index.html";
@@ -235,9 +237,9 @@ async function loadTasks() {
             <td><span class="badge ${data.isActive ? "badge-active" : "badge-inactive"}">${data.isActive ? "نشط" : "معطل"}</span></td>
             <td>
                 <div style="display: flex; gap: 5px; flex-wrap: wrap;">
-                    <button class="action-btn btn-edit" style="background: #f59e0b; border: none;" onclick="editTask('${docSnap.id}')">تعديل ✏️</button>
-                    <button class="action-btn btn-edit" onclick="toggleTaskStatus('${docSnap.id}', ${data.isActive})">${data.isActive ? "تعطيل ⏸️" : "تفعيل ▶️"}</button>
-                    <button class="action-btn btn-delete" onclick="deleteTask('${docSnap.id}')">حذف ❌</button>
+                    <button class="action-btn btn-edit" style="background: #f59e0b; border: none;" onclick="editTask('${docSnap.id}')">تعديل <i class="fa-solid fa-edit"></i></button>
+                    <button class="action-btn btn-edit" onclick="toggleTaskStatus('${docSnap.id}', ${data.isActive})">${data.isActive ? "تعطيل <i class='fa-solid fa-pause'></i>" : "تفعيل <i class='fa-solid fa-play'></i>"}</button>
+                    <button class="action-btn btn-delete" onclick="deleteTask('${docSnap.id}')">حذف <i class="fa-solid fa-trash"></i></button>
                 </div>
             </td>
         `;
@@ -248,12 +250,11 @@ async function loadTasks() {
 document.getElementById("add-option-row-btn").addEventListener("click", () => {
     const container = document.getElementById("options-container");
     const row = document.createElement("div");
-    row.className = "option-row";
-    row.style.cssText = "display: flex; gap: 10px; margin-bottom: 10px;";
+    row.className = "option-row-wrapper";
     row.innerHTML = `
-        <input type="text" class="opt-name" placeholder="اسم الخيار إضافي" style="margin: 0; flex-grow: 2;">
-        <input type="number" class="opt-points" placeholder="النقاط" style="margin: 0; flex-grow: 1;">
-        <button class="remove-opt-btn" style="background: var(--danger); color: white; border: none; padding: 0 15px; border-radius: 8px; cursor: pointer;">X</button>
+        <div style="flex-grow: 2;"><input type="text" class="opt-name admin-input" placeholder="اسم الخيار إضافي" style="margin: 0;"></div>
+        <div style="width: 120px;"><input type="number" class="opt-points admin-input" placeholder="النقاط" style="margin: 0;"></div>
+        <button class="remove-opt-btn btn-icon" style="background: rgba(239, 68, 68, 0.15); color: var(--danger); border: 1px solid var(--danger);"><i class="fa-solid fa-trash"></i></button>
     `;
     container.appendChild(row);
     row.querySelector(".remove-opt-btn").addEventListener("click", () =>
@@ -286,22 +287,12 @@ window.editTask = async (taskId) => {
             container.innerHTML = "";
 
             taskData.options.forEach((opt, index) => {
-                // // تخطي خيار الصفر التلقائي (لم أقم بها) لكي لا يظهر في الفورم
-                // if (
-                //     index === 0 &&
-                //     opt.points === 0 &&
-                //     opt.name.includes("لم أقم بها")
-                // )
-                //     return;
-
                 const row = document.createElement("div");
-                row.className = "option-row";
-                row.style.cssText =
-                    "display: flex; gap: 10px; margin-bottom: 10px;";
+                row.className = "option-row-wrapper";
                 row.innerHTML = `
-                    <input type="text" class="opt-name" placeholder="اسم الخيار إضافي" value="${opt.name}" style="margin: 0; flex-grow: 2;">
-                    <input type="number" class="opt-points" placeholder="النقاط" value="${opt.points}" style="margin: 0; flex-grow: 1;">
-                    <button class="remove-opt-btn" style="background: var(--danger); color: white; border: none; padding: 0 15px; border-radius: 8px; cursor: pointer;">X</button>
+                    <div style="flex-grow: 2;"><input type="text" class="opt-name admin-input" placeholder="اسم الخيار إضافي" value="${opt.name}" style="margin: 0;"></div>
+                    <div style="width: 120px;"><input type="number" class="opt-points admin-input" placeholder="النقاط" value="${opt.points}" style="margin: 0;"></div>
+                    <button class="remove-opt-btn btn-icon" style="background: rgba(239, 68, 68, 0.15); color: var(--danger); border: 1px solid var(--danger);"><i class="fa-solid fa-trash"></i></button>
                 `;
                 container.appendChild(row);
                 row.querySelector(".remove-opt-btn").addEventListener(
@@ -316,7 +307,8 @@ window.editTask = async (taskId) => {
 
             // تغيير شكل زر الحفظ ليدل على التعديل
             const btn = document.getElementById("add-task-btn");
-            btn.innerText = "تحديث المهمة ✏️";
+            btn.innerHTML =
+                "تحديث المهمة <i class='fa-solid fa-pen-to-square'></i>";
             btn.style.background = "#f59e0b"; // برتقالي
 
             // إظهار زر الإلغاء
@@ -324,9 +316,9 @@ window.editTask = async (taskId) => {
             if (!cancelBtn) {
                 cancelBtn = document.createElement("button");
                 cancelBtn.id = "cancel-edit-btn";
-                cancelBtn.innerText = "إلغاء ❌";
+                cancelBtn.innerHTML = "إلغاء <i class='fa-solid fa-xmark'></i>";
                 cancelBtn.style.cssText =
-                    "background: transparent; color: var(--danger); border: 1px solid var(--danger); padding: 12px 20px; border-radius: 8px; cursor: pointer; flex-grow: 0;";
+                    "background: transparent; width: 120px; display:flex; justify-content: center; align-items: center; color: var(--danger); border: 1px solid var(--danger); padding: 12px 20px; border-radius: 8px; cursor: pointer; flex-grow: 0;";
                 cancelBtn.onclick = cancelEditMode;
                 btn.parentNode.appendChild(cancelBtn);
             }
@@ -350,15 +342,14 @@ function cancelEditMode() {
     document.getElementById("task-category").value = "";
     document.getElementById("task-is-multi").checked = false;
     document.getElementById("options-container").innerHTML = `
-        <div class="option-row" style="display: flex; gap: 10px; margin-bottom: 10px;">
-            <input type="text" class="opt-name" placeholder="اسم الخيار (مثال: في المسجد)" style="margin: 0; flex-grow: 2;">
-            <input type="number" class="opt-points" placeholder="النقاط (مثال: 20)" style="margin: 0; flex-grow: 1;">
+        <div class="option-row-wrapper">
+            <div style="flex-grow: 2;"><input type="text" class="opt-name admin-input" placeholder="اسم الخيار (مثال: قراءة 10 صفحات)" style="margin: 0;"></div>
+            <div style="width: 120px;"><input type="number" class="opt-points admin-input" placeholder="النقاط" style="margin: 0;"></div>
         </div>
     `;
     const btn = document.getElementById("add-task-btn");
-    btn.innerText = "حفظ المهمة بالكامل";
-    btn.style.background = ""; // إعادة لونه الأصلي (css gradient)
-
+    btn.innerHTML = "حفظ المهمة بالكامل <i class='fa-solid fa-save'></i>";
+    btn.style.background = "";
     const cancelBtn = document.getElementById("cancel-edit-btn");
     if (cancelBtn) cancelBtn.style.display = "none";
 }
@@ -371,7 +362,9 @@ document.getElementById("add-task-btn").addEventListener("click", async () => {
     if (!name)
         return await CustomDialog.alert("يرجى إدخال اسم المهمة الأساسي.");
 
-    const optionRows = document.querySelectorAll(".option-row");
+    const optionRows = document.querySelectorAll(
+        "#options-container .option-row-wrapper",
+    );
     const options = [];
     let hasError = false;
 
@@ -432,9 +425,11 @@ document.getElementById("add-task-btn").addEventListener("click", async () => {
     } finally {
         btn.disabled = false;
         if (editingTaskId) {
-            btn.innerText = "تحديث المهمة ✏️";
+            btn.innerHTML =
+                "تحديث المهمة <i class='fa-solid fa-pen-to-square'></i>";
         } else {
-            btn.innerText = "حفظ المهمة بالكامل";
+            btn.innerHTML =
+                "حفظ المهمة بالكامل <i class='fa-solid fa-save'></i>";
         }
     }
 });
@@ -457,226 +452,162 @@ window.toggleTaskStatus = async (taskId, currentStatus) => {
 };
 
 // ==============================
-// إدارة التحديات
+// إعدادات النظام (System Configs V2)
 // ==============================
-document
-    .getElementById("trigger-badge-upload")
-    .addEventListener("click", () =>
-        document.getElementById("challenge-badge-upload").click(),
-    );
 
-document
-    .getElementById("challenge-badge-upload")
-    .addEventListener("change", async (e) => {
-        selectedBadgeFile = e.target.files[0];
-        if (selectedBadgeFile && selectedBadgeFile.type === "image/png") {
-            const reader = new FileReader();
-            reader.onload = (event) =>
-                (document.getElementById("badge-preview").src =
-                    event.target.result);
-            reader.readAsDataURL(selectedBadgeFile);
-        } else {
-            await CustomDialog.alert("يرجى اختيار ملف صورة PNG مفرغة.");
-            selectedBadgeFile = null;
-            document.getElementById("badge-preview").src =
-                "https://via.placeholder.com/40";
-        }
-    });
-
-async function loadCurrentChallenge() {
-    const tbody = document.getElementById("challenge-table-body");
-    tbody.innerHTML = "";
-    const docSnap = await getDoc(doc(db, "settings", "currentChallenge"));
-
-    if (docSnap.exists() && docSnap.data().isActive) {
-        const data = docSnap.data();
-        const endDate = data.endDate.toDate().toLocaleDateString("en-CA");
-        let statusBadge = "";
-        let actionBtn = "";
-        if (data.status === "registration") {
-            statusBadge = `<span class="badge" style="background: #eab308; color: #000;">مرحلة التسجيل مفتوحة</span>`;
-            actionBtn = `<button class="action-btn" style="background: var(--success);" onclick="activateChallenge()">بدء التحدي الآن</button>`;
-        } else if (data.status === "active") {
-            statusBadge = `<span class="badge badge-active">نشط وجاري</span>`;
-            actionBtn = `<button class="action-btn btn-delete" onclick="endChallengeAndAwardBadges()">إنهاء وتوزيع الأوسمة</button>`;
+// سحب الإعدادات الحالية من قاعدة البيانات وعرضها في الحقول
+async function loadSystemConfigs() {
+    try {
+        // سحب الهدف اليومي
+        const challengeDoc = await getDoc(
+            doc(db, "settings", "currentChallenge"),
+        );
+        if (challengeDoc.exists()) {
+            document.getElementById("sys-daily-target").value =
+                challengeDoc.data().dailyTargetPoints || 100;
         }
 
-        const tr = document.createElement("tr");
-        tr.innerHTML = `
-            <td style="color: var(--gold-primary); font-weight: bold;">${data.title}</td><td>${data.dailyTargetPoints}</td><td>${endDate}</td><td>${statusBadge}</td>
-            <td>${actionBtn} ${data.status === "registration" ? `<button class="action-btn btn-delete" onclick="endChallengeAndAwardBadges(true)">إلغاء</button>` : ""}</td>
-        `;
-        tbody.appendChild(tr);
-    } else {
-        tbody.innerHTML =
-            '<tr><td colspan="5" style="text-align: center;">لا يوجد تحدي حالياً. أطلق تحدياً جديداً ليبدأ يوم التسجيل.</td></tr>';
+        // سحب إعدادات الوقت
+        const sysDoc = await getDoc(doc(db, "configs", "system"));
+        if (sysDoc.exists()) {
+            const data = sysDoc.data();
+            document.getElementById("sys-day-start").value =
+                data.dayStartHour !== undefined ? data.dayStartHour : 4;
+            document.getElementById("sys-submit-start").value =
+                data.submissionStartHour !== undefined
+                    ? data.submissionStartHour
+                    : 21;
+        }
+    } catch (error) {
+        console.error("خطأ في سحب الإعدادات:", error);
     }
 }
 
+// حفظ الإعدادات عند الضغط على الزر
 document
-    .getElementById("start-challenge-btn")
-    .addEventListener("click", async () => {
-        const title = document.getElementById("challenge-title").value.trim();
-        const days = parseInt(document.getElementById("challenge-days").value);
-        const dailyTarget = parseInt(
-            document.getElementById("challenge-daily-target").value,
+    .getElementById("save-configs-btn")
+    ?.addEventListener("click", async () => {
+        const target = parseInt(
+            document.getElementById("sys-daily-target").value,
         );
-        if (!title || isNaN(days) || isNaN(dailyTarget))
-            return await CustomDialog.alert("أدخل بيانات التحدي.");
+        const dayStart = parseInt(
+            document.getElementById("sys-day-start").value,
+        );
+        const submitStart = parseInt(
+            document.getElementById("sys-submit-start").value,
+        );
 
-        const btn = document.getElementById("start-challenge-btn");
-        btn.innerText = "جاري الإطلاق... ⏳";
+        // التحقق من صحة المدخلات
+        if (isNaN(target) || isNaN(dayStart) || isNaN(submitStart)) {
+            return CustomDialog.alert("يرجى إدخال أرقام صحيحة في جميع الحقول.");
+        }
+        if (
+            dayStart < 0 ||
+            dayStart > 23 ||
+            submitStart < 0 ||
+            submitStart > 23
+        ) {
+            return CustomDialog.alert(
+                "الساعات يجب أن تكون بنظام 24 ساعة (من 0 إلى 23).",
+            );
+        }
+
+        const btn = document.getElementById("save-configs-btn");
+        const originalText = btn.innerHTML;
+        btn.innerHTML = "جاري الحفظ... ⏳";
         btn.disabled = true;
+
         try {
-            let badgeImageUrl = null;
-            const challengeId = Date.now().toString();
-            if (selectedBadgeFile) {
-                const badgeRef = ref(storage, `badges/${challengeId}.png`);
-                await uploadBytes(badgeRef, selectedBadgeFile);
-                badgeImageUrl = await getDownloadURL(badgeRef);
-            } else {
-                badgeImageUrl = "https://via.placeholder.com/100?text=Badge";
-            }
-
-            const startDate = new Date();
-            const endDate = new Date(startDate);
-            endDate.setDate(startDate.getDate() + days);
-            // 1. جلب كل المستخدمين من قاعدة البيانات
-            const usersSnap = await getDocs(collection(db, "users"));
-
-            // 2. إنشاء مصفوفة بوعود التحديث لتصفير الستريك للجميع (Batch Update)
-            const resetPromises = usersSnap.docs.map((uDoc) =>
-                updateDoc(doc(db, "users", uDoc.id), {
-                    currentStreak: 0,
-                    currentXP: 0,
-                    hasDoubleXP: false,
-                    usedDoubleXP: false,
-                }),
+            // تحديث الهدف اليومي
+            await setDoc(
+                doc(db, "settings", "currentChallenge"),
+                {
+                    dailyTargetPoints: target,
+                    isActive: true, // للحفاظ على توافق النظام القديم
+                },
+                { merge: true },
             );
 
-            // 3. تنفيذ التصفير للكل قبل الانتقال للخطوة التالية
-            await Promise.all(resetPromises);
-            console.log("تم تصفير الستريك لجميع المستخدمين.");
+            // تحديث إعدادات التوقيت
+            await setDoc(
+                doc(db, "configs", "system"),
+                {
+                    dayStartHour: dayStart,
+                    submissionStartHour: submitStart,
+                },
+                { merge: true },
+            );
 
-            await setDoc(doc(db, "settings", "currentChallenge"), {
-                challengeId,
-                title,
-                badgeImageUrl,
-                durationDays: days,
-                dailyTargetPoints: dailyTarget,
-                startDate,
-                endDate,
-                status: "registration",
-                isActive: true,
-                createdAt: new Date(),
-            });
-
-            document.getElementById("challenge-title").value = "";
-            document.getElementById("challenge-days").value = "";
-            document.getElementById("challenge-daily-target").value = "";
-            selectedBadgeFile = null;
-            document.getElementById("badge-preview").src =
-                "https://via.placeholder.com/40";
-            loadCurrentChallenge();
             await CustomDialog.alert(
-                "تم إطلاق التحدي بنجاح ورفع صورة الوسام المصممة!",
-                "عملية ناجحة ✅",
+                "تم تحديث إعدادات النظام بنجاح! ستُطبق التغييرات فوراً.",
+                "نجاح ✅",
             );
         } catch (error) {
-            await CustomDialog.alert("حدث خطأ أثناء إطلاق التحدي.");
+            console.error(error);
+            await CustomDialog.alert("حدث خطأ أثناء الحفظ.");
         } finally {
-            btn.innerText = "إطلاق التحدي";
+            btn.innerHTML = originalText;
             btn.disabled = false;
         }
     });
 
-window.activateChallenge = async () => {
-    if (
-        await CustomDialog.confirm(
-            "هل أنت متأكد من إغلاق التسجيل وبدء التحدي الآن للمنضمين؟",
-            "انطلاق التحدي 🚀",
-        )
-    ) {
-        await updateDoc(doc(db, "settings", "currentChallenge"), {
-            status: "active",
-        });
-        loadCurrentChallenge();
-    }
-};
-
-window.endChallengeAndAwardBadges = async (isCancel = false) => {
-    const msg = isCancel
-        ? "هل أنت متأكد من إلغاء هذا التحدي؟"
-        : "هل أنت متأكد من إنهاء التحدي؟ سيتم توزيع الوسام على الصامدين وإعداد الجميع للتحدي القادم.";
-    if (await CustomDialog.confirm(msg, "إنهاء التحدي 🏆")) {
-        const challengeSnap = await getDoc(
-            doc(db, "settings", "currentChallenge"),
-        );
-        if (challengeSnap.exists() && !isCancel) {
-            const data = challengeSnap.data();
-            const badgeUrl =
-                data.badgeImageUrl ||
-                "https://via.placeholder.com/100?text=Badge";
-            const usersSnap = await getDocs(collection(db, "users"));
-            const updatePromises = [];
-            usersSnap.forEach((userDoc) => {
-                const ud = userDoc.data();
-                if (ud.joinedChallengeId === data.challengeId) {
-                    let upData = {
-                        joinedChallengeId: null,
-                        challengeStatus: "active",
-                    };
-                    if (ud.challengeStatus !== "failed")
-                        upData.badges = arrayUnion({
-                            title: data.title,
-                            date: new Date().toLocaleDateString("en-CA"),
-                            icon: badgeUrl,
-                        });
-                    updatePromises.push(updateDoc(userDoc.ref, upData));
-                }
-            });
-            await Promise.all(updatePromises);
-            await CustomDialog.alert(
-                "تم توزيع الأوسمة المصممة على الصامدين، وتم تصفير الحالات لانتظار التحدي القادم!",
-                "توزيع الأوسمة 🎉",
-            );
-        }
-        await updateDoc(doc(db, "settings", "currentChallenge"), {
-            isActive: false,
-            status: "ended",
-        });
-        loadCurrentChallenge();
-    }
-};
-
 // ==============================
-// إدارة الأعضاء
+// إدارة الأعضاء (V2) - النسخة المنقحة والمؤمنة
 // ==============================
+
 async function loadUsers() {
     const tbody = document.getElementById("users-table-body");
-    tbody.innerHTML = "";
+    tbody.innerHTML =
+        "<tr><td colspan='5' style='text-align:center;'>جاري سحب بيانات الجنود... ⏳</td></tr>";
+
     const snap = await getDocs(collection(db, "users"));
+    tbody.innerHTML = "";
+
     snap.forEach((docSnap) => {
         const data = docSnap.data();
-        // if (data.role === "admin") return;
-        const statusBadge =
+        // if (data.role === "admin") return; // إخفاء الإدارة من الجدول
+
+        // 🛑 القائمة المنسدلة التفاعلية لتغيير المنطقة (Select)
+        const zoneSelectHtml = `
+            <select onchange="changeUserZone('${docSnap.id}', this.value)" style="background: rgba(0,0,0,0.5); color: white; border: 1px solid var(--border-color); padding: 5px; border-radius: 6px; font-family: 'Cairo', sans-serif; font-size: 12px; margin-bottom: 5px; outline: none; cursor: pointer;">
+                <option value="green" ${data.currentZone === "green" ? "selected" : ""}>🟢 منطقة خضراء</option>
+                <option value="yellow" ${data.currentZone === "yellow" ? "selected" : ""}>🟡 منطقة صفراء</option>
+                <option value="red" ${data.currentZone === "red" ? "selected" : ""}>🔴 منطقة حمراء</option>
+            </select>
+        `;
+
+        const challengeStatus =
             data.challengeStatus === "failed"
-                ? `<span class="badge badge-inactive">تم إقصاؤه</span>`
-                : `<span class="badge badge-active">نشط</span>`;
-        const challengeStatus = data.joinedChallengeId
-            ? '<span style="color:var(--success);">مسجل</span>'
-            : '<span style="color:var(--text-muted);">غير مسجل</span>';
+                ? `<span class="badge badge-inactive" style="display:inline-block; width: 100%; text-align: center;">مُقصى 💀</span>`
+                : `<span class="badge badge-active" style="display:inline-block; width: 100%; text-align: center;">صامد ⚔️</span>`;
 
         const tr = document.createElement("tr");
         tr.innerHTML = `
-            <td style="font-weight: bold; line-height: 1.4;">${data.name} <br><span style="font-size: 11px; color: var(--text-muted); font-weight: normal;">${data.email}</span></td>
-            <td class="gold-text" style="font-weight:bold; font-size: 18px;">${data.points || 0}</td><td>${statusBadge}</td><td>${challengeStatus}</td>
             <td>
-                <div style="display: flex; gap: 5px; justify-content: flex-start;">
-                <button class="action-btn btn-edit" style="background: #f97316; border: none;" onclick="editUserStreak('${docSnap.id}', ${data.streak || 0})">تعديل الستريك 🔥</button>
-                <button class="action-btn btn-edit" onclick="editUserPoints('${docSnap.id}', ${data.points || 0})">تعديل النقاط</button>
-                <button class="action-btn" style="background: ${data.challengeStatus === "failed" ? "#10b981" : "#f59e0b"};" onclick="toggleUserStatus('${docSnap.id}', '${data.challengeStatus}')">${data.challengeStatus === "failed" ? "إعادة إحياء" : "إقصاء"}</button>
-                <button class="action-btn btn-delete" style="background: transparent; border: 1px solid var(--danger); color: var(--danger);" onclick="deleteUserAccount('${docSnap.id}')">حذف نهائي</button>
+                <strong style="color: var(--gold-primary); font-size: 15px;">${data.name}</strong><br>
+                <span style="font-size: 11px; color: var(--text-muted);">${data.email}</span>
+            </td>
+            <td>
+                <div style="font-size: 13px;">⭐ XP: <strong style="color:var(--success);">${data.lifetimeScore || 0}</strong></div>
+                <div style="font-size: 13px;">🪙 عملات: <strong style="${(data.walletCoins || 0) < 0 ? "color:var(--danger);" : "color:var(--gold-primary);"}">${data.walletCoins || 0}</strong></div>
+            </td>
+            <td>
+                <div style="font-size: 13px;">🏆 الدورة: <strong>${data.cycleScore || 0}</strong></div>
+                <div style="font-size: 13px;">🔥 ستريك: <strong style="color:#f97316;">${data.currentStreak || 0}</strong></div>
+            </td>
+            <td>
+                <div style="display: flex; flex-direction: column; gap: 5px; max-width: 120px;">
+                    ${zoneSelectHtml}
+                    ${challengeStatus}
+                </div>
+            </td>
+            <td>
+                <div style="display: flex; gap: 5px; flex-wrap: wrap; max-width: 250px;">
+                    <button class="action-btn" style="background: #3b82f6;" onclick="editUserValue('${docSnap.id}', 'walletCoins', ${data.walletCoins || 0}, 'تعديل العملات 🪙')">العملات</button>
+                    <button class="action-btn" style="background: #8b5cf6;" onclick="editUserValue('${docSnap.id}', 'lifetimeScore', ${data.lifetimeScore || 0}, 'تعديل الـ XP ⭐')">الـ XP</button>
+                    <button class="action-btn" style="background: #f97316;" onclick="editUserValue('${docSnap.id}', 'currentStreak', ${data.currentStreak || 0}, 'تعديل الستريك 🔥')">الستريك</button>
+                    <button class="action-btn" style="background: ${data.challengeStatus === "failed" ? "#10b981" : "#f59e0b"};" onclick="toggleUserStatus('${docSnap.id}', '${data.challengeStatus}')">${data.challengeStatus === "failed" ? "إحياء 🕊️" : "إقصاء 💀"}</button>
+                    <button class="action-btn btn-delete" style="background: transparent; border: 1px solid var(--danger); color: var(--danger);" onclick="deleteUserAccount('${docSnap.id}')">حذف نهائي ❌</button>
                 </div>
             </td>
         `;
@@ -684,96 +615,65 @@ async function loadUsers() {
     });
 }
 
-window.editUserPoints = async (uid, currentPoints) => {
-    const newPoints = await CustomDialog.prompt(
-        "أدخل رصيد النقاط الجديد لهذا العضو:",
-        currentPoints,
-        "تعديل النقاط ⚙️",
-    );
-    if (newPoints !== null && newPoints.trim() !== "" && !isNaN(newPoints)) {
-        try {
-            await updateDoc(doc(db, "users", uid), {
-                points: parseInt(newPoints),
-            });
-            loadUsers();
-        } catch (error) {
-            await CustomDialog.alert("حدث خطأ أثناء تحديث النقاط.");
-        }
+// 🛑 الدالة الجديدة لتغيير المنطقة فوراً من الـ Select
+window.changeUserZone = async (uid, newZone) => {
+    try {
+        await updateDoc(doc(db, "users", uid), { currentZone: newZone });
+        console.log(`User ${uid} zone changed to ${newZone}`);
+        // لا نحتاج لعمل loadUsers() هنا لتجنب إعادة تحميل الجدول بالكامل وإزعاجك أثناء العمل
+        // التعديل يتم في الخلفية بصمت.
+    } catch (error) {
+        await CustomDialog.alert("حدث خطأ أثناء تغيير المنطقة.");
+        loadUsers(); // إعادة التحميل فقط في حالة الخطأ لإصلاح الواجهة
     }
 };
 
-window.editUserStreak = async (uid, currentStreak) => {
-    const newStreak = await CustomDialog.prompt(
-        "أدخل عدد أيام الستريك الجديد لهذا العضو:",
-        currentStreak,
-        "تعديل الستريك 🔥",
+window.editUserValue = async (uid, fieldObj, currentValue, title) => {
+    const newValue = await CustomDialog.prompt(
+        `أدخل القيمة الجديدة لـ (${title}):`,
+        currentValue,
+        title,
     );
-
-    if (newStreak !== null && newStreak.trim() !== "" && !isNaN(newStreak)) {
+    if (newValue !== null && newValue.trim() !== "" && !isNaN(newValue)) {
         try {
-            await updateDoc(doc(db, "users", uid), {
-                streak: parseInt(newStreak),
-            });
+            let updateData = {};
+            updateData[fieldObj] = parseInt(newValue);
+            await updateDoc(doc(db, "users", uid), updateData);
             loadUsers();
-            await CustomDialog.alert("تم تحديث الستريك بنجاح!", "نجاح");
         } catch (error) {
-            await CustomDialog.alert("حدث خطأ أثناء تحديث الستريك.");
+            await CustomDialog.alert("حدث خطأ أثناء التحديث.");
         }
     }
 };
-
-// window.toggleUserStatus = async (uid, currentStatus) => {
-//     const newStatus = currentStatus === "failed" ? "active" : "failed";
-//     const msg =
-//         newStatus === "failed"
-//             ? "هل أنت متأكد من إقصاء هذا العضو؟ سيظهر له شاشة Game Over."
-//             : "هل أنت متأكد من إعادة إحياء هذا العضو ليعود للتحدي؟";
-//     if (await CustomDialog.confirm(msg, "تغيير حالة العضو")) {
-//         try {
-//             await updateDoc(doc(db, "users", uid), {
-//                 challengeStatus: newStatus,
-//             });
-//             loadUsers();
-//         } catch (error) {
-//             await CustomDialog.alert("حدث خطأ أثناء تغيير الحالة.");
-//         }
-//     }
-// };
 
 window.toggleUserStatus = async (uid, currentStatus) => {
     const newStatus = currentStatus === "failed" ? "active" : "failed";
     const msg =
         newStatus === "failed"
-            ? "هل أنت متأكد من إقصاء هذا العضو؟ سيظهر له شاشة Game Over."
-            : "هل أنت متأكد من إعادة إحياء هذا العضو ليعود للتحدي؟";
+            ? "هل أنت متأكد من إقصاء هذا العضو؟ سيظهر له شاشة Game Over وتُغلق أمامه المهام."
+            : "هل أنت متأكد من إعادة إحياء هذا العضو؟ سيعود للمنطقة الخضراء ليبدأ من جديد.";
 
     if (await CustomDialog.confirm(msg, "تغيير حالة العضو")) {
         try {
-            // تجهيز البيانات الأساسية للتحديث
-            let updateData = {
-                challengeStatus: newStatus,
-            };
+            let updateData = { challengeStatus: newStatus };
 
-            // حقن كود العفو العام (تصفير التاريخ للأمس) فقط في حالة الإحياء
+            // 🛑 حقن كود العفو العام المطابق تماماً لكودك القديم الدقيق
             if (newStatus === "active") {
                 const now = new Date();
                 const cairoTimeStr = now.toLocaleString("en-US", {
                     timeZone: "Africa/Cairo",
                 });
                 const cairoDate = new Date(cairoTimeStr);
-                cairoDate.setDate(cairoDate.getDate() - 1);
+                cairoDate.setDate(cairoDate.getDate() - 1); // نرجعه للأمس
 
                 const year = cairoDate.getFullYear();
                 const month = String(cairoDate.getMonth() + 1).padStart(2, "0");
                 const day = String(cairoDate.getDate()).padStart(2, "0");
 
                 updateData.lastEvalDate = `${year}-${month}-${day}`;
-
-                // يمكنك إضافة أي متغيرات أخرى تريد تصفيرها هنا مثل:
-                // updateData.failedDays = 0;
+                updateData.currentZone = "green"; // إعادته للمنطقة الخضراء
             }
 
-            // تنفيذ التحديث
             await updateDoc(doc(db, "users", uid), updateData);
             loadUsers();
         } catch (error) {
@@ -800,19 +700,18 @@ window.deleteUserAccount = async (uid) => {
 };
 
 // ==============================
-// إعادة ضبط المصنع للجميع (فرمتة)
+// إعادة ضبط المصنع للجميع (فرمتة V2)
 // ==============================
 document
     .getElementById("factory-reset-btn")
     ?.addEventListener("click", async () => {
         const isSure = await CustomDialog.confirm(
-            "⚠️ تحذير كارثي: هذا الزر سيقوم بتصفير جميع نقاط الأعضاء، وكسر الستريكات، وإرجاع الجميع لحالة (نشط)، وضبط تاريخ آخر تقييم لليوم. هل أنت متأكد 100% أنك تريد تصفير تعب الجميع؟",
+            "⚠️ تحذير كارثي: هذا الزر سيقوم بتصفير (العملات، الـ XP، نقاط الدورة، الستريك) وإرجاع الجميع لحالة (نشط) في المنطقة الخضراء، وضبط تاريخ آخر تقييم لليوم. هل أنت متأكد 100% أنك تريد مسح كل شيء؟",
             "إعادة ضبط المصنع ☢️",
         );
 
         if (!isSure) return;
 
-        // طبقة حماية إضافية لمنع الضغط بالخطأ
         const secondConfirm = await CustomDialog.prompt(
             "اكتب كلمة 'تأكيد' باللغة العربية لتنفيذ الفرمتة:",
             "",
@@ -830,31 +729,50 @@ document
         btn.disabled = true;
 
         try {
-            const todayStr = new Date().toLocaleDateString("en-CA", {
+            // 🛑 التوليد اليدوي الدقيق للتاريخ كما طلبت لمنع أي أخطاء
+            const now = new Date();
+            const cairoTimeStr = now.toLocaleString("en-US", {
                 timeZone: "Africa/Cairo",
             });
+            const cairoDate = new Date(cairoTimeStr);
+
+            const year = cairoDate.getFullYear();
+            const month = String(cairoDate.getMonth() + 1).padStart(2, "0");
+            const day = String(cairoDate.getDate()).padStart(2, "0");
+            const todayStr = `${year}-${month}-${day}`;
+
             const usersSnap = await getDocs(collection(db, "users"));
-            const updatePromises = [];
+            const batch = writeBatch(db); // استخدام Batch لأداء أقوى وأسرع
 
             usersSnap.forEach((userDoc) => {
-                // تحديث جميع الأعضاء (بما فيهم حسابك كلاعب)
-                updatePromises.push(
-                    updateDoc(userDoc.ref, {
-                        points: 0,
-                        streak: 0,
-                        lastEvalDate: todayStr,
-                        challengeStatus: "active",
-                    }),
-                );
+                const uData = userDoc.data();
+                if (uData.role === "admin") return; // تجاهل حسابك كأدمن
+
+                const userRef = doc(db, "users", userDoc.id);
+                batch.update(userRef, {
+                    lifetimeScore: 0,
+                    walletCoins: 0,
+                    cycleScore: 0,
+                    currentStreak: 0,
+                    currentZone: "green",
+                    currentMultiplier: 1.0,
+                    freezeCount: 0,
+                    hasDoubleXP: false,
+                    usedDoubleXP: false,
+                    hasTodoList: false,
+                    challengeStatus: "active",
+                    lastEvalDate: todayStr, // التاريخ المولد يدوياً وبدقة
+                    points: 0, // تصفير النقاط القديمة أيضاً
+                });
             });
 
-            await Promise.all(updatePromises);
+            await batch.commit();
 
             await CustomDialog.alert(
                 "تمت فرمتة جميع الأعضاء بنجاح. الكل يبدأ من الصفر اليوم.",
                 "عملية ناجحة ✅",
             );
-            loadUsers(); // تحديث الجدول
+            loadUsers();
         } catch (error) {
             console.error(error);
             await CustomDialog.alert("حدث خطأ أثناء إعادة الضبط.");
@@ -863,7 +781,6 @@ document
             btn.disabled = false;
         }
     });
-
 // ==============================
 // إدارة أكواد الهدايا (Redeem Codes)
 // ==============================
@@ -898,8 +815,8 @@ async function loadRedeemCodes() {
             <td style="${usersCount >= data.maxUses ? "color: var(--danger); font-weight: bold;" : ""}">${usersCount} / ${maxUses}</td>
             <td><span class="badge ${data.isActive ? "badge-active" : "badge-inactive"}">${data.isActive ? "نشط" : "معطل"}</span></td>
             <td>
-                <button class="action-btn btn-edit" onclick="toggleRedeemCode('${docSnap.id}', ${data.isActive})">${data.isActive ? "تعطيل ⏸️" : "تفعيل ▶️"}</button>
-                <button class="action-btn btn-delete" onclick="deleteRedeemCode('${docSnap.id}')">حذف ❌</button>
+                <button class="action-btn btn-edit" onclick="toggleRedeemCode('${docSnap.id}', ${data.isActive})">${data.isActive ? "تعطيل <i class='fa-solid fa-pause'></i>" : "تفعيل <i class='fa-solid fa-play'></i>"}</button>
+                <button class="action-btn btn-delete" onclick="deleteRedeemCode('${docSnap.id}')">حذف <i class='fa-solid fa-trash'></i></button>
             </td>
         `;
         tbody.appendChild(tr);
@@ -980,66 +897,52 @@ window.deleteRedeemCode = async (codeId) => {
 };
 
 // ==============================
-// نظام بث الإشعارات للأدمن (محدث ومحمي من التكرار)
+// نظام بث الإشعارات المخصصة للأدمن
 // ==============================
 const sendBroadcast = httpsCallable(functions, "sendAdminBroadcast");
 
 document
-    .getElementById("notify-registration-btn")
+    .getElementById("send-custom-notif-btn")
     ?.addEventListener("click", async (e) => {
-        const btn = e.target;
-        if (btn.disabled) return; // منع النقرات المزدوجة
+        const title = document.getElementById("notif-title").value.trim();
+        const body = document.getElementById("notif-body").value.trim();
 
-        if (
-            await CustomDialog.confirm(
-                "هل تريد إرسال إشعار 'فتح التسجيل' لجميع المستخدمين؟",
-                "تأكيد الإرسال",
-            )
-        ) {
-            btn.disabled = true;
-            btn.innerText = "جاري الإرسال ⏳...";
-            try {
-                await sendBroadcast({
-                    title: "التسجيل متاح الآن 🔓",
-                    body: "تم فتح باب التسجيل للتحدي الجديد. سارع بحجز مكانك قبل إغلاق الأبواب.",
-                });
-                await CustomDialog.alert("تم إرسال الإشعار بنجاح!");
-            } catch (e) {
-                console.error(e);
-                await CustomDialog.alert("فشل الإرسال.");
-            } finally {
-                btn.disabled = false;
-                btn.innerText = "إشعار: فتح التسجيل 🔓";
-            }
+        if (!title || !body) {
+            return CustomDialog.alert("يجب إدخال عنوان ونص الإشعار أولاً.");
         }
-    });
-
-document
-    .getElementById("notify-challenge-btn")
-    ?.addEventListener("click", async (e) => {
-        const btn = e.target;
-        if (btn.disabled) return; // منع النقرات المزدوجة
 
         if (
             await CustomDialog.confirm(
-                "هل تريد إرسال إشعار 'بدء التحدي' لجميع المستخدمين؟",
-                "تأكيد الإرسال",
+                `هل أنت متأكد من إرسال هذا الإشعار لجميع الجنود؟\n\nالعنوان: ${title}\nالرسالة: ${body}`,
+                "تأكيد البث 📢",
             )
         ) {
+            const btn = e.target;
+            const originalText = btn.innerHTML;
             btn.disabled = true;
-            btn.innerText = "جاري الإرسال ⏳...";
+            btn.innerHTML = "جاري الإرسال ⏳...";
+
             try {
-                await sendBroadcast({
-                    title: "المعسكر بدأ! ⚔️",
-                    body: "انطلق التحدي رسمياً. المهام بانتظارك، لا مجال للتراجع الآن.",
-                });
-                await CustomDialog.alert("تم إرسال الإشعار بنجاح!");
-            } catch (e) {
-                console.error(e);
-                await CustomDialog.alert("فشل الإرسال.");
+                const result = await sendBroadcast({ title, body });
+                if (result.data.success) {
+                    await CustomDialog.alert(
+                        result.data.message,
+                        "نجاح الإرسال ✅",
+                    );
+                    document.getElementById("notif-title").value = "";
+                    document.getElementById("notif-body").value = "";
+                } else {
+                    await CustomDialog.alert(result.data.message, "تنبيه");
+                }
+            } catch (error) {
+                console.error("Broadcast Error:", error);
+                await CustomDialog.alert(
+                    "فشل الإرسال. تأكد من إعدادات السيرفر أو صلاحياتك كمدير.",
+                    "خطأ ❌",
+                );
             } finally {
                 btn.disabled = false;
-                btn.innerText = "إشعار: بدء التحدي ⚔️";
+                btn.innerHTML = originalText;
             }
         }
     });
@@ -1129,7 +1032,7 @@ window.migrateSystemV2 = async () => {
 };
 
 // ==========================================
-// 📊 نظام التقرير الشامل (Data Analytics & PDF)
+// 📊 نظام التقرير الاستخباراتي الشامل (V2)
 // ==========================================
 window.generateComprehensiveReport = async () => {
     const btn = document.getElementById("generate-report-btn");
@@ -1137,69 +1040,115 @@ window.generateComprehensiveReport = async () => {
 
     const originalText = btn.innerHTML;
     btn.innerHTML =
-        "<i class='fa-solid fa-spinner fa-spin'></i> جاري طحن البيانات... ⏳";
+        "<i class='fa-solid fa-spinner fa-spin'></i> جاري سحب البيانات الاستخباراتية... ⏳";
     btn.disabled = true;
 
     try {
-        // 1. جلب خريطة المهام (Tasks)
+        // 1. جلب إعدادات النظام الحالية
+        const sysDoc = await getDoc(doc(db, "configs", "system"));
+        const currentCycle = sysDoc.exists()
+            ? sysDoc.data().currentCycle || 1
+            : 1;
+
+        // 2. بناء خريطة المهام (الدنيوية والدينية)
+        const allTasksStats = {};
+
         const tasksSnap = await getDocs(collection(db, "tasks"));
-        const tasksStats = {};
         tasksSnap.forEach((doc) => {
             const data = doc.data();
-            tasksStats[doc.id] = {
+            allTasksStats[doc.id] = {
                 name: data.name,
                 category: data.category || "عام",
+                type: "دنيوي",
                 totalSelections: 0,
-                optionsFreq: {}, // كم مرة تم اختيار كل مستوى من المهمة
             };
         });
 
-        // 2. جلب المستخدمين (Users)
+        const relTasksSnap = await getDocs(collection(db, "religiousTasks"));
+        relTasksSnap.forEach((doc) => {
+            const data = doc.data();
+            allTasksStats[doc.id] = {
+                name: data.title,
+                category: "الأساسيات",
+                type: "ديني",
+                totalSelections: 0,
+            };
+        });
+
+        // 3. جلب وتحليل بيانات الجنود
         const usersSnap = await getDocs(collection(db, "users"));
         const users = [];
         let globalStats = {
             totalUsers: 0,
             activeUsers: 0,
             failedUsers: 0,
-            totalXP: 0,
-            totalCoins: 0,
-            totalFreezesUsed: 0,
+            totalLifetimeXP: 0,
+            totalCycleScore: 0,
+            totalCoinsInMarket: 0,
+            zones: { green: 0, yellow: 0, red: 0 },
         };
 
-        // 3. فلترة المستخدمين وحساب الإحصائيات العامة
         usersSnap.forEach((doc) => {
             const u = doc.data();
-            if (u.role !== "admin") {
+            // u.role !== "admin" && u.role !== "tester"
+            if (true) {
                 users.push({ id: doc.id, ...u });
                 globalStats.totalUsers++;
+
                 if (u.challengeStatus === "active") globalStats.activeUsers++;
                 if (u.challengeStatus === "failed") globalStats.failedUsers++;
-                globalStats.totalXP += u.currentXP || 0;
-                globalStats.totalCoins += u.walletCoins || 0;
-                // حساب التجميدات المستهلكة (بافتراض أن كل شخص بدأ بـ 0 واشترى، أو يمكنك قياسها لاحقاً)
+
+                globalStats.totalLifetimeXP += u.lifetimeScore || 0;
+                globalStats.totalCycleScore += u.cycleScore || 0;
+                globalStats.totalCoinsInMarket += u.walletCoins || 0;
+
+                const zone = u.currentZone || "green";
+                if (globalStats.zones[zone] !== undefined)
+                    globalStats.zones[zone]++;
             }
         });
 
-        // 4. جلب السجلات اليومية (Daily Logs) لتحليل المهام
-        // هذه الخطوة تستهلك قراءات (Reads) لذلك يجب استخدامها عند الحاجة فقط
+        // 4. تحليل إنجازات آخر 7 أيام فقط (لحماية السيرفر من الانفجار)
+        const now = new Date();
+        const sevenDaysAgo = new Date(now);
+        sevenDaysAgo.setDate(now.getDate() - 7);
+        const dateLimitStr = sevenDaysAgo.toLocaleDateString("en-CA", {
+            timeZone: "Africa/Cairo",
+        });
+
         for (let user of users) {
-            const logsSnap = await getDocs(
+            const logsQuery = query(
                 collection(db, `users/${user.id}/dailyLogs`),
+                where("date", ">=", dateLimitStr),
             );
+            const logsSnap = await getDocs(logsQuery);
+
             logsSnap.forEach((logDoc) => {
                 const log = logDoc.data();
-                if (log.selections) {
-                    for (const [taskId, optionIndex] of Object.entries(
-                        log.selections,
+                if (log.isFinalized) {
+                    // دمج الاختيارات الدنيوية والدينية للمسح
+                    const combinedSelections = {
+                        ...(log.selections || {}),
+                        ...(log.religiousSelections || {}),
+                    };
+
+                    for (const [taskId, selection] of Object.entries(
+                        combinedSelections,
                     )) {
-                        if (tasksStats[taskId]) {
-                            // تجاهل الاختيار رقم 0 إذا كان هو خيار "لم أفعل شيئاً"
-                            if (optionIndex > 0) {
-                                tasksStats[taskId].totalSelections++;
-                                tasksStats[taskId].optionsFreq[optionIndex] =
-                                    (tasksStats[taskId].optionsFreq[
-                                        optionIndex
-                                    ] || 0) + 1;
+                        if (allTasksStats[taskId]) {
+                            // تحويل الاختيار لمصفوفة لتسهيل الفحص
+                            let selArray = Array.isArray(selection)
+                                ? selection
+                                : [selection];
+
+                            // توافق عكسي للمهام الدينية القديمة (True/False)
+                            if (typeof selection === "boolean") {
+                                if (selection)
+                                    allTasksStats[taskId].totalSelections++;
+                            }
+                            // إذا اختار أي فهرس أكبر من صفر (صفر هو دائماً الرفض/لم أفعل)
+                            else if (selArray.some((val) => val > 0)) {
+                                allTasksStats[taskId].totalSelections++;
                             }
                         }
                     }
@@ -1208,20 +1157,24 @@ window.generateComprehensiveReport = async () => {
         }
 
         // 5. ترتيب البيانات للتقرير
-        const top10Users = [...users]
-            .sort((a, b) => (b.currentXP || 0) - (a.currentXP || 0))
+        const top10Cycle = [...users]
+            .filter((u) => u.challengeStatus === "active")
+            .sort((a, b) => (b.cycleScore || 0) - (a.cycleScore || 0))
             .slice(0, 10);
 
-        // تحويل المهام إلى مصفوفة لترتيبها حسب الأكثر إنجازاً
-        const tasksArray = Object.values(tasksStats).sort(
+        const tasksArray = Object.values(allTasksStats).sort(
             (a, b) => b.totalSelections - a.totalSelections,
         );
 
         // ==========================================
-        // 🎨 بناء صفحة التقرير (HTML + CSS for Print)
+        // 🎨 بناء صفحة التقرير للطباعة
         // ==========================================
-        const reportDate = new Date().toLocaleDateString("en-CA", {
+        const reportDate = new Date().toLocaleDateString("ar-EG", {
             timeZone: "Africa/Cairo",
+            weekday: "long",
+            year: "numeric",
+            month: "long",
+            day: "numeric",
         });
 
         let htmlContent = `
@@ -1229,76 +1182,104 @@ window.generateComprehensiveReport = async () => {
             <html lang="ar" dir="rtl">
             <head>
                 <meta charset="UTF-8">
-                <title>تقرير المعسكر - ${reportDate}</title>
+                <title>تقرير المعسكر العسكري - دورة ${currentCycle}</title>
                 <style>
-                    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 80px; color: #111; background: #fff; line-height: 1.6; }
-                    h1, h2, h3 { color: #1e3a8a; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; }
-                    .header { text-align: center; margin-bottom: 40px; }
-                    .stats-grid { display: flex; flex-wrap: wrap; gap: 20px; margin-bottom: 40px; }
-                    .stat-box { flex: 1; min-width: 150px; background: #f3f4f6; padding: 20px; border-radius: 8px; text-align: center; border: 1px solid #d1d5db; }
-                    .stat-box h4 { margin: 0 0 10px 0; color: #4b5563; font-size: 14px; }
-                    .stat-box span { font-size: 24px; font-weight: bold; color: #1d4ed8; }
+                    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap');
+                    body { font-family: 'Cairo', sans-serif; padding: 40px; color: #111; background: #fff; line-height: 1.6; }
+                    h1 { color: #b91c1c; border-bottom: 3px solid #b91c1c; padding-bottom: 10px; text-align: center; font-weight: 900; }
+                    h2 { color: #1e3a8a; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; margin-top: 40px; }
+                    .header-info { text-align: center; margin-bottom: 40px; font-weight: bold; color: #4b5563; }
+                    .stats-grid { display: flex; flex-wrap: wrap; gap: 15px; margin-bottom: 30px; }
+                    .stat-box { flex: 1; min-width: 120px; background: #f9fafb; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #d1d5db; }
+                    .stat-box h4 { margin: 0 0 5px 0; color: #6b7280; font-size: 13px; }
+                    .stat-box span { font-size: 22px; font-weight: bold; color: #111827; }
                     table { width: 100%; border-collapse: collapse; margin-bottom: 40px; font-size: 14px; }
-                    th, td { padding: 12px; text-align: right; border: 1px solid #d1d5db; }
-                    th { background-line: #f9fafb; font-weight: bold; background: #e5e7eb; }
+                    th, td { padding: 10px; text-align: right; border: 1px solid #d1d5db; }
+                    th { background: #e5e7eb; font-weight: bold; color: #1f2937; }
                     tr:nth-child(even) { background-color: #f9fafb; }
+                    .zone-green { color: #059669; font-weight: bold; }
+                    .zone-yellow { color: #d97706; font-weight: bold; }
+                    .zone-red { color: #dc2626; font-weight: bold; }
                     @media print {
                         body { padding: 0; }
-                        button { display: none; }
                         .page-break { page-break-before: always; }
                     }
                 </style>
             </head>
             <body>
-                <div class="header">
-                    <h1>🛡️ التقرير الشامل لبيانات المعسكر (V2)</h1>
-                    <p>تاريخ الاستخراج: ${reportDate}</p>
+                <h1>🛡️ التقرير الاستخباراتي الشامل للمنصة</h1>
+                <div class="header-info">
+                    <p>الدورة التنافسية الحالية: ${currentCycle} | تاريخ الاستخراج: ${reportDate}</p>
                 </div>
 
-                <h2>📊 نظرة عامة على الاقتصاد والمحاربين</h2>
+                <h2>📊 نظرة عامة على التعداد والاقتصاد</h2>
                 <div class="stats-grid">
                     <div class="stat-box"><h4>إجمالي المحاربين</h4><span>${globalStats.totalUsers}</span></div>
                     <div class="stat-box"><h4>الصامدون (Active)</h4><span style="color: #059669;">${globalStats.activeUsers}</span></div>
                     <div class="stat-box"><h4>المُقصون (Failed)</h4><span style="color: #dc2626;">${globalStats.failedUsers}</span></div>
-                    <div class="stat-box"><h4>إجمالي الـ XP المكتسب</h4><span>${globalStats.totalXP}</span></div>
-                    <div class="stat-box"><h4>العملات المتداولة (🪙)</h4><span>${globalStats.totalCoins}</span></div>
+                    <div class="stat-box"><h4>الـ XP المتراكم</h4><span>${globalStats.totalLifetimeXP}</span></div>
+                    <div class="stat-box"><h4>العملات في السوق</h4><span>${globalStats.totalCoinsInMarket}</span></div>
                 </div>
 
-                <h2>🏆 لوحة الشرف (أفضل 10 محاربين)</h2>
+                <h2>🗺️ التوزيع الديموغرافي للمناطق (Zones)</h2>
+                <div class="stats-grid">
+                    <div class="stat-box" style="border-color: #059669; background: #ecfdf5;">
+                        <h4 style="color: #059669;">المنطقة الخضراء (أمان)</h4>
+                        <span class="zone-green">${globalStats.zones.green} جندي</span>
+                    </div>
+                    <div class="stat-box" style="border-color: #d97706; background: #fffbeb;">
+                        <h4 style="color: #d97706;">المنطقة الصفراء (إنذار)</h4>
+                        <span class="zone-yellow">${globalStats.zones.yellow} جندي</span>
+                    </div>
+                    <div class="stat-box" style="border-color: #dc2626; background: #fef2f2;">
+                        <h4 style="color: #dc2626;">المنطقة الحمراء (خطر)</h4>
+                        <span class="zone-red">${globalStats.zones.red} جندي</span>
+                    </div>
+                </div>
+
+                <h2>🏆 أفضل 10 جنود في الدورة الحالية (Cycle ${currentCycle})</h2>
                 <table>
-                    <thead><tr><th>المركز</th><th>الاسم</th><th>الـ XP الحالي</th><th>العملات المتبقية</th><th>الستريك</th><th>الحالة</th></tr></thead>
+                    <thead><tr><th>المركز</th><th>الاسم</th><th>نقاط الدورة 🏆</th><th>الـ XP التراكمي ⭐</th><th>الستريك 🔥</th><th>المنطقة</th></tr></thead>
                     <tbody>
-                        ${top10Users
-                            .map(
-                                (u, i) => `
+                        ${top10Cycle
+                            .map((u, i) => {
+                                let zoneLabel =
+                                    u.currentZone === "red"
+                                        ? "<span class='zone-red'>حمراء 🔴</span>"
+                                        : u.currentZone === "yellow"
+                                          ? "<span class='zone-yellow'>صفراء 🟡</span>"
+                                          : "<span class='zone-green'>خضراء 🟢</span>";
+                                return `
                             <tr>
                                 <td>#${i + 1}</td>
                                 <td>${u.name}</td>
-                                <td>${u.currentXP || 0}</td>
-                                <td>${u.walletCoins || 0}</td>
-                                <td>${u.currentStreak || 0} 🔥</td>
-                                <td>${u.challengeStatus === "active" ? "صامد" : "مُقصى"}</td>
+                                <td style="font-weight:bold;">${u.cycleScore || 0}</td>
+                                <td>${u.lifetimeScore || 0}</td>
+                                <td>${u.currentStreak || 0}</td>
+                                <td>${zoneLabel}</td>
                             </tr>
-                        `,
-                            )
+                        `;
+                            })
                             .join("")}
                     </tbody>
                 </table>
 
                 <div class="page-break"></div>
 
-                <h2>📋 تحليل المهام (أداة ضبط الصعوبة)</h2>
-                <p style="color: #4b5563; font-size: 13px;">* المهام في الأعلى هي الأكثر إنجازاً (قد تكون سهلة جداً أو نقاطها مبالغ فيها). المهام في الأسفل يتم تجاهلها (تحتاج لتخفيف أو زيادة نقاط).</p>
+                <h2>📋 تحليل أداء المهام (لآخر 7 أيام فقط)</h2>
+                <p style="color: #4b5563; font-size: 13px;">* المهام في الأعلى يسهل إنجازها، والمهام في الأسفل يتجنبها الجنود (راجع توزيع النقاط بناءً على هذا الجدول).</p>
                 <table>
-                    <thead><tr><th>اسم المهمة</th><th>القسم</th><th>مرات الإنجاز</th></tr></thead>
+                    <thead><tr><th>الترتيب</th><th>اسم المهمة</th><th>النوع</th><th>القسم</th><th>مرات الإنجاز</th></tr></thead>
                     <tbody>
                         ${tasksArray
                             .map(
-                                (t) => `
+                                (t, i) => `
                             <tr>
-                                <td>${t.name}</td>
+                                <td>${i + 1}</td>
+                                <td><strong>${t.name}</strong></td>
+                                <td style="color: ${t.type === "ديني" ? "#10b981" : "#6b7280"}; font-weight: bold;">${t.type}</td>
                                 <td>${t.category}</td>
-                                <td><strong>${t.totalSelections}</strong> مرة</td>
+                                <td>${t.totalSelections} مرة</td>
                             </tr>
                         `,
                             )
@@ -1307,22 +1288,21 @@ window.generateComprehensiveReport = async () => {
                 </table>
 
                 <script>
-                    // تشغيل نافذة الطباعة تلقائياً بمجرد تحميل الصفحة
-                    window.onload = function() { window.print(); }
+                    window.onload = function() { setTimeout(() => window.print(), 500); }
                 </script>
             </body>
             </html>
         `;
 
-        // 6. فتح التقرير في نافذة جديدة للطباعة
+        // 6. فتح التقرير في نافذة جديدة
         const printWindow = window.open("", "_blank");
         printWindow.document.write(htmlContent);
         printWindow.document.close();
     } catch (error) {
         console.error("Error generating report:", error);
         await CustomDialog.alert(
-            "حدث خطأ أثناء طحن البيانات. راجع الكونسول.",
-            "خطأ تقني",
+            "حدث خطأ أثناء سحب البيانات. راجع الكونسول للتفاصيل.",
+            "خطأ تقني ❌",
         );
     } finally {
         btn.innerHTML = originalText;
@@ -1340,14 +1320,15 @@ document
 // ==========================================
 async function populateCategoryFilter() {
     const filterSelect = document.getElementById("task-category-filter");
+    const categoryDatalist = document.getElementById("category-list"); // القائمة الجديدة
+
     if (!filterSelect) return;
 
-    // حفظ الخيار المحدد حالياً حتى لا يتغير عند التحديث
     const currentSelection = filterSelect.value;
 
     try {
         const snap = await getDocs(collection(db, "tasks"));
-        const categories = new Set(); // نستخدم Set لمنع التكرار
+        const categories = new Set();
 
         snap.forEach((doc) => {
             const data = doc.data();
@@ -1358,18 +1339,24 @@ async function populateCategoryFilter() {
             categories.add(cat);
         });
 
-        // تصفير القائمة وإبقاء خيار "الكل"
         filterSelect.innerHTML = '<option value="all">كل الأقسام</option>';
+        if (categoryDatalist) categoryDatalist.innerHTML = "";
 
-        // حقن الأقسام الجديدة
         categories.forEach((category) => {
+            // إضافة الخيار للفلتر
             const option = document.createElement("option");
             option.value = category;
             option.innerText = category;
             filterSelect.appendChild(option);
+
+            // إضافة الخيار للـ Datalist للإكمال التلقائي
+            if (categoryDatalist) {
+                const dlOption = document.createElement("option");
+                dlOption.value = category;
+                categoryDatalist.appendChild(dlOption);
+            }
         });
 
-        // إعادة اختيار القسم الذي كان يحدده الأدمن (إن وجد)
         if (categories.has(currentSelection) || currentSelection === "all") {
             filterSelect.value = currentSelection;
         }
@@ -1439,8 +1426,8 @@ async function loadReligiousTasks() {
             <td>${optionsHtml}</td>
             <td>${typeBadge}<br><span style="font-size: 10px; color: gray;">${data.isMultiSelect ? "متعدد الاختيار" : "اختيار واحد"}</span></td>
             <td>
-                <button class="action-btn btn-edit" style="background: #f59e0b; border: none;" onclick="editReligiousTask('${docSnap.id}')">تعديل ✏️</button>
-                <button class="action-btn btn-delete" onclick="deleteReligiousTask('${docSnap.id}')">حذف ❌</button>
+                <button class="action-btn btn-edit" style="background: #f59e0b; border: none;" onclick="editReligiousTask('${docSnap.id}')">تعديل <i class="fa-solid fa-edit"></i></button>
+                <button class="action-btn btn-delete" onclick="deleteReligiousTask('${docSnap.id}')">حذف <i class="fa-solid fa-trash"></i></button>
             </td>
         `;
         tbody.appendChild(tr);
@@ -1452,11 +1439,10 @@ document
     ?.addEventListener("click", () => {
         const container = document.getElementById("rel-options-container");
         const row = document.createElement("div");
-        row.className = "rel-option-row";
-        row.style.cssText = "display: flex; gap: 10px; margin-bottom: 8px;";
+        row.className = "option-row-wrapper";
         row.innerHTML = `
-        <input type="text" class="rel-opt-name" placeholder="اسم الخيار الإضافي" style="margin: 0; flex-grow: 1;">
-        <button class="remove-rel-opt-btn" style="background: var(--danger); color: white; border: none; padding: 0 15px; border-radius: 8px; cursor: pointer;">X</button>
+        <div style="flex-grow: 1;"><input type="text" class="rel-opt-name admin-input" placeholder="اسم الخيار الإضافي" style="margin: 0;"></div>
+        <button class="remove-rel-opt-btn btn-icon" style="background: rgba(239, 68, 68, 0.15); color: var(--danger); border: 1px solid var(--danger);"><i class="fa-solid fa-trash"></i></button>
     `;
         container.appendChild(row);
         row.querySelector(".remove-rel-opt-btn").addEventListener("click", () =>
@@ -1479,7 +1465,9 @@ document
         if (!title)
             return await CustomDialog.alert("يجب إدخال عنوان المهمة الدينية.");
 
-        const optionRows = document.querySelectorAll(".rel-option-row");
+        const optionRows = document.querySelectorAll(
+            "#rel-options-container .option-row-wrapper",
+        );
         const options = [];
         let hasError = false;
 
@@ -1528,9 +1516,9 @@ document
         } catch (error) {
             await CustomDialog.alert("حدث خطأ أثناء حفظ المهمة.");
         } finally {
-            btn.innerText = editingRelTaskId
-                ? "تحديث المهمة ✏️"
-                : "حفظ المهمة الدينية";
+            btn.innerHTML = editingRelTaskId
+                ? "تحديث المهمة <i class='fa-solid fa-pen-to-square'></i>"
+                : "حفظ المهمة الدينية <i class='fa-solid fa-save'></i>";
             btn.disabled = false;
         }
     });
@@ -1555,12 +1543,10 @@ window.editReligiousTask = async (taskId) => {
         if (data.options && data.options.length > 0) {
             data.options.forEach((opt) => {
                 const row = document.createElement("div");
-                row.className = "rel-option-row";
-                row.style.cssText =
-                    "display: flex; gap: 10px; margin-bottom: 8px;";
+                row.className = "option-row-wrapper";
                 row.innerHTML = `
-                    <input type="text" class="rel-opt-name" value="${opt.name}" style="margin: 0; flex-grow: 1;">
-                    <button class="remove-rel-opt-btn" style="background: var(--danger); color: white; border: none; padding: 0 15px; border-radius: 8px; cursor: pointer;">X</button>
+                    <div style="flex-grow: 1;"><input type="text" class="rel-opt-name admin-input" value="${opt.name}" style="margin: 0;"></div>
+                    <button class="remove-rel-opt-btn btn-icon" style="background: rgba(239, 68, 68, 0.15); color: var(--danger); border: 1px solid var(--danger);"><i class="fa-solid fa-trash"></i></button>
                 `;
                 container.appendChild(row);
                 row.querySelector(".remove-rel-opt-btn").addEventListener(
@@ -1573,14 +1559,15 @@ window.editReligiousTask = async (taskId) => {
         }
 
         const btn = document.getElementById("add-rel-task-btn");
-        btn.innerText = "تحديث المهمة ✏️";
+        btn.innerHTML =
+            "تحديث المهمة <i class='fa-solid fa-pen-to-square'></i>";
         btn.style.background = "#f59e0b";
 
         let cancelBtn = document.getElementById("cancel-rel-edit-btn");
         if (!cancelBtn) {
             cancelBtn = document.createElement("button");
             cancelBtn.id = "cancel-rel-edit-btn";
-            cancelBtn.innerText = "إلغاء ❌";
+            cancelBtn.innerHTML = "إلغاء <i class='fa-solid fa-xmark'></i>";
             cancelBtn.style.cssText =
                 "background: transparent; color: var(--danger); border: 1px solid var(--danger); padding: 12px 20px; border-radius: 8px; cursor: pointer;";
             cancelBtn.onclick = cancelRelEditMode;
@@ -1603,12 +1590,12 @@ function cancelRelEditMode() {
     document.getElementById("rel-task-important").checked = false;
     document.getElementById("rel-task-is-multi").checked = false;
     document.getElementById("rel-options-container").innerHTML = `
-        <div class="rel-option-row" style="display: flex; gap: 10px; margin-bottom: 8px;">
-            <input type="text" class="rel-opt-name" placeholder="اسم الخيار" style="margin: 0; flex-grow: 1;">
+        <div class="option-row-wrapper">
+            <div style="flex-grow: 1;"><input type="text" class="rel-opt-name admin-input" placeholder="اسم الخيار" style="margin: 0;"></div>
         </div>`;
 
     const btn = document.getElementById("add-rel-task-btn");
-    btn.innerText = "حفظ المهمة الدينية";
+    btn.innerHTML = "حفظ المهمة الدينية <i class='fa-solid fa-save'></i>";
     btn.style.background = "";
     const cancelBtn = document.getElementById("cancel-rel-edit-btn");
     if (cancelBtn) cancelBtn.style.display = "none";
@@ -1690,3 +1677,400 @@ document
             btn.disabled = false;
         }
     });
+
+// ==========================================
+// 👁️ محرك رادار المراقبة (AI Audit Radar)
+// ==========================================
+
+// تعيين تاريخ اليوم كقيمة افتراضية عند تحميل الصفحة
+document.addEventListener("DOMContentLoaded", () => {
+    const today = new Date().toLocaleDateString("en-CA", {
+        timeZone: "Africa/Cairo",
+    });
+    const dateInput = document.getElementById("radar-date-input");
+    if (dateInput) dateInput.value = today;
+});
+
+// دالة تكبير الصور
+window.enlargeRadarImage = function (url) {
+    const overlay = document.getElementById("image-enlarge-overlay");
+    const img = document.getElementById("enlarged-radar-image");
+    if (overlay && img) {
+        img.src = url;
+        overlay.classList.add("show");
+    }
+};
+
+// محرك سحب البيانات
+document
+    .getElementById("fetch-radar-btn")
+    ?.addEventListener("click", async () => {
+        const dateStr = document.getElementById("radar-date-input").value;
+        if (!dateStr) return CustomDialog.alert("يرجى تحديد تاريخ أولاً.");
+
+        const btn = document.getElementById("fetch-radar-btn");
+        const originalText = btn.innerHTML;
+        btn.innerHTML =
+            "<i class='fa-solid fa-spinner fa-spin'></i> جاري المسح...";
+        btn.disabled = true;
+
+        const dopContainer = document.getElementById(
+            "radar-dopamine-container",
+        );
+        const uncContainer = document.getElementById(
+            "radar-unchaining-container",
+        );
+
+        dopContainer.innerHTML =
+            "<p style='color: var(--gold-primary); text-align: center; grid-column: 1/-1;'>جاري سحب تقارير الدوبامين... ⏳</p>";
+        uncContainer.innerHTML =
+            "<p style='color: var(--danger); text-align: center; grid-column: 1/-1;'>جاري سحب تقارير فك القيود... ⏳</p>";
+
+        try {
+            const usersSnap = await getDocs(collection(db, "users"));
+            const promises = [];
+            const usersMap = {};
+
+            let dopCardsHtml = "";
+            let uncCardsHtml = "";
+
+            // تجهيز مصفوفة الوعود (Promises) لسحب سجلات اليوم المحدد لكل جندي بصورة متوازية وسريعة
+            usersSnap.forEach((userDoc) => {
+                const uData = userDoc.data();
+                //uData.role !== "admin" && uData.role !== "tester"
+                if (true) {
+                    usersMap[userDoc.id] = {
+                        name: uData.name,
+                        email: uData.email,
+                        unchainingData: uData,
+                    };
+
+                    const logRef = doc(
+                        db,
+                        `users/${userDoc.id}/dailyLogs`,
+                        dateStr,
+                    );
+                    promises.push(
+                        getDoc(logRef).then((snap) => ({
+                            snap,
+                            uid: userDoc.id,
+                        })),
+                    );
+                }
+            });
+
+            const logsResults = await Promise.all(promises);
+
+            logsResults.forEach((result) => {
+                const user = usersMap[result.uid];
+
+                // ==========================================
+                // 1. النظام القديم (لضمان عدم ضياع الصور السابقة)
+                // ==========================================
+                if (
+                    user.unchainingData &&
+                    user.unchainingData.unchainingTimestamp
+                ) {
+                    // استخراج التاريخ من الصيغة القديمة (مثال: 2026-06-05T01:55:00)
+                    const uncDate =
+                        user.unchainingData.unchainingTimestamp.split("T")[0];
+                    if (
+                        uncDate === dateStr &&
+                        user.unchainingData.lastUnchainingProof
+                    ) {
+                        uncCardsHtml += `
+                        <div class="glass-card" style="padding: 15px; border-color: #10b981; background: rgba(16, 185, 129, 0.05);">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
+                                <div>
+                                    <h4 style="color: white; margin: 0; font-size: 15px;">${user.name}</h4>
+                                    <span style="font-size: 11px; color: var(--text-muted);">${user.email}</span>
+                                </div>
+                                <span class="badge" style="background: rgba(16, 185, 129, 0.2); color: #10b981;">قُبل وفُك قيده ✅ (قديم)</span>
+                            </div>
+                            <img src="${user.unchainingData.lastUnchainingProof}" onclick="enlargeRadarImage('${user.unchainingData.lastUnchainingProof}')" style="width: 100%; height: 180px; object-fit: cover; object-position: top; border-radius: 8px; border: 1px solid #10b981; cursor: zoom-in; margin-bottom: 10px;">
+                        </div>
+                    `;
+                    }
+                }
+
+                // ==========================================
+                // 2. النظام الجديد (السجلات اليومية والمرفوضين)
+                // ==========================================
+                if (result.snap.exists()) {
+                    const logData = result.snap.data();
+
+                    // معالجة تقارير فك القيود (نجاح وفشل)
+                    if (
+                        logData.unchainingData &&
+                        logData.unchainingData.proofImageUrl
+                    ) {
+                        const unc = logData.unchainingData;
+                        const isAccepted = unc.status === "accepted";
+
+                        const badgeHtml = isAccepted
+                            ? `<span class="badge" style="background: rgba(16, 185, 129, 0.2); color: #10b981;">قُبل وفُك قيده ✅</span>`
+                            : `<span class="badge" style="background: rgba(220, 38, 38, 0.2); color: #dc2626;">رفضه القاضي ❌</span>`;
+
+                        uncCardsHtml += `
+                        <div class="glass-card" style="padding: 15px; border-color: ${isAccepted ? "#10b981" : "var(--danger)"}; background: ${isAccepted ? "rgba(16, 185, 129, 0.05)" : "rgba(220, 38, 38, 0.05)"};">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
+                                <div>
+                                    <h4 style="color: white; margin: 0; font-size: 15px;">${user.name}</h4>
+                                    <span style="font-size: 11px; color: var(--text-muted);">${user.email}</span>
+                                </div>
+                                ${badgeHtml}
+                            </div>
+                            
+                            <img src="${unc.proofImageUrl}" onclick="enlargeRadarImage('${unc.proofImageUrl}')" style="width: 100%; height: 180px; object-fit: cover; object-position: top; border-radius: 8px; border: 1px solid ${isAccepted ? "#10b981" : "var(--danger)"}; cursor: zoom-in; margin-bottom: 10px;">
+                            
+                            <div style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; margin-bottom: 10px; font-size: 13px;">
+                                <strong style="color: ${isAccepted ? "#10b981" : "var(--danger)"}; display: block; margin-bottom: 5px;">تعليق القاضي الآلي:</strong>
+                                <div style="color: white; max-height: 60px; overflow-y: auto; line-height: 1.4;">"${unc.message || "بدون تعليق"}"</div>
+                            </div>
+                        </div>
+                    `;
+                    }
+
+                    // معالجة تقارير الدوبامين اليومية
+                    if (
+                        logData.dopamineData &&
+                        logData.dopamineData.proofImageUrl
+                    ) {
+                        const dop = logData.dopamineData;
+                        const isPassed = logData.passed;
+                        const statusBadge = isPassed
+                            ? `<span class="badge" style="background: rgba(16, 185, 129, 0.2); color: #10b981;">اعتمده القاضي ✅</span>`
+                            : `<span class="badge" style="background: rgba(220, 38, 38, 0.2); color: #dc2626;">أسقطه القاضي ❌</span>`;
+
+                        dopCardsHtml += `
+                        <div class="glass-card" style="padding: 15px; border-color: ${isPassed ? "#10b981" : "#dc2626"}40;">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
+                                <div>
+                                    <h4 style="color: var(--gold-primary); margin: 0; font-size: 15px;">${user.name}</h4>
+                                    <span style="font-size: 11px; color: var(--text-muted);">${user.email}</span>
+                                </div>
+                                ${statusBadge}
+                            </div>
+                            
+                            <img src="${dop.proofImageUrl}" onclick="enlargeRadarImage('${dop.proofImageUrl}')" style="width: 100%; height: 180px; object-fit: cover; object-position: top; border-radius: 8px; border: 1px solid var(--border-color); cursor: zoom-in; margin-bottom: 10px;">
+                            
+                            <div style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; margin-bottom: 10px; font-size: 13px;">
+                                <strong style="color: var(--gold-light); display: block; margin-bottom: 5px;">تبرير الجندي:</strong>
+                                <div style="color: white; max-height: 60px; overflow-y: auto; line-height: 1.4;">"${dop.justification || "لم يكتب تبريراً"}"</div>
+                            </div>
+
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 12px; background: rgba(255,255,255,0.02); padding: 10px; border-radius: 8px; border: 1px dashed var(--border-color);">
+                                <div>
+                                    <span style="color: var(--text-muted); display: block;">أبلغ به (شاشة):</span>
+                                    <strong style="color: white;">${dop.reportedScreenMinutes || 0} د</strong>
+                                </div>
+                                <div>
+                                    <span style="color: var(--text-muted); display: block;">حسبه الـ AI:</span>
+                                    <strong style="color: #f97316;">${dop.aiEvaluatedWastedScreen !== undefined ? dop.aiEvaluatedWastedScreen : "-"} د</strong>
+                                </div>
+                                <div>
+                                    <span style="color: var(--text-muted); display: block;">أبلغ به (Shorts):</span>
+                                    <strong style="color: white;">${dop.reportedShortsMinutes || 0} د</strong>
+                                </div>
+                                <div>
+                                    <span style="color: var(--text-muted); display: block;">حسبه الـ AI:</span>
+                                    <strong style="color: #f97316;">${dop.aiEvaluatedWastedShorts !== undefined ? dop.aiEvaluatedWastedShorts : "-"} د</strong>
+                                </div>
+                            </div>
+                            <div style="margin-top: 10px; text-align: center; background: rgba(168, 85, 247, 0.1); padding: 5px; border-radius: 6px; color: var(--gold-primary); font-weight: bold; font-size: 13px;">
+                                نقاط الدوبامين: +${dop.pointsAwarded || 0}
+                            </div>
+                        </div>
+                    `;
+                    }
+                }
+            });
+
+            dopContainer.innerHTML =
+                dopCardsHtml ||
+                "<p style='color: var(--text-muted); grid-column: 1/-1; text-align: center;'>لا توجد إثباتات دوبامين مسجلة في هذا التاريخ.</p>";
+            uncContainer.innerHTML =
+                uncCardsHtml ||
+                "<p style='color: var(--text-muted); grid-column: 1/-1; text-align: center;'>لا توجد إثباتات فك قيود مسجلة في هذا التاريخ.</p>";
+        } catch (error) {
+            console.error("Radar Error:", error);
+            CustomDialog.alert(
+                "حدث خطأ أثناء تشغيل الرادار. راجع الكونسول.",
+                "خطأ ❌",
+            );
+        } finally {
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        }
+    });
+
+// ==========================================
+// 🔥 إدارة بنك تحديات الإرادة (Willpower Challenges)
+// ==========================================
+let editingWpId = null;
+
+async function loadWillpowerChallenges() {
+    const tbody = document.getElementById("willpower-table-body");
+    if (!tbody) return;
+    tbody.innerHTML =
+        "<tr><td colspan='4' style='text-align:center;'>جاري تحميل البنك... ⏳</td></tr>";
+
+    try {
+        const snap = await getDocs(collection(db, "willpowerChallenges"));
+        tbody.innerHTML = "";
+
+        if (snap.empty) {
+            tbody.innerHTML =
+                "<tr><td colspan='4' style='text-align:center; color: var(--text-muted);'>البنك فارغ حالياً. أضف تحديات جديدة للجنود.</td></tr>";
+            return;
+        }
+
+        snap.forEach((docSnap) => {
+            const data = docSnap.data();
+            const statusBadge = data.isActive
+                ? `<span class="badge badge-active" style="background: rgba(16, 185, 129, 0.2); color: #10b981;">متاح للسحب</span>`
+                : `<span class="badge badge-inactive" style="background: rgba(239, 68, 68, 0.2); color: #ef4444;">معطل</span>`;
+
+            const tr = document.createElement("tr");
+            tr.innerHTML = `
+                <td>
+                    <strong style="color: var(--gold-primary); font-size: 15px;">${data.title}</strong><br>
+                    <span style="font-size: 12px; color: var(--text-muted);">${data.description}</span>
+                </td>
+                <td>
+                    <div style="font-size: 13px;">⭐ XP: <strong style="color:var(--success);">${data.xpReward || 0}</strong></div>
+                    <div style="font-size: 13px;">🪙 عملات: <strong style="color:var(--gold-primary);">${data.coinReward || 0}</strong></div>
+                </td>
+                <td>${statusBadge}</td>
+                <td>
+                    <div style="display: flex; gap: 5px; flex-wrap: wrap; justify-content: flex-end;">
+                        <button class="action-btn btn-edit" style="background: #f59e0b;" onclick="editWillpower('${docSnap.id}')">تعديل <i class="fa-solid fa-edit"></i></button>
+                        <button class="action-btn btn-edit" style="background: ${data.isActive ? "#6b7280" : "#10b981"};" onclick="toggleWillpowerStatus('${docSnap.id}', ${data.isActive})">${data.isActive ? "تعطيل <i class='fa-solid fa-pause'></i>" : "تفعيل <i class='fa-solid fa-play'></i>"}</button>
+                        <button class="action-btn btn-delete" onclick="deleteWillpower('${docSnap.id}')">حذف <i class="fa-solid fa-trash"></i></button>
+                    </div>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+    } catch (error) {
+        console.error("Error loading willpower challenges:", error);
+        tbody.innerHTML =
+            "<tr><td colspan='4' style='text-align:center; color: var(--danger);'>حدث خطأ أثناء جلب البيانات.</td></tr>";
+    }
+}
+
+document.getElementById("add-wp-btn")?.addEventListener("click", async () => {
+    const title = document.getElementById("wp-title").value.trim();
+    const description = document.getElementById("wp-desc").value.trim();
+    const xpReward = parseInt(document.getElementById("wp-xp").value);
+    const coinReward = parseInt(document.getElementById("wp-coins").value);
+
+    if (!title || !description || isNaN(xpReward) || isNaN(coinReward)) {
+        return CustomDialog.alert(
+            "يرجى تعبئة جميع الحقول وإدخال أرقام صحيحة للمكافآت.",
+        );
+    }
+
+    const btn = document.getElementById("add-wp-btn");
+    const originalText = btn.innerHTML;
+    btn.innerHTML = "جاري الحفظ... ⏳";
+    btn.disabled = true;
+
+    try {
+        if (editingWpId) {
+            await updateDoc(doc(db, "willpowerChallenges", editingWpId), {
+                title,
+                description,
+                xpReward,
+                coinReward,
+            });
+            await CustomDialog.alert("تم تحديث تحدي الإرادة بنجاح!", "نجاح ✅");
+        } else {
+            await addDoc(collection(db, "willpowerChallenges"), {
+                title,
+                description,
+                xpReward,
+                coinReward,
+                isActive: true,
+                createdAt: new Date(),
+            });
+            await CustomDialog.alert("تم إضافة التحدي للبنك بنجاح!", "نجاح ✅");
+        }
+        cancelWpEditMode();
+        loadWillpowerChallenges();
+    } catch (error) {
+        await CustomDialog.alert("حدث خطأ أثناء الحفظ.");
+        console.error(error);
+    } finally {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    }
+});
+
+window.editWillpower = async (id) => {
+    const docRef = await getDoc(doc(db, "willpowerChallenges", id));
+    if (docRef.exists()) {
+        const data = docRef.data();
+        editingWpId = id;
+        document.getElementById("wp-title").value = data.title;
+        document.getElementById("wp-desc").value = data.description;
+        document.getElementById("wp-xp").value = data.xpReward;
+        document.getElementById("wp-coins").value = data.coinReward;
+
+        const btn = document.getElementById("add-wp-btn");
+        btn.innerHTML =
+            "تحديث التحدي <i class='fa-solid fa-pen-to-square'></i>";
+        btn.style.background = "#f59e0b";
+
+        let cancelBtn = document.getElementById("cancel-wp-edit-btn");
+        if (!cancelBtn) {
+            cancelBtn = document.createElement("button");
+            cancelBtn.id = "cancel-wp-edit-btn";
+            cancelBtn.innerHTML = "إلغاء <i class='fa-solid fa-xmark'></i>";
+            cancelBtn.style.cssText =
+                "background: transparent; color: var(--danger); border: 1px solid var(--danger); padding: 12px 20px; border-radius: 8px; cursor: pointer; flex-grow: 1;";
+            cancelBtn.onclick = cancelWpEditMode;
+            document.getElementById("wp-btn-container").appendChild(cancelBtn);
+        }
+        cancelBtn.style.display = "flex";
+        cancelBtn.style.justifyContent = "center";
+
+        document
+            .getElementById("willpower-page")
+            .scrollIntoView({ behavior: "smooth" });
+    }
+};
+
+function cancelWpEditMode() {
+    editingWpId = null;
+    document.getElementById("wp-title").value = "";
+    document.getElementById("wp-desc").value = "";
+    document.getElementById("wp-xp").value = "";
+    document.getElementById("wp-coins").value = "";
+
+    const btn = document.getElementById("add-wp-btn");
+    btn.innerHTML = "حفظ التحدي في البنك <i class='fa-solid fa-save'></i>";
+    btn.style.background = ""; // يرجع للون الذهبي
+
+    const cancelBtn = document.getElementById("cancel-wp-edit-btn");
+    if (cancelBtn) cancelBtn.style.display = "none";
+}
+
+window.toggleWillpowerStatus = async (id, currentStatus) => {
+    await updateDoc(doc(db, "willpowerChallenges", id), {
+        isActive: !currentStatus,
+    });
+    loadWillpowerChallenges();
+};
+
+window.deleteWillpower = async (id) => {
+    if (
+        await CustomDialog.confirm(
+            "هل أنت متأكد من حذف هذا التحدي نهائياً من البنك؟",
+            "حذف التحدي ❌",
+        )
+    ) {
+        await deleteDoc(doc(db, "willpowerChallenges", id));
+        loadWillpowerChallenges();
+    }
+};

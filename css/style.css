@@ -962,7 +962,7 @@ select:focus {
     background: rgba(0, 0, 0, 0.5);
 }
 
-.task-item.important .rel-custom-select-wrapper .custom-select-trigger {
+/* .task-item.important .rel-custom-select-wrapper .custom-select-trigger {
     border-color: rgba(245, 158, 11, 0.4);
 }
 .task-item.important .rel-custom-select-wrapper .custom-select-trigger:hover,
@@ -979,7 +979,7 @@ select:focus {
 .task-item.important .custom-option.selected {
     background: rgba(245, 158, 11, 0.1);
     color: #f59e0b;
-}
+} */
 
 .custom-select-trigger i {
     color: var(--text-muted);
@@ -993,9 +993,9 @@ select:focus {
     color: var(--gold-primary);
 }
 
-.task-item.important .custom-select.open .custom-select-trigger i {
+/* .task-item.important .custom-select.open .custom-select-trigger i {
     color: rgba(245, 158, 11, 1);
-}
+} */
 
 .custom-options {
     position: absolute;
@@ -1064,10 +1064,10 @@ select:focus {
     background: var(--gold-primary);
     border-radius: 10px;
 }
-
+/* 
 .task-item.important .custom-options::-webkit-scrollbar-thumb {
     background: rgba(245, 158, 11, 0.6);
-}
+} */
 
 /* ==========================================
    نظام النوافذ الحوارية المخصصة (Custom Dialog System)

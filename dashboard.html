@@ -58,15 +58,22 @@
                     style="width: 180px; text-align: center; margin: 0  auto 5px auto;">
             </div>
             <ul class="nav-links">
-                <li class="active" data-target="tasks-page"> <i class="fa-solid fa-tasks fa-fw"></i> المهام اليومية</li>
-                <li data-target="religious-tasks-page"> <i class="fa-solid fa-mosque fa-fw"></i> الجانب الديني</li>
+                <li class="active" data-target="tasks-page"> <i class="fa-solid fa-tasks fa-fw"></i> <span> المهام
+                        اليومية </span></li>
+                <li data-target="religious-tasks-page"> <i class="fa-solid fa-mosque fa-fw"></i> <span> الجانب
+                        الديني</span></li>
+                <li data-target="willpower-user-page">
+                    <i class="fa-solid fa-fire-flame-curved fa-fw"></i>
+                    <span>تحدي الإرادة</span>
+                </li>
                 <li id="nav-todo-link" data-target="todo-page" style="display: none;"> <i
-                        class="fa-solid fa-list fa-fw"></i> المهام الحرة</li>
-                <li data-target="store-page"><i class="fa-solid fa-store fa-fw"></i> المتجر</li>
+                        class="fa-solid fa-list fa-fw"></i> <span>المهام الحرة</span></li>
+                <li data-target="store-page"><i class="fa-solid fa-store fa-fw"></i> <span>المتجر</span></li>
+                <li data-target="leaderboard-page"> <i class="fa-solid fa-trophy fa-fw"></i> <span>قائمة
+                        المتصدرين</span></li>
                 <!-- <li class="nav-item" data-target="study-rooms-page">
-                    <i class="fa-solid fa-users-viewfinder fa-fw"></i> غرف الدراسة
-                </li> -->
-                <li data-target="leaderboard-page"> <i class="fa-solid fa-trophy fa-fw"></i> قائمة المتصدرين</li>
+                        <i class="fa-solid fa-users-viewfinder fa-fw"></i> غرف الدراسة
+                    </li> -->
                 <!-- <li data-target="analytics-page"> <i class="fa-solid fa-chart-line fa-fw"></i> تحليل التقدم</li> -->
             </ul>
         </aside>
@@ -111,7 +118,7 @@
                             <h2 id="challenge-title" class="gold-text" style="margin-bottom: 5px;">جاري تحميل التحدي...
                             </h2>
                             <p style="color: var(--text-muted); font-size: 14px;">الوقت المتبقي: <span id="days-left"
-                                    class="gold-text">--</span> أيام</p>
+                                    class="gold-text">--</span></p>
                             <p id="double-xp-tag"
                                 style="display: none; color: #eab308; font-size: 12px; margin-top: 5px; font-weight: bold;">
                                 <i class="fa-solid fa-bolt"></i> 2x XP مُفعل لليوم
@@ -138,10 +145,11 @@
                             القيود</h3>
                         <p style="color: var(--text-muted); margin-bottom: 20px; font-size: 14px; line-height: 1.6;">
                             أنت الآن مقيد في المنطقة الحمراء. لا يمكنك جمع النقاط ولا المنافسة.
-                            <br><strong style="color: var(--text-main);">المهمة:</strong> قم بتقليل الـ Screen Time
-                            الخاص بك اليوم إلى أقل
-                            من ساعة، أو قم بأداء تمرين رياضي شاق.
-                            <br>ارفع لقطة شاشة (Screenshot) تثبت إنجازك لفك القيود والعودة للساحة.
+                            <br><strong style="color: var(--text-main);">المهمة:</strong> قم بتقليل <strong>إجمالي وقت
+                                الشاشة (Screen
+                                Time)</strong> الخاص بك اليوم إلى أقل من ساعتين، مع ضمان أن يكون وقت الـ (Shorts/Reels)
+                            أقل من 30 دقيقة.
+                            <br>ارفع لقطة شاشة (Screenshot) تثبت استهلاكك لفك القيود والعودة للساحة.
                         </p>
 
                         <input type="file" id="unchaining-proof-file" accept="image/*" style="display: none;">
@@ -436,6 +444,74 @@
                     </div>
                 </div>
             </div> -->
+
+            <section id="willpower-user-page" class="page-section">
+                <div class="header-banner glass-card"
+                    style="background: linear-gradient(135deg, rgba(220, 38, 38, 0.2) 0%, rgba(15, 23, 42, 1) 100%); border: 1px solid var(--danger); margin-bottom: 20px;">
+                    <h2
+                        style="color: var(--danger); margin-bottom: 5px; font-weight: 900; text-shadow: 0 0 10px rgba(220,38,38,0.5);">
+                        <i class="fa-solid fa-fire-flame-curved"></i> تحدي الإرادة الموحد
+                    </h2>
+                    <p style="color: var(--text-muted); font-size: 13px; margin: 0;">
+                        تحدٍ قاسي واحد يومياً يختبر صلابتك العقلية والبدنية. التحدي موحد لجميع جنود المعسكر. لا مجال
+                        للأعذار.
+                    </p>
+                </div>
+
+                <div id="willpower-loading" style="text-align: center; padding: 40px; color: var(--gold-primary);">
+                    <i class="fa-solid fa-spinner fa-spin fa-2x"></i>
+                    <p style="margin-top: 10px;">جاري تشفير تحدي اليوم...</p>
+                </div>
+
+                <div id="willpower-content" style="display: none;">
+                    <div class="glass-card"
+                        style="position: relative; overflow: hidden; border: 1px solid rgba(249, 115, 22, 0.3); box-shadow: 0 0 30px rgba(249, 115, 22, 0.05);">
+                        <div
+                            style="position: absolute; top: -50px; right: -50px; width: 150px; height: 150px; background: radial-gradient(circle, rgba(249, 115, 22, 0.2) 0%, transparent 70%); border-radius: 50%; pointer-events: none;">
+                        </div>
+
+                        <h3 id="wp-user-title"
+                            style="color: white; font-size: 22px; text-align: center; margin-bottom: 15px; font-weight: 900;">
+                            -</h3>
+                        <p id="wp-user-desc"
+                            style="color: var(--text-muted); text-align: center; font-size: 15px; line-height: 1.6; margin-bottom: 25px;">
+                            -</p>
+
+                        <div style="display: flex; justify-content: center; gap: 15px; margin-bottom: 30px;">
+                            <div
+                                style="background: rgba(16, 185, 129, 0.1); border: 1px solid #10b981; padding: 10px 20px; border-radius: 8px; text-align: center;">
+                                <span
+                                    style="display: block; font-size: 11px; color: #10b981; margin-bottom: 3px;">مكافأة
+                                    الـ
+                                    XP</span>
+                                <strong id="wp-user-xp" style="color: white; font-size: 18px;">+0</strong>
+                            </div>
+                            <div
+                                style="background: #53268028; border: 1px solid var(--gold-primary); padding: 10px 20px; border-radius: 8px; text-align: center;">
+                                <span
+                                    style="display: block; font-size: 11px; color: var(--gold-primary); margin-bottom: 3px;">غنائم
+                                    العملات</span>
+                                <strong id="wp-user-coins" style="color: white; font-size: 18px;">+0 <i
+                                        class="fa-solid fa-coins fa-fw"></i></strong>
+                            </div>
+                        </div>
+
+                        <button id="complete-wp-btn" class="gold-btn"
+                            style="width: 100%; margin: 0; font-size: 18px; padding: 15px;">
+                            أتممت التحدي بشرف ⚔️
+                        </button>
+                    </div>
+                </div>
+
+                <div id="willpower-completed-msg" style="display: none; text-align: center; padding: 30px;"
+                    class="glass-card">
+                    <i class="fa-solid fa-circle-check fa-4x" style="color: #10b981; margin-bottom: 15px;"></i>
+                    <h3 style="color: white; margin-bottom: 10px;">أداء عظيم يا جندي!</h3>
+                    <p style="color: var(--text-muted); font-size: 14px;">لقد أتممت تحدي اليوم وحصلت على الغنائم. انتظر
+                        التحدي
+                        القادم فجر الغد.</p>
+                </div>
+            </section>
 
             <section id="leaderboard-page" class="page-section">
                 <h2 class="gold-text leaderboard-title">🏆 قاعة العظماء</h2>

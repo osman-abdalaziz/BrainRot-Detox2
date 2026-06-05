@@ -152,16 +152,13 @@ window.CustomDialog = {
 };
 
 // ==============================
-// 🛡️ نظام مزامنة الوقت الفائق (Google Edge Servers)
-// لا للغش، لا للبطء!
+// 🛡️ نظام مزامنة الوقت الفائق (مضاد للانهيار)
 // ==============================
 let serverTimeAtLoad = null;
 let performanceAtLoad = null;
 
 async function syncTime() {
     try {
-        // خدعة عبقرية: جلب التوقيت من سيرفر موقعك نفسه (فايربيز/جوجل)
-        // هذا الاتصال يستغرق مللي ثواني ولا يمكن حظره برمجياً
         const response = await fetch(window.location.href.split("#")[0], {
             method: "HEAD",
             cache: "no-store",
@@ -175,38 +172,56 @@ async function syncTime() {
             throw new Error("No Date Header");
         }
     } catch (error) {
-        console.error("فشل التحقق من التوقيت الحقيقي. لا يوجد إنترنت.");
-        serverTimeAtLoad = null; // 🛑 نمنع استخدام وقت الموبايل نهائياً
+        console.warn(
+            "ضعف في الإنترنت: تعذر جلب وقت السيرفر. سيتم استخدام وقت الجهاز مؤقتاً لتجنب شلل النظام.",
+        );
+        serverTimeAtLoad = Date.now(); // 🛑 السقوط الآمن: استخدام وقت الجهاز بدلاً من تدمير الموقع
     }
     performanceAtLoad = performance.now();
 }
 
 // هذه الدالة هي الوحيدة المسؤولة عن إعطائنا الوقت في كل الكود
 function getRealNow() {
-    // 1. نظام الحماية الصارم (Fail-Secure)
+    // تمت إزالة throw new Error الكارثي الذي كان يوقف عمل الجافاسكربت بالكامل
+    // الدالة الآن تعيد الوقت دائماً (سواء من السيرفر أو من الجهاز) لضمان عدم توقف الواجهة
     if (serverTimeAtLoad === null) {
-        // لو الطالب فصل النت ولعب في الساعة، الكود هينفجر في وشه ويرفض يشتغل
-        CustomDialog.alert(
-            "لا يمكن التحقق من التوقيت الحقيقي! يرجى التأكد من اتصالك بالإنترنت وعدم التلاعب بساعة الجهاز.",
-            "خطأ أمني 🛑",
-        );
-        throw new Error("Anti-Cheat Triggered: No secure time available.");
+        serverTimeAtLoad = Date.now();
+        if (performanceAtLoad === null) performanceAtLoad = performance.now();
     }
 
-    // 2. إذا كان كل شيء سليماً، نحسب الوقت الحقيقي
     const elapsed = performance.now() - performanceAtLoad;
     return new Date(serverTimeAtLoad + elapsed);
 }
 
-// دالة صارمة لتحويل أي وقت إلى تاريخ بتوقيت القاهرة حصراً (YYYY-MM-DD)
+// دالة صارمة لتحويل التاريخ و"إزاحة اليوم" برمجياً بناءً على ساعة السيرفر
 function getCairoDateString(dateObj) {
-    return dateObj.toLocaleDateString("en-CA", { timeZone: "Africa/Cairo" });
+    const cairoTimeStr = dateObj.toLocaleString("en-US", {
+        timeZone: "Africa/Cairo",
+        hour12: false,
+    });
+    const cairoDate = new Date(cairoTimeStr);
+    const currentHour = cairoDate.getHours();
+
+    // 🛑 السحر المعماري: إزاحة اليوم
+    // إذا كانت الساعة الآن أقل من ساعة تصفير اليوم (مثلاً 3 فجراً أقل من 4)
+    // نجبر النظام على اعتبارنا ما زلنا في "الأمس"
+    if (currentHour < window.dayStartHour) {
+        cairoDate.setDate(cairoDate.getDate() - 1);
+    }
+
+    // إرجاع التاريخ بصيغة YYYY-MM-DD يدوياً لضمان الدقة وتجنب اختلاف المتصفحات
+    const year = cairoDate.getFullYear();
+    const month = String(cairoDate.getMonth() + 1).padStart(2, "0");
+    const day = String(cairoDate.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
 }
 
 let currentUser = null;
 let currentCycle = 1; // الدورة الأسبوعية الحالية
 let dailyTargetPoints = 0;
 let isTodayFinalized = false;
+window.dayStartHour = 4; // الافتراضي: 4 فجراً يبدأ اليوم الجديد
+window.submissionStartHour = 21; // الافتراضي: 9 مساءً يفتح باب الاعتماد
 
 onAuthStateChanged(auth, async (user) => {
     if (user) {
@@ -236,7 +251,14 @@ onAuthStateChanged(auth, async (user) => {
         // جلب رقم الدورة الأسبوعية الحالية من السيرفر
         const sysDoc = await getDoc(doc(db, "configs", "system"));
         if (sysDoc.exists()) {
-            currentCycle = sysDoc.data().currentCycle || 1;
+            const sysData = sysDoc.data();
+            currentCycle = sysData.currentCycle || 1;
+            window.dayStartHour =
+                sysData.dayStartHour !== undefined ? sysData.dayStartHour : 4;
+            window.submissionStartHour =
+                sysData.submissionStartHour !== undefined
+                    ? sysData.submissionStartHour
+                    : 21;
         }
 
         // إخفاء نافذة الانضمام القديمة نهائياً
@@ -250,6 +272,7 @@ onAuthStateChanged(auth, async (user) => {
 
         loadLeaderboard();
         loadAnalytics();
+        loadDailyWillpower(); // <--- تشغيل محرك الإرادة اليومية
         applyZoneUI(userData.currentZone || "green");
         const loader = document.getElementById("global-loader");
         if (loader) loader.classList.add("hidden");
@@ -712,6 +735,9 @@ async function processActiveParticipant(userData, userDocRef) {
 
         while (evalDate <= limitDate) {
             const dateStr = getCairoDateString(evalDate);
+            // إنشاء طابع زمني منطقي لنهاية ذلك اليوم (الساعة 23:59:59) للحفاظ على التسلسل التاريخي
+            const logicalTimestamp = new Date(evalDate);
+            logicalTimestamp.setHours(23, 59, 59);
             const logRef = doc(
                 db,
                 `users/${currentUser.uid}/dailyLogs`,
@@ -824,7 +850,7 @@ async function processActiveParticipant(userData, userDocRef) {
                         date: dateStr,
                         selections,
                         religiousSelections,
-                        timestamp: getRealNow(),
+                        timestamp: logicalTimestamp,
                     },
                     { merge: true },
                 );
@@ -841,7 +867,7 @@ async function processActiveParticipant(userData, userDocRef) {
                             isFinalized: true,
                             pointsEarned,
                             date: dateStr,
-                            timestamp: getRealNow(),
+                            timestamp: logicalTimestamp,
                         },
                         { merge: true },
                     );
@@ -1639,7 +1665,7 @@ document
     ?.addEventListener("click", async () => {
         if (!currentUser || isTodayFinalized) return;
         // ==========================================
-        // 🛑 جدار الحماية الزمني (مسموح من 9 مساءً وحتى 4 فجراً فقط)
+        // 🛑 جدار الحماية الزمني الديناميكي
         // ==========================================
         const now = getRealNow();
         const cairoTimeStr = now.toLocaleString("en-US", {
@@ -1647,13 +1673,23 @@ document
             hour12: false,
         });
         const cairoDate = new Date(cairoTimeStr);
-        const currentHour = cairoDate.getHours(); // يجلب الساعة من 0 إلى 23
+        const currentHour = cairoDate.getHours();
 
-        // إذا لم تكن الساعة أكبر من أو تساوي 21 (9 مساءً) ولم تكن أقل من 4 (فجراً)
-        if (!(currentHour >= 21 || currentHour < 4)) {
+        const startH = window.submissionStartHour;
+        const endH = window.dayStartHour;
+
+        // إذا لم يكن الوقت داخل النافذة (من وقت فتح الاعتماد وحتى وقت نهاية اليوم)
+        if (!(currentHour >= startH || currentHour < endH)) {
+            // دالة صغيرة لتحويل نظام الـ 24 إلى 12 ساعة لرسالة الخطأ
+            const formatHour = (h) => {
+                let ampm = h >= 12 ? "مساءً" : "صباحاً";
+                let hours12 = h % 12 || 12;
+                return `${hours12}:00 ${ampm}`;
+            };
+
             return await CustomDialog.alert(
-                "لا يمكنك اعتماد مهام اليوم الآن. نافذة التقييم تفتح فقط من الساعة 9:00 مساءً وحتى 4:00 فجراً بتوقيت القاهرة.",
-                "نافذة مغلقة 🛑",
+                `لا يمكنك اعتماد مهام اليوم الآن. نافذة التقييم تفتح فقط من ${formatHour(startH)} وحتى ${formatHour(endH)} بتوقيت القاهرة.`,
+                "النافذة مغلقة 🛑",
             );
         }
         // ==========================================
@@ -1770,12 +1806,12 @@ document
             const wastedShorts = aiResult.data.wastedShortsMinutes;
 
             // --- 6. تطبيق معادلة الدوبامين العكسية (Capped Linear Decay) ---
-            // أقصى نقاط للشاشة: 100 | حد التسامح: 4 ساعات (240 دقيقة)
-            let screenPoints = 100 * (1 - wastedScreen / 240);
+            // أقصى نقاط للشاشة: 100 | حد التسامح: 4 ساعات (300 دقيقة)
+            let screenPoints = 100 * (1 - wastedScreen / 300);
             if (screenPoints < 0) screenPoints = 0;
 
-            // أقصى نقاط للشورتس: 100 | حد التسامح: 30 دقيقة
-            let shortsPoints = 100 * (1 - wastedShorts / 30);
+            // أقصى نقاط للشورتس: 100 | حد التسامح: 45 دقيقة
+            let shortsPoints = 100 * (1 - wastedShorts / 45);
             if (shortsPoints < 0) shortsPoints = 0;
 
             const dopaminePoints = Math.floor(screenPoints + shortsPoints);
@@ -3379,36 +3415,46 @@ function startDoomsdayClock() {
 
     // تحديث العداد كل ثانية
     setInterval(() => {
-        // إذا كان المستخدم قد أنهى يومه بالفعل، أخفِ العداد ولا تزعجه
         if (isTodayFinalized) {
             clockEl.style.display = "none";
             return;
         }
 
         const now = getRealNow();
-
-        // خدعة هندسية لحساب الوقت المتبقي لمنتصف ليل القاهرة بدقة
         const cairoTimeStr = now.toLocaleString("en-US", {
             timeZone: "Africa/Cairo",
             hour12: false,
         });
         const cairoDate = new Date(cairoTimeStr);
-        // إنشاء موعد منتصف الليل لنفس اليوم
-        const cairoMidnight = new Date(
+        const currentHour = cairoDate.getHours();
+
+        const startH = window.submissionStartHour;
+        const endH = window.dayStartHour;
+
+        // بناء موعد الإغلاق (الديدلاين) ديناميكياً
+        let cairoDeadline = new Date(
             cairoDate.getFullYear(),
             cairoDate.getMonth(),
-            cairoDate.getDate() + 1,
-            0,
+            cairoDate.getDate(),
+            endH,
             0,
             0,
         );
 
-        // حساب الفارق بالمللي ثانية
-        const diffMs = cairoMidnight - cairoDate;
+        // إذا كنا بالليل (مثلاً 10 مساءً) والديدلاين فجراً، نزيد يوماً للديدلاين
+        if (currentHour >= startH && endH < 12) {
+            cairoDeadline.setDate(cairoDeadline.getDate() + 1);
+        }
+
+        const diffMs = cairoDeadline - cairoDate;
         const hoursLeft = diffMs / (1000 * 60 * 60);
 
-        // التفعيل فقط إذا تبقى ساعتين أو أقل
-        if (hoursLeft <= 2 && hoursLeft > 0) {
+        // التفعيل فقط لو متبقي ساعتين أو أقل وكان الاعتماد مفتوحاً فعلاً
+        if (
+            hoursLeft <= 2 &&
+            hoursLeft > 0 &&
+            (currentHour >= startH || currentHour < endH)
+        ) {
             clockEl.style.display = "block";
             const h = Math.floor((diffMs / (1000 * 60 * 60)) % 24);
             const m = Math.floor((diffMs / 1000 / 60) % 60);
@@ -4141,3 +4187,157 @@ submitUnchainingBtn?.addEventListener("click", async () => {
         submitUnchainingBtn.disabled = false;
     }
 });
+
+// ==========================================
+// 🔥 محرك تحدي الإرادة اليومي للمستخدمين
+// ==========================================
+let currentDailyWillpower = null;
+
+async function loadDailyWillpower() {
+    const loadingEl = document.getElementById("willpower-loading");
+    const contentEl = document.getElementById("willpower-content");
+    const completedMsgEl = document.getElementById("willpower-completed-msg");
+    const btn = document.getElementById("complete-wp-btn");
+
+    if (!loadingEl || !contentEl) return;
+
+    try {
+        const todayStr = getCairoDateString(getRealNow());
+
+        // 1. التحقق مما إذا كان المستخدم قد أتم التحدي اليوم
+        const logRef = doc(
+            db,
+            `users/${auth.currentUser.uid}/dailyLogs/${todayStr}`,
+        );
+        const logSnap = await getDoc(logRef);
+
+        if (logSnap.exists() && logSnap.data().willpowerCompleted) {
+            loadingEl.style.display = "none";
+            contentEl.style.display = "none";
+            completedMsgEl.style.display = "block";
+            return;
+        }
+
+        // 2. سحب كل التحديات المتاحة من البنك
+        const wpQuery = query(collection(db, "willpowerChallenges"));
+        const snap = await getDocs(wpQuery);
+
+        const activeChallenges = [];
+        snap.forEach((doc) => {
+            if (doc.data().isActive)
+                activeChallenges.push({ id: doc.id, ...doc.data() });
+        });
+
+        if (activeChallenges.length === 0) {
+            loadingEl.style.display = "none";
+            contentEl.style.display = "block";
+            document.getElementById("wp-user-title").innerText =
+                "لا يوجد تحديات";
+            document.getElementById("wp-user-desc").innerText =
+                "القيادة لم تقم بتذخير بنك التحديات بعد.";
+            btn.style.display = "none";
+            return;
+        }
+
+        // 3. الخوارزمية الحتمية لاختيار التحدي الموحد لجميع الجنود بناءً على تاريخ اليوم
+        // (نحول التاريخ إلى رقم ثم نقسمه على عدد التحديات وناخذ الباقي)
+        const epochDays = Math.floor(
+            new Date(todayStr).getTime() / (1000 * 60 * 60 * 24),
+        );
+        const challengeIndex = epochDays % activeChallenges.length;
+
+        // ترتيب المصفوفة لضمان نفس الترتيب دائماً
+        activeChallenges.sort((a, b) => a.id.localeCompare(b.id));
+        currentDailyWillpower = activeChallenges[challengeIndex];
+
+        // 4. عرض التحدي في الواجهة
+        document.getElementById("wp-user-title").innerText =
+            currentDailyWillpower.title;
+        document.getElementById("wp-user-desc").innerText =
+            currentDailyWillpower.description;
+        document.getElementById("wp-user-xp").innerText =
+            `+${currentDailyWillpower.xpReward} Score`;
+        document.getElementById("wp-user-coins").innerHTML =
+            `+${currentDailyWillpower.coinReward} <i class="fa-solid fa-coins fa-fw"></i>`;
+
+        loadingEl.style.display = "none";
+        contentEl.style.display = "block";
+    } catch (error) {
+        console.error("Error loading Willpower:", error);
+        loadingEl.innerHTML =
+            "<p style='color: var(--danger);'>فشل تحميل التحدي، تأكد من الإنترنت.</p>";
+    }
+}
+
+// دالة اعتماد التحدي وحصاد الغنائم
+document
+    .getElementById("complete-wp-btn")
+    ?.addEventListener("click", async () => {
+        if (!currentDailyWillpower || !auth.currentUser) return;
+
+        // 🛑 نافذة قَسَم الشرف العسكري لمنع الكذب
+        const isHonest = await CustomDialog.confirm(
+            "هل تقسم أنك أنجزت هذا التحدي كاملاً وبدون أي تحايل؟\n\nتذكر: الكذب هنا سيدمر نزاهتك النفسية قبل أن يدمر إحصائياتك الرقمية.",
+            "قَسَم الشرف ⚖️",
+        );
+
+        if (!isHonest) return;
+
+        const btn = document.getElementById("complete-wp-btn");
+        const originalText = btn.innerHTML;
+        btn.innerHTML =
+            "<i class='fa-solid fa-spinner fa-spin'></i> جاري الاعتماد...";
+        btn.disabled = true;
+
+        try {
+            const uid = auth.currentUser.uid;
+            const todayStr = getCairoDateString(getRealNow());
+
+            // 1. تحديث محفظة المستخدم (XP الدورة، XP التراكمي، والعملات) بدالة increment الصارمة
+            const userRef = doc(db, "users", uid);
+            await updateDoc(userRef, {
+                lifetimeScore: increment(currentDailyWillpower.xpReward),
+                cycleScore: increment(currentDailyWillpower.xpReward),
+                walletCoins: increment(currentDailyWillpower.coinReward),
+            });
+
+            // 2. توثيق الإنجاز في سجل اليوم لكي لا يكرره
+            const logRef = doc(db, `users/${uid}/dailyLogs/${todayStr}`);
+            await setDoc(
+                logRef,
+                {
+                    willpowerCompleted: true,
+                    willpowerDetails: {
+                        title: currentDailyWillpower.title,
+                        xpEarned: currentDailyWillpower.xpReward,
+                        coinsEarned: currentDailyWillpower.coinReward,
+                    },
+                },
+                { merge: true },
+            );
+
+            // 3. الاحتفال وتحديث الواجهة
+            confetti({
+                particleCount: 150,
+                spread: 70,
+                origin: { y: 0.6 },
+                colors: ["#f97316", "#10b981", "#fbbf24"],
+            });
+            await CustomDialog.alert(
+                `حصلت على ${currentDailyWillpower.xpReward} XP و ${currentDailyWillpower.coinReward} عملة!`,
+                "تم السحق بنجاح ⚔️",
+            );
+
+            // تحديث شريط الهيدر للعملات والـ XP فوراً
+            syncUserUI(uid);
+
+            document.getElementById("willpower-content").style.display = "none";
+            document.getElementById("willpower-completed-msg").style.display =
+                "block";
+        } catch (error) {
+            console.error("Willpower Submit Error:", error);
+            await CustomDialog.alert("حدث خطأ أثناء اعتماد التحدي.", "خطأ ❌");
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        }
+    });
