@@ -667,13 +667,14 @@ select:focus {
     border-radius: 50%;
     object-fit: cover;
     /* عدل هذه النسبة (75%) لتكبير أو تصغير الصورة داخل الفتحة */
-    width: 73%;
-    height: 73%;
+    width: 70%;
+    height: 70%;
     position: relative;
     z-index: 1; /* الصورة أصبحت طبقة سفلية */
     border: none !important;
     box-shadow: none !important;
-    top: -1px;
+
+    top: 0px;
 }
 
 /* 3. حقن صور الإطارات في الطبقة العلوية (::after) */
@@ -689,19 +690,77 @@ select:focus {
 .frame-gold::after {
     background-image: url("../images/frame-4.webp");
 }
+
 .frame-diamond::after {
     background-image: url("../images/frame-5.webp");
-    animation: pulseLegendImage 2s infinite alternate;
+    /* animation: pulseLegendImage 2s infinite alternate;
+    -webkit-animation: pulseLegendImage 2s infinite alternate; */
+}
+
+/* Custom Frames */
+.frame-1::after {
+    background-image: url("../images/frame-custom-1.webp");
+}
+.frame-2::after {
+    background-image: url("../images/frame-custom-2.webp");
+}
+.frame-3::after {
+    background-image: url("../images/frame-custom-3.webp");
+}
+.frame-4::after {
+    background-image: url("../images/frame-custom-4.webp");
+}
+.frame-5::after {
+    background-image: url("../images/frame-custom-5.webp");
+}
+.frame-6::after {
+    background-image: url("../images/frame-custom-6.webp");
+}
+.frame-7::after {
+    background-image: url("../images/frame-custom-7.webp");
+}
+.frame-8::after {
+    background-image: url("../images/frame-custom-8.webp");
+}
+.frame-9::after {
+    background-image: url("../images/frame-custom-9.webp");
+}
+.frame-10::after {
+    background-image: url("../images/frame-custom-10.webp");
+}
+.frame-11::after {
+    background-image: url("../images/frame-custom-11.webp");
+}
+.frame-12::after {
+    background-image: url("../images/frame-custom-12.webp");
+}
+.frame-13::after {
+    background-image: url("../images/frame-custom-13.webp");
+}
+.frame-14::after {
+    background-image: url("../images/frame-custom-14.webp");
+}
+.frame-15::after {
+    background-image: url("../images/frame-custom-15.webp");
+}
+.frame-16::after {
+    background-image: url("../images/frame-custom-16.webp");
+}
+.frame-17::after {
+    background-image: url("../images/frame-custom-17.webp");
+}
+.frame-18::after {
+    background-image: url("../images/frame-custom-18.webp");
 }
 
 @keyframes pulseLegendImage {
     from {
-        filter: drop-shadow(0 0 5px rgba(217, 70, 239, 0.2));
-        -webkit-filter: drop-shadow(0 0 5px rgba(217, 70, 239, 0.2));
+        filter: drop-shadow(0 0 2px rgba(217, 70, 239, 0.2));
+        -webkit-filter: drop-shadow(0 0 2px rgba(217, 70, 239, 0.2));
     }
     to {
-        filter: drop-shadow(0 0 10px rgba(217, 70, 239, 0.8));
-        -webkit-filter: drop-shadow(0 0 10px rgba(217, 70, 239, 0.8));
+        filter: drop-shadow(0 0 6px rgba(217, 70, 239, 0.6));
+        -webkit-filter: drop-shadow(0 0 6px rgba(217, 70, 239, 0.6));
     }
 }
 
@@ -2071,17 +2130,41 @@ select:focus {
     -webkit-overflow-scrolling: touch; /* سحب ناعم جداً في الآيفون */
 }
 
-/* تخصيص شكل شريط التمرير */
-.chart-scroll-wrapper::-webkit-scrollbar {
+::-webkit-scrollbar {
     height: 6px;
+    width: 4px;
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 999999;
 }
-.chart-scroll-wrapper::-webkit-scrollbar-thumb {
+::-webkit-scrollbar-thumb {
     background: var(--gold-primary);
     border-radius: 10px;
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 999999;
 }
-.chart-scroll-wrapper::-webkit-scrollbar-track {
+::-webkit-scrollbar-track {
     background: rgba(255, 255, 255, 0.05);
     border-radius: 10px;
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 999999;
+}
+
+@media (max-width: 768px) {
+    ::-webkit-scrollbar {
+        display: none !important; /* إخفاء Scrollbar في الجوال لشكل أنظف */
+    }
+    ::-webkit-scrollbar-thumb {
+        display: none !important;
+    }
+    ::-webkit-scrollbar-track {
+        display: none !important;
+    }
 }
 
 /* ==========================================
@@ -2100,7 +2183,7 @@ select:focus {
 .store-item {
     width: 200px !important; /* الحجم الثابت الذي طلبته */
     flex-shrink: 0 !important; /* منع الكارت من الانضغاط وتشويه شكله */
-    display: flex !important;
+    display: flex;
     flex-direction: column !important;
     height: auto !important;
     box-sizing: border-box !important;
@@ -2394,4 +2477,199 @@ body.red-zone [data-target="store-page"] {
     color: #ef4444;
     border: 1px solid #ef4444;
     display: block;
+}
+
+/* تصميم الرفوف للأوسمة */
+.trophy-shelf {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 15px;
+    padding: 20px 10px;
+    margin-bottom: 40px;
+    background: linear-gradient(
+        to bottom,
+        rgba(0, 0, 0, 0) 70%,
+        rgba(186, 173, 199, 0.11) 100%
+    );
+    border-bottom: 8px solid #1a1a24;
+    border-radius: 5px;
+    box-shadow: 0 15px 15px -15px rgba(0, 0, 0, 0.8);
+    position: relative;
+}
+.trophy-shelf::after {
+    content: attr(data-shelf-name);
+    position: absolute;
+    bottom: -20px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 12px;
+    color: var(--text-muted);
+    background: #1e1e24;
+    padding: 4px 15px;
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    white-space: nowrap;
+}
+.trophy-item {
+    background: rgba(15, 10, 30, 0.8);
+    border: 1px solid rgba(234, 179, 8, 0.2);
+    padding: 15px 10px;
+    border-radius: 12px;
+    width: 110px;
+    text-align: center;
+    box-shadow:
+        0 -5px 15px rgba(0, 0, 0, 0.5) inset,
+        0 5px 10px rgba(0, 0, 0, 0.3);
+    transition:
+        transform 0.3s,
+        border-color 0.3s;
+}
+.trophy-item:hover {
+    transform: translateY(-10px);
+    border-color: var(--gold-primary);
+}
+
+/* .rank-vip-tag {
+    background: linear-gradient(
+        90deg,
+        rgba(234, 179, 8, 0.15),
+        rgba(249, 115, 22, 0.15)
+    ) !important;
+    border: 1px solid var(--gold-primary) !important;
+    color: var(--gold-light) !important;
+    text-shadow: 0 0 8px rgba(234, 179, 8, 0.5);
+    font-weight: bold !important;
+} */
+
+/* إعدادات الفريمات الملكية (عبر pseudo-element) */
+.avatar-wrapper.has-custom-frame {
+    overflow: visible !important;
+    background: transparent !important;
+    padding: 0 !important;
+}
+
+.avatar-wrapper.has-custom-frame > img {
+    border-radius: 50% !important;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* ==========================================
+   تنسيقات المتجر الملكي (VIP Cosmetics)
+   ========================================== */
+
+/* صناديق الاختيار (للأيقونات والألوان) */
+.vip-choice-box {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 2px solid var(--border-color);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+    background: rgba(0, 0, 0, 0.4);
+    color: var(--text-main);
+    font-size: 16px;
+    opacity: 0.4;
+}
+
+.vip-choice-box:hover {
+    transform: scale(1.1);
+    opacity: 1;
+}
+
+.vip-choice-box.selected {
+    border-color: var(--gold-primary);
+    opacity: 1 !important;
+    transform: scale(1.1);
+    -webkit-transform: scale(1.1);
+    -moz-transform: scale(1.1);
+    -ms-transform: scale(1.1);
+    -o-transform: scale(1.1);
+}
+
+/* إخفاء السكرول بار من قوائم الألوان والأيقونات */
+#vip-icons-grid::-webkit-scrollbar,
+#vip-colors-grid::-webkit-scrollbar {
+    display: none;
+}
+
+/* 🛑 كلاسات ألوان الألقاب (هذه الأسماء ستُحفظ في قاعدة البيانات) 🛑 */
+.tag-color-gray {
+    background: rgba(148, 163, 184, 0.15) !important;
+    color: #94a3b8 !important;
+    border-color: rgba(148, 163, 184, 0.3) !important;
+    text-shadow: 0 0 8px rgba(148, 163, 184, 0.25);
+}
+
+.tag-color-gold {
+    background: linear-gradient(
+        90deg,
+        rgba(234, 179, 8, 0.15),
+        rgba(249, 115, 22, 0.15)
+    ) !important;
+    color: #facc15 !important;
+    border-color: #eab308 !important;
+    text-shadow: 0 0 8px rgba(234, 179, 8, 0.5);
+}
+
+.tag-color-crimson {
+    background: rgba(220, 38, 38, 0.15) !important;
+    color: #ef4444 !important;
+    border-color: #dc2626 !important;
+    text-shadow: 0 0 8px rgba(220, 38, 38, 0.5);
+}
+
+.tag-color-void {
+    background: rgba(147, 51, 234, 0.15) !important;
+    color: #c084fc !important;
+    border-color: #9333ea !important;
+    text-shadow: 0 0 8px rgba(147, 51, 234, 0.5);
+}
+
+.tag-color-toxic {
+    background: rgba(16, 185, 129, 0.15) !important;
+    color: #34d399 !important;
+    border-color: #10b981 !important;
+    text-shadow: 0 0 8px rgba(16, 185, 129, 0.5);
+}
+
+.tag-color-ice {
+    background: rgba(6, 182, 212, 0.15) !important;
+    color: #22d3ee !important;
+    border-color: #06b6d4 !important;
+    text-shadow: 0 0 8px rgba(6, 182, 212, 0.5);
+}
+
+.tag-color-pink {
+    background: rgba(233, 30, 99, 0.15) !important;
+    color: #e91e63 !important;
+    border-color: #c2185b !important;
+    text-shadow: 0 0 8px rgba(233, 30, 99, 0.5);
+}
+
+.tag-color-orange {
+    background: rgba(251, 146, 60, 0.15) !important;
+    color: #fb923c !important;
+    border-color: #f97316 !important;
+    text-shadow: 0 0 8px rgba(251, 146, 60, 0.5);
+}
+
+.tag-color-bronze {
+    background: rgba(205, 127, 50, 0.15) !important;
+    color: #cd7f32 !important;
+    border-color: #cd7f32 !important;
+    text-shadow: 0 0 8px rgba(205, 127, 50, 0.5);
+}
+
+#profile-rank-title span {
+    background: none !important;
+    font-size: 28px !important;
+    margin-bottom: 15px !important;
+    display: inline-block !important;
 }

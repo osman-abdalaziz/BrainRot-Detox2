@@ -24,6 +24,7 @@ import {
     orderBy,
     deleteDoc,
     arrayUnion,
+    where,
 } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 import {
     ref,
@@ -271,7 +272,6 @@ onAuthStateChanged(auth, async (user) => {
         await checkAndCelebrateBadges(userData, userDocRef);
 
         loadLeaderboard();
-        loadAnalytics();
         loadDailyWillpower(); // <--- تشغيل محرك الإرادة اليومية
         applyZoneUI(userData.currentZone || "green");
         const loader = document.getElementById("global-loader");
@@ -302,13 +302,14 @@ async function checkAndCelebrateBadges(userData, userDocRef) {
 
         if (!container || !overlay || !openBtn) return;
 
-        // تجهيز شكل الأوسمة للظهور لاحقاً
+        // تجهيز شكل الأوسمة للظهور لاحقاً مع دعم الوصف الجديد
         container.innerHTML = newBadges
             .map(
                 (badge) => `
-            <div style="background: rgba(30, 20, 50, 0.6); border: 1px solid #eab308; padding: 20px 15px; border-radius: 16px; width: 130px; text-align: center; box-shadow: 0 0 20px rgba(234, 179, 8, 0.2); animation: floatBadge 3s ease-in-out infinite;">
-                <img src="${badge.imagePath || badge.icon || "images/badge.webp"}" alt="Badge" style="width: 80px; height: 80px; object-fit: contain; margin-bottom: 12px; filter: drop-shadow(0 0 15px rgba(234,179,8,0.8));">
-                <h4 style="font-size: 14px; color: #fef08a; margin: 0; line-height: 1.5; font-weight: bold; text-shadow: 0 2px 4px rgba(0,0,0,0.8);">${badge.title}</h4>
+            <div style="background: rgba(30, 20, 50, 0.6); border: 1px solid #eab308; padding: 15px; border-radius: 16px; width: 140px; text-align: center; box-shadow: 0 0 20px rgba(234, 179, 8, 0.2); animation: floatBadge 3s ease-in-out infinite;">
+                <img src="${badge.imagePath || badge.icon || "images/badge.webp"}" alt="Badge" style="width: 70px; height: 70px; object-fit: contain; margin-bottom: 10px; filter: drop-shadow(0 0 15px rgba(234,179,8,0.8));">
+                <h4 style="font-size: 14px; color: #fef08a; margin: 0 0 5px 0; line-height: 1.3; font-weight: bold; text-shadow: 0 2px 4px rgba(0,0,0,0.8);">${badge.title}</h4>
+                ${badge.description ? `<p style="font-size: 10px; color: #d1d5db; margin: 0; line-height: 1.4;">${badge.description}</p>` : ""}
             </div>
         `,
             )
@@ -323,8 +324,9 @@ async function checkAndCelebrateBadges(userData, userDocRef) {
         overlay.style.visibility = "visible";
         let fireworkInterval = null;
 
-        // 🛑 السر هنا: يتم تفعيل الصوت والألعاب النارية فقط بعد "النقرة"
-        openBtn.onclick = () => {
+        // 🛑 السر هنا: يتم تفعيل الصوت والألعاب النارية وتسجيل الاحتفال فقط بعد "النقرة"
+        openBtn.onclick = async () => {
+            // تحويل الدالة إلى async
             // 1. إخفاء الصندوق وإظهار التوهج والأوسمة
             giftBox.style.display = "none";
             revealContent.style.display = "block";
@@ -334,7 +336,7 @@ async function checkAndCelebrateBadges(userData, userDocRef) {
             revealContent.style.animation =
                 "epicDrop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards";
 
-            // 2. تشغيل الصوت (سيعمل 100% الآن لأنه تم بناءً على تفاعل Click)
+            // 2. تشغيل الصوت
             const epicSound = new Audio("../audios/tadaaa.mp3");
             epicSound.volume = 0.8;
             epicSound
@@ -382,13 +384,17 @@ async function checkAndCelebrateBadges(userData, userDocRef) {
                     }),
                 );
             }, 250);
-        };
 
-        // تحديث الداتابيز لكي لا يظهر الاحتفال مجدداً في الأجهزة الأخرى
-        const newIds = newBadges.map((b) => b.id);
-        await updateDoc(userDocRef, {
-            celebratedBadgeIds: arrayUnion(...newIds),
-        });
+            // 4. 🛑 التعديل الجذري: توثيق الاحتفال في الداتابيز "فقط" عند الضغط وفتح الهدية
+            try {
+                const newIds = newBadges.map((b) => b.id);
+                await updateDoc(userDocRef, {
+                    celebratedBadgeIds: arrayUnion(...newIds),
+                });
+            } catch (error) {
+                console.error("فشل في توثيق استلام الأوسمة:", error);
+            }
+        };
 
         // إغلاق الشاشة بالكامل عند الضغط على الاستلام
         closeBtn.onclick = () => {
@@ -478,29 +484,76 @@ function updateProfileUI(userData) {
         });
     }
 
-    const badgesContainer = document.getElementById("badges-container");
-    if (userData.badges && userData.badges.length > 0) {
-        badgesContainer.innerHTML = "";
+    // ==============================
+    // 🛡️ نظام خزانة الأوسمة والرفوف
+    // ==============================
+    const trophyContainer = document.getElementById("trophy-room-container");
+    if (trophyContainer) {
+        if (userData.badges && userData.badges.length > 0) {
+            trophyContainer.innerHTML = "";
 
-        // ترتيب الأوسمة بحيث يظهر الأحدث أولاً
-        const sortedBadges = [...userData.badges].sort(
-            (a, b) => new Date(b.date) - new Date(a.date),
-        );
+            const streakBadges = [];
+            const topBadges = [];
+            const otherBadges = [];
 
-        sortedBadges.forEach((badge) => {
-            const dateStr = new Date(badge.date).toLocaleDateString("en-GB"); // صيغة DD/MM/YYYY
-            const imgPath =
-                badge.imagePath || badge.icon || "images/badge.webp"; // التوافق مع القديم والجديد
+            // تصنيف الأوسمة لرفوف
+            userData.badges.forEach((b) => {
+                const id = (b.id || "").toLowerCase();
+                if (id.includes("streak") || id.includes("fire"))
+                    streakBadges.push(b);
+                else if (
+                    id.includes("top") ||
+                    id.includes("rank") ||
+                    id.includes("champion")
+                )
+                    topBadges.push(b);
+                else otherBadges.push(b);
+            });
 
-            badgesContainer.innerHTML += `
-            <div style="background: rgba(168, 85, 247, 0.1); border: 1px solid var(--border-color); padding: 15px; border-radius: 12px; width: 130px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.2);">
-                <div style="display: flex; justify-content: center; align-items: center; font-size: 35px; margin-bottom: 10px; text-shadow: 0 0 10px var(--gold-glow);">
-                    <img src="${imgPath}" alt="${badge.title}" style="width: 80px; height: 80px; object-fit: contain; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.4));">
-                </div>
-                <h4 style="font-size: 13px; color: var(--text-main); margin-bottom: 5px; line-height: 1.3;">${badge.title}</h4>
-                <span style="font-size: 11px; color: var(--gold-primary); font-weight: bold;">${dateStr}</span>
-            </div>`;
-        });
+            const renderShelf = (badgesArray, shelfName) => {
+                if (badgesArray.length === 0) return "";
+                badgesArray.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+                let html = `<div class="trophy-shelf" data-shelf-name="${shelfName}">`;
+                badgesArray.forEach((badge) => {
+                    const dateStr = new Date(badge.date).toLocaleDateString(
+                        "en-GB",
+                    );
+                    const imgPath =
+                        badge.imagePath || badge.icon || "images/badge.webp";
+                    const descHtml = badge.description
+                        ? `<p style="font-size: 10px; color: #9ca3af; margin: 5px 0; line-height: 1.4;">${badge.description}</p>`
+                        : `<div style="margin-bottom: 5px;"></div>`;
+
+                    html += `
+                    <div class="trophy-item" style="width: 135px; padding: 15px 10px;">
+                        <div style="display: flex; justify-content: center; align-items: center; font-size: 30px; margin-bottom: 10px; text-shadow: 0 0 10px var(--gold-glow);">
+                            <img src="${imgPath}" alt="${badge.title}" style="width: 75px; height: 75px; object-fit: contain;">
+                        </div>
+                        <h4 style="font-size: 12px; color: var(--gold-light); margin: 0; line-height: 1.3;">${badge.title}</h4>
+                        ${descHtml}
+                        <span style="display: inline-block; margin-top: 5px; font-size: 10px; color: var(--text-muted); font-weight: bold; background: rgba(0,0,0,0.3); padding: 3px 8px; border-radius: 6px;">${dateStr}</span>
+                    </div>`;
+                });
+                html += `</div>`;
+                return html;
+            };
+
+            let finalTrophyHtml = "";
+            finalTrophyHtml += renderShelf(
+                topBadges,
+                "🎖️ أوسمة الصدارة والمعارك",
+            );
+            finalTrophyHtml += renderShelf(
+                streakBadges,
+                "🔥 أوسمة الصمود والستريك",
+            );
+            finalTrophyHtml += renderShelf(otherBadges, "💼 أوسمة عامة");
+
+            trophyContainer.innerHTML = finalTrophyHtml;
+        } else {
+            trophyContainer.innerHTML = `<p style="color: var(--text-muted); font-size: 14px; text-align: center;">لا توجد أوسمة حتى الآن. المعركة في بدايتها!</p>`;
+        }
     }
     // ==============================
     // فحص صلاحية مفكرة المهام الحرة
@@ -529,19 +582,24 @@ function updateProfileUI(userData) {
         }
     }
 
-    // ==============================
-    // تحديث شارة الرتبة والتقدم (النظام الجديد)
-    // ==============================
-    const lifetimeScore = userData.lifetimeScore || 0;
-    const rankDetails = getRankDetails(lifetimeScore);
+    // // ==============================
+    // // تحديث شارة الرتبة والتقدم (النظام الجديد)
+    // // ==============================
+    // const lifetimeScore = userData.lifetimeScore || 0;
+    // const rankDetails = getRankDetails(lifetimeScore);
 
-    const titleEl = document.getElementById("profile-rank-title");
+    // const titleEl = document.getElementById("profile-rank-title");
     const scoreEl = document.getElementById("profile-lifetime-score");
     const progressEl = document.getElementById("profile-rank-progress");
     const nextRankTextEl = document.getElementById("profile-next-rank-text");
     const nextRankNameEl = document.getElementById("profile-next-rank-name");
 
-    if (titleEl) titleEl.innerHTML = rankDetails.title;
+    // if (titleEl) titleEl.innerHTML = rankDetails.title;
+
+    // نظام الرتب والتخصيص
+    const lifetimeScore = userData.lifetimeScore || 0;
+    const rankDetails = getRankDetails(lifetimeScore);
+    const titleEl = document.getElementById("profile-rank-title");
     if (scoreEl) scoreEl.innerText = `${lifetimeScore} XP`;
 
     if (rankDetails.nextGoal) {
@@ -563,6 +621,74 @@ function updateProfileUI(userData) {
         if (nextRankTextEl)
             nextRankTextEl.innerText = `وصلت لأعلى قمة في المعسكر 🏆`;
         if (nextRankNameEl) nextRankNameEl.innerText = "";
+    }
+
+    // بناء اللقب
+    // if (titleEl) {
+    //     if (userData.customTagText || userData.customTagIcon) {
+    //         const rawRankText = rankDetails.title
+    //             .replace(/<[^>]*>?/gm, "")
+    //             .trim(); // استخراج النص الصافي للرتبة
+    //         const icon = userData.customTagIcon || "";
+    //         const text = userData.customTagText || rawRankText;
+    //         titleEl.innerHTML = `<span class="rank-vip-tag" style="padding: 5px 15px; border-radius: 20px; font-size: 20px;">${icon} ${text}</span>`;
+    //     } else {
+    //         titleEl.innerHTML = rankDetails.title;
+    //     }
+    // }
+    // 🛑 بناء اللقب (يقرأ النص أو الأيقونة أو اللون، مع دعم الافتراضي)
+    if (titleEl) {
+        if (
+            userData.customTagText ||
+            userData.customTagIcon ||
+            userData.customTagColor
+        ) {
+            const rawRankText = rankDetails.title
+                .replace(/<[^>]*>?/gm, "")
+                .trim();
+            const textToUse = userData.customTagText
+                ? userData.customTagText
+                : rawRankText;
+            const iconHtml = userData.customTagIcon
+                ? `<i class="${userData.customTagIcon}" style="margin-left: 5px;"></i>`
+                : "";
+
+            // إذا لم يختر لوناً مخصصاً، نستخدم ستايل رتبته الأصلية
+            const finalTagClass = userData.customTagColor
+                ? `${userData.customTagColor}`
+                : rankDetails.tagClass;
+
+            titleEl.innerHTML = `<span class="${finalTagClass}" style="padding: 5px 15px; border-radius: 20px; font-size: 20px; display: inline-block;">${iconHtml} ${textToUse}</span>`;
+        } else {
+            titleEl.innerHTML = rankDetails.title;
+        }
+    }
+
+    // 🛑 بناء إطار الصورة (الاعتماد على الكلاسات فقط)
+    function applyAvatarFrame(wrapperId, customFrameClass) {
+        const wrapper = document.getElementById(wrapperId);
+        if (!wrapper) return;
+
+        // تنظيف أي صورة قديمة (من النظام السابق لضمان عدم وجود عك في الـ HTML)
+        const oldOverlay = wrapper.querySelector(".custom-frame-overlay");
+        if (oldOverlay) oldOverlay.remove();
+
+        // 🛑 تحديد الكلاس: إذا كان يمتلك فريم VIP (مثلاً frame-fire) نستخدمه، وإلا نستخدم فريم الرتبة
+        const finalFrameClass = customFrameClass
+            ? customFrameClass
+            : getRankFrameClass(lifetimeScore || 0);
+        wrapper.className = `avatar-wrapper ${finalFrameClass}`;
+    }
+
+    applyAvatarFrame("nav-avatar-wrapper", userData.customFrame);
+    applyAvatarFrame("profile-avatar-wrapper", userData.customFrame);
+
+    // إظهار المتجر الملكي للأساطير
+    const vipItem = document.getElementById("vip-cosmetics-item");
+    if (vipItem) {
+        if ((userData.lifetimeScore || 0) >= 10000)
+            vipItem.style.display = "flex";
+        else vipItem.style.display = "none";
     }
 }
 
@@ -614,55 +740,6 @@ function applyZoneUI(zone) {
         }
     }
 }
-
-// function renderRegistrationPhase(isJoined) {
-//     const container = document.querySelector(".tasks-container");
-//     const infoBox = document.getElementById("challenge-info");
-//     infoBox.innerHTML = `<h2 style="color: var(--gold-primary); text-align: center; margin-bottom: 10px;">⏳ يوم التسجيل مفتوح</h2><p style="text-align: center; font-size: 18px;">تحدي: <strong>${currentChallengeData.title}</strong></p><p style="text-align: center; color: var(--text-muted);">المدة: ${currentChallengeData.durationDays} أيام | الهدف اليومي: ${currentChallengeData.dailyTargetPoints} نقطة</p>`;
-//     if (isJoined)
-//         container.innerHTML = `<div style="text-align: center; padding: 40px;"><h3 style="color: var(--success); font-size: 24px;">✅ أنت مسجل ومستعد!</h3><p style="color: var(--text-muted); margin-top: 10px;">سيتم فتح المهام بمجرد أن يطلق الإدمن إشارة البدء. استعد.</p></div>`;
-//     else {
-//         container.innerHTML = `<div style="text-align: center; padding: 30px; background: rgba(168, 85, 247, 0.1); border: 1px dashed var(--gold-primary); border-radius: 12px;"><h3 style="margin-bottom: 15px;">التسجيل متاح الآن</h3><p style="margin-bottom: 20px; color: var(--text-muted);">إذا لم تنضم الآن، فلن تتمكن من الدخول بعد بدء التحدي.</p><button id="join-challenge-btn" class="gold-btn" style="width: auto; padding: 12px 40px; font-size: 18px;">انضمام للتحدي بقوة 🔥</button></div>`;
-//         document
-//             .getElementById("join-challenge-btn")
-//             .addEventListener("click", joinChallenge);
-//     }
-// }
-
-// async function joinChallenge() {
-//     const btn = document.getElementById("join-challenge-btn");
-//     btn.disabled = true;
-//     btn.innerText = "جاري التسجيل...";
-//     try {
-//         await updateDoc(doc(db, "users", currentUser.uid), {
-//             joinedChallengeId: currentChallengeData.challengeId,
-//             challengeStatus: "active",
-//             streak: 0, // تصفير الستريك مع التحدي الجديد
-//         });
-//         window.syncUserUI();
-//     } catch (error) {
-//         await CustomDialog.alert("حدث خطأ أثناء الانضمام.", "خطأ");
-//         btn.disabled = false;
-//     }
-// }
-
-// function renderSpectatorState(displayDays) {
-//     document.getElementById("challenge-info").style.display = "none";
-//     document.querySelector(".tasks-container").innerHTML =
-//         `<div style="text-align: center; padding: 40px; background: rgba(0,0,0,0.2); border-radius: 16px; border: 1px solid var(--border-color);"><h2 style="color: var(--text-muted); font-size: 28px;">التحدي جاري حالياً 🔒</h2><p style="margin-top: 15px; font-size: 18px;">لقد فوتّ يوم التسجيل في تحدي <strong style="color: var(--gold-primary);">${currentChallengeData.title}</strong> (${currentChallengeData.durationDays} أيام).</p><div style="margin: 25px auto; padding: 20px; background: rgba(168, 85, 247, 0.1); border: 1px dashed var(--gold-primary); border-radius: 12px; display: inline-block;"><p style="font-size: 16px; margin: 0; color: var(--text-main);">الوقت المتبقي لانتهاء التحدي وبدء تسجيل جديد:</p><p style="font-size: 32px; font-weight: bold; color: var(--gold-primary); margin: 5px 0 0 0;">${displayDays} <span style="font-size: 16px;">أيام</span></p></div><p style="margin-top: 10px; font-size: 16px; color: var(--text-muted);">يجب عليك الانتظار حتى ينتهي التحدي الحالي للانضمام.</p></div>`;
-// }
-
-// function renderFailedState(displayDays) {
-//     document.getElementById("challenge-info").style.display = "none";
-//     document.querySelector(".tasks-container").innerHTML =
-//         `<div style="text-align: center; padding: 40px; background: rgba(244, 63, 94, 0.1); border: 1px solid var(--danger); border-radius: 16px;"><h1 style="color: var(--danger); font-size: 40px; text-shadow: 0 0 20px rgba(244,63,94,0.5);">💀 GAME OVER 💀</h1><p style="margin-top: 15px; font-size: 18px;">لقد فشلت في التحدي الحالي وتم إقصاؤك.</p><div style="margin: 25px auto; padding: 20px; background: rgba(0,0,0,0.3); border-radius: 12px; display: inline-block;"><p style="font-size: 16px; margin: 0; color: var(--text-muted);">الوقت المتبقي لانتهاء فترة عقوبتك:</p><p style="font-size: 32px; font-weight: bold; color: var(--danger); margin: 5px 0 0 0;">${displayDays} <span style="font-size: 16px;">أيام</span></p></div><p style="margin-top: 10px; color: var(--text-muted);">رصيدك ونقاطك محفوظة، لكنك ستبقى متفرجاً حتى يتم إعلان تحدٍ جديد.</p></div>`;
-// }
-
-// function renderNoChallengeState() {
-//     document.getElementById("challenge-info").style.display = "none";
-//     document.querySelector(".tasks-container").innerHTML =
-//         `<div style="text-align: center; padding: 50px;"><h2 style="color: var(--text-muted);">لا يوجد تحدي نشط حالياً. خذ قسطاً من الراحة واستعد للمعركة القادمة.</h2></div>`;
-// }
 
 async function processActiveParticipant(userData, userDocRef) {
     // تحديث الرأسية الديناميكية
@@ -830,7 +907,7 @@ async function processActiveParticipant(userData, userDocRef) {
 
                 lifetimeScore += earnedXP;
                 walletCoins += earnedCoins;
-                cycleScore += multipliedPoints;
+                cycleScore += earnedXP;
 
                 // 🛑 تحديث متغير المضاعف ليتم حفظه لاحقاً في الـ updates
                 userData.currentMultiplier = streakMultiplier;
@@ -872,6 +949,9 @@ async function processActiveParticipant(userData, userDocRef) {
                         { merge: true },
                     );
                 } else {
+                    // 🛑 التعديل الجراحي الأول: حفظ الستريك الميت في كائن المستخدم قبل تصفيره
+                    userData.lostStreak = currentStreak;
+
                     currentStreak = 0;
                     if (currentZone === "green") currentZone = "yellow";
                     else if (currentZone === "yellow") currentZone = "red";
@@ -907,6 +987,7 @@ async function processActiveParticipant(userData, userDocRef) {
             lifetimeScore,
             walletCoins,
             currentStreak,
+            lostStreak: userData.lostStreak || 0, // 🛑 إضافة الستريك المفقود للحفظ
             cycleScore,
             currentZone,
             freezeCount,
@@ -945,10 +1026,6 @@ async function processActiveParticipant(userData, userDocRef) {
 
     const loader = document.getElementById("global-loader");
     if (loader) loader.classList.add("hidden");
-
-    if (typeof checkNiyyahReminder === "function") {
-        await checkNiyyahReminder(userData);
-    }
 
     loadTasks(todayLogData, userData);
     startDoomsdayClock();
@@ -1090,7 +1167,6 @@ async function loadTasks(todayLogData, userData) {
     if (isTodayFinalized) disableSubmitButton();
     else autoSaveTasks(false);
 
-    setTimeout(startTour, 800);
     if (
         document.getElementById("devices-container") &&
         document.getElementById("devices-container").children.length === 0
@@ -1912,16 +1988,17 @@ document
                 dbUpdates.walletCoins = increment(earnedCoins);
                 dbUpdates.currentStreak = increment(1);
                 dbUpdates.currentZone = currentZone;
-                dbUpdates.cycleScore = increment(multipliedPoints);
                 dbUpdates.currentMultiplier = streakMultiplier;
 
                 if (hasDoubleXP) {
                     earnedXP *= 2;
+                    dbUpdates.cycleScore = increment(earnedXP);
                     dbUpdates.lifetimeScore = increment(earnedXP);
                     dbUpdates.hasDoubleXP = false;
                     dbUpdates.usedDoubleXP = true;
                     xpLabel = `<span style="color:#eab308; display: block;">(مضاعف المتجر ⚡)</span>`;
                 } else {
+                    dbUpdates.cycleScore = increment(earnedXP);
                     dbUpdates.lifetimeScore = increment(earnedXP);
                 }
 
@@ -1948,6 +2025,10 @@ document
                     else if (currentZone === "yellow") currentZone = "red";
 
                     const penaltyCoins = Math.floor(dailyTargetPoints / 2);
+
+                    // 🛑 التعديل الجراحي الثاني: حفظ الستريك الميت في التحديثات
+                    dbUpdates.lostStreak = userDataLocal.currentStreak || 0;
+
                     dbUpdates.currentStreak = 0;
                     dbUpdates.currentZone = currentZone;
                     dbUpdates.walletCoins = increment(-penaltyCoins);
@@ -2147,23 +2228,90 @@ async function loadLeaderboard() {
                     ? `<span class="streak-badge"><i class="fa-solid fa-fire fa-fw"></i> ${user.currentStreak}</span>`
                     : "";
 
+            // const rankInfo = getRankDetails(user.lifetimeScore || 0);
+            // const frameClass = getRankFrameClass(user.lifetimeScore || 0);
             const rankInfo = getRankDetails(user.lifetimeScore || 0);
-            const frameClass = getRankFrameClass(user.lifetimeScore || 0);
+
+            // تخصيص اللقب
+            // let displayTagText = rankInfo.title;
+            // let tagClass = rankInfo.tagClass;
+
+            // if (user.customTagText || user.customTagIcon) {
+            //     const rawRankText = rankInfo.title
+            //         .replace(/<[^>]*>?/gm, "")
+            //         .trim();
+            //     const icon = user.customTagIcon || "";
+            //     const text = user.customTagText || rawRankText;
+            //     displayTagText = `${icon} ${text}`;
+            //     tagClass = "rank-vip-tag";
+            // }
+
+            // 🛑 تخصيص اللقب في المتصدرين
+            let displayTagText = rankInfo.title;
+            let tagClass = rankInfo.tagClass;
+
+            if (
+                user.customTagText ||
+                user.customTagIcon ||
+                user.customTagColor
+            ) {
+                const rawRankText = rankInfo.title
+                    .replace(/<[^>]*>?/gm, "")
+                    .trim();
+                const textToUse = user.customTagText
+                    ? user.customTagText
+                    : rawRankText;
+                const iconHtml = user.customTagIcon
+                    ? `<i class="${user.customTagIcon}" style="margin-left: 3px;"></i>`
+                    : "";
+
+                displayTagText = `${iconHtml} ${textToUse}`.trim();
+                tagClass = user.customTagColor
+                    ? `${user.customTagColor}`
+                    : rankInfo.tagClass;
+            }
+
             const displayedScore = getDisplayScore(user);
 
             const userDiv = document.createElement("div");
             userDiv.className = `leaderboard-item ${hoverClass}`;
 
             // الحل الهندسي لمشكلة الأسماء الإنجليزية (align-items: flex-start + dir="auto")
+            // userDiv.innerHTML = `
+            //     <div class="leaderboard-user-info" style="min-width: 0;">
+            //         <div class="rank-badge ${badgeClass}" style="${customStyle}">#${currentRank}</div>
+            //         <div class="avatar-wrapper ${frameClass}" style="width: 45px; height: 45px; flex-shrink: 0;">
+            //             <img src="${user.photoURL || "images/profile.webp"}" alt="Avatar">
+            //         </div>
+            //         <div style="display: flex; flex-direction: column; gap: 3px; min-width: 0; align-items: flex-start; text-align: right;">
+            //             <span class="leaderboard-name" dir="auto" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${user.name}</span>
+            //             <span class="rank-tag ${rankInfo.tagClass}">${rankInfo.title}</span>
+            //         </div>
+            //     </div>
+
+            //     <div class="leaderboard-stats" style="flex-shrink: 0;">
+            //         ${streakHtml}
+            //         <span class="task-points-badge">${displayedScore}</span>
+            //     </div>
+            // `;
+
+            // 🛑 تخصيص الفريم (الاعتماد على الكلاسات فقط)
+            // إذا كان عنده فريم مشتريه (كلاس) نستخدمه، لو لأ نستخدم فريم الرتبة الافتراضي
+            const frameClass = user.customFrame
+                ? user.customFrame
+                : getRankFrameClass(user.lifetimeScore || 0);
+
             userDiv.innerHTML = `
                 <div class="leaderboard-user-info" style="min-width: 0;">
                     <div class="rank-badge ${badgeClass}" style="${customStyle}">#${currentRank}</div>
-                    <div class="avatar-wrapper ${frameClass}" style="width: 45px; height: 45px; flex-shrink: 0;">
+                    
+                    <div class="avatar-wrapper ${frameClass}" style="width: 60px; height: 60px; flex-shrink: 0;">
                         <img src="${user.photoURL || "images/profile.webp"}" alt="Avatar">
                     </div>
+
                     <div style="display: flex; flex-direction: column; gap: 3px; min-width: 0; align-items: flex-start; text-align: right;">
                         <span class="leaderboard-name" dir="auto" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${user.name}</span>
-                        <span class="rank-tag ${rankInfo.tagClass}">${rankInfo.title}</span>
+                        <span class="rank-tag ${tagClass}">${displayTagText}</span>
                     </div>
                 </div>
                 
@@ -2187,9 +2335,38 @@ function openUserProfileModal(user) {
     const modal = document.getElementById("user-modal-overlay");
     const rankInfo = getRankDetails(user.lifetimeScore || 0);
 
+    // 🛑 التعديل 1: معالجة اللقب (Tag) الملكي أو العادي 🛑
+    // let displayTagText = rankInfo.title;
+    // let tagClass = rankInfo.tagClass;
+
+    // if (user.customTagText || user.customTagIcon) {
+    //     const rawRankText = rankInfo.title.replace(/<[^>]*>?/gm, "").trim();
+    //     const icon = user.customTagIcon || "";
+    //     const text = user.customTagText || rawRankText;
+    //     displayTagText = `${icon} ${text}`;
+    //     tagClass = "rank-vip-tag"; // إعطاء ستايل VIP
+    // }
+
+    // 🛑 معالجة اللقب (Tag) الملكي والألوان والأيقونات 🛑
+    let displayTagText = rankInfo.title;
+    let tagClass = rankInfo.tagClass;
+
+    if (user.customTagText || user.customTagIcon || user.customTagColor) {
+        const rawRankText = rankInfo.title.replace(/<[^>]*>?/gm, "").trim();
+        const textToUse = user.customTagText ? user.customTagText : rawRankText;
+        const iconHtml = user.customTagIcon
+            ? `<i class="${user.customTagIcon}" style="margin-left: 3px;"></i>`
+            : "";
+
+        displayTagText = `${iconHtml} ${textToUse}`.trim();
+        tagClass = user.customTagColor
+            ? `${user.customTagColor}`
+            : rankInfo.tagClass;
+    }
+
     document.getElementById("modal-user-name").innerText = user.name;
     document.getElementById("modal-user-name").innerHTML +=
-        `<br><span class="rank-tag ${rankInfo.tagClass}" style="display: block; margin: auto; font-size: 13px;">${rankInfo.title}</span>`;
+        `<br><span class="rank-tag ${tagClass}" style="display: inline-block; margin-top: 5px; font-size: 13px;">${displayTagText}</span>`;
 
     document.getElementById("modal-user-rank").innerText = `#${user.rank}`;
 
@@ -2197,7 +2374,6 @@ function openUserProfileModal(user) {
     const streakEl = document.getElementById("modal-user-streak");
 
     if (currentLeaderboardMode === "challenge") {
-        // في الدورة الحالية: نظهر نقاط الدورة والستريك الحالي
         pointsEl.innerHTML = `${user.cycleScore || 0} <i class="fa-solid fa-trophy" style="color: var(--gold-primary);"></i>`;
         streakEl.style.display = "inline-block";
         streakEl.innerHTML = `<i class="fa-solid fa-fire fa-fw"></i> ${user.currentStreak || 0}`;
@@ -2205,16 +2381,26 @@ function openUserProfileModal(user) {
             .getElementById("streak-box")
             ?.style.setProperty("display", "inline", "important");
     } else {
-        // في التراكمي: نظهر الـ lifetimeScore ونخفي الستريك لأنه لا يخص الترتيب التراكمي
-        pointsEl.innerHTML = `${user.lifetimeScore || 0} <i class="fa-solid fa-medal" style="color: #10b981;"></i>`;
+        pointsEl.innerHTML = `${user.lifetimeScore || 0} <i class="fa-solid fa-medal"></i>`;
         document
             .getElementById("streak-box")
             ?.style.setProperty("display", "none", "important");
         streakEl.style.display = "none";
     }
 
+    // 🛑 معالجة إطار الصورة الملكي (Frame) عبر الكلاسات النظيفة 🛑
     const avatarWrapper = document.getElementById("modal-avatar-wrapper");
-    avatarWrapper.className = `avatar-wrapper ${getRankFrameClass(user.lifetimeScore)}`;
+
+    // تنظيف أي صورة قديمة (من النظام السابق لضمان عدم وجود عك)
+    const oldOverlay = avatarWrapper.querySelector(".custom-frame-overlay");
+    if (oldOverlay) oldOverlay.remove();
+
+    // 🛑 تحديد الكلاس: إذا كان يمتلك فريم (مثلاً frame-diamond) نستخدمه، وإلا نستخدم فريم الرتبة
+    const finalFrameClass = user.customFrame
+        ? user.customFrame
+        : getRankFrameClass(user.lifetimeScore || 0);
+    avatarWrapper.className = `avatar-wrapper ${finalFrameClass}`;
+
     document.getElementById("modal-user-avatar").src =
         user.photoURL || "images/profile.webp";
 
@@ -2230,14 +2416,18 @@ function openUserProfileModal(user) {
                 );
                 const imgPath =
                     badge.imagePath || badge.icon || "images/badge.webp";
+                const descHtml = badge.description
+                    ? `<p style="font-size: 10px; color: #9ca3af; margin: 5px 0; line-height: 1.4;">${badge.description}</p>`
+                    : `<div style="margin-bottom: 5px;"></div>`;
 
                 return `
-            <div style="background: rgba(168, 85, 247, 0.1); border: 1px solid var(--border-color); padding: 15px; border-radius: 12px; width: 110px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.2);">
-                <div style="display: flex; justify-content: center; align-items: center; font-size: 30px; margin-bottom: 5px; text-shadow: 0 0 10px var(--gold-glow);">
-                    <img src="${imgPath}" alt="${badge.title}" style="width: 70px; height: 70px; object-fit: contain;">
+            <div style="background: rgba(168, 85, 247, 0.05); border: 1px solid rgba(168, 85, 247, 0.3); padding: 15px 10px; border-radius: 12px; width: 135px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.2);">
+                <div style="display: flex; justify-content: center; align-items: center; font-size: 30px; margin-bottom: 10px; text-shadow: 0 0 10px var(--gold-glow);">
+                    <img src="${imgPath}" alt="${badge.title}" style="width: 60px; height: 60px; object-fit: contain;">
                 </div>
-                <h4 style="font-size: 12px; color: var(--text-main); margin-bottom: 5px; line-height: 1.3;">${badge.title}</h4>
-                <span style="font-size: 10px; color: var(--gold-primary); font-weight: bold;">${dateStr}</span>
+                <h4 style="font-size: 12px; color: var(--gold-light); margin: 0; line-height: 1.3;">${badge.title}</h4>
+                ${descHtml}
+                <span style="display: inline-block; margin-top: 5px; font-size: 10px; color: var(--text-muted); font-weight: bold; background: rgba(0,0,0,0.3); padding: 3px 8px; border-radius: 6px;">${dateStr}</span>
             </div>`;
             })
             .join("");
@@ -2368,262 +2558,6 @@ document
             0.9,
         );
     });
-
-async function loadAnalytics() {
-    if (!currentUser) return;
-    try {
-        // 1. جلب المهام لبناء مرجع وحساب الحد الأقصى الممكن لكل قسم ديناميكياً
-        const tasksSnap = await getDocs(collection(db, "tasks"));
-        const tasksMap = {};
-        const maxDailyPointsPerCategory = {};
-
-        tasksSnap.forEach((doc) => {
-            const taskData = doc.data();
-            tasksMap[doc.id] = taskData;
-
-            // حساب أعلى نقاط ممكنة لهذه المهمة (بشرط أن تكون نشطة)
-            if (
-                taskData.isActive &&
-                taskData.options &&
-                taskData.options.length > 0
-            ) {
-                const cat = taskData.category || "مهام عامة";
-                let maxPointsForThisTask = 0;
-
-                // --- الإصلاح الأول: التفرقة بين المهام العادية والمتعددة في حساب الحد الأقصى ---
-                if (taskData.isMultiSelect) {
-                    // إذا كانت مهمة متعددة، الحد الأقصى هو مجموع نقاط كل الخيارات
-                    taskData.options.forEach((opt) => {
-                        if (opt.points > 0) maxPointsForThisTask += opt.points;
-                    });
-                } else {
-                    // إذا كانت قائمة عادية، الحد الأقصى هو أعلى خيار فقط
-                    maxPointsForThisTask = Math.max(
-                        ...taskData.options.map((opt) => opt.points || 0),
-                    );
-                }
-
-                maxDailyPointsPerCategory[cat] =
-                    (maxDailyPointsPerCategory[cat] || 0) +
-                    maxPointsForThisTask;
-            }
-        });
-
-        // 2. جلب سجلات المستخدم
-        const logsSnap = await getDocs(
-            collection(db, `users/${currentUser.uid}/dailyLogs`),
-        );
-        let passedCount = 0,
-            failedCount = 0,
-            dates = [],
-            points = [];
-        let logsArray = [];
-        let categoryPoints = {};
-
-        logsSnap.forEach((doc) => logsArray.push(doc.data()));
-        logsArray.sort((a, b) => new Date(a.date) - new Date(b.date));
-
-        logsArray.forEach((log) => {
-            if (log.isFinalized === true) {
-                if (log.passed) passedCount++;
-                else failedCount++;
-            }
-
-            dates.push(log.date);
-            points.push(log.pointsEarned || 0);
-
-            // --- الإصلاح الثاني: حساب النقاط المكتسبة للـ Checklists والـ Select ---
-            if (log.selections) {
-                for (const [taskId, selectionData] of Object.entries(
-                    log.selections,
-                )) {
-                    const task = tasksMap[taskId];
-                    if (task && task.options) {
-                        const cat = task.category || "مهام عامة";
-
-                        // تحويل الاختيار المفرد إلى مصفوفة لتوحيد المعاملة البرمجية
-                        const selectedIndices = Array.isArray(selectionData)
-                            ? selectionData
-                            : [selectionData];
-
-                        selectedIndices.forEach((idx) => {
-                            if (task.options[idx]) {
-                                const pts = task.options[idx].points || 0;
-                                categoryPoints[cat] =
-                                    (categoryPoints[cat] || 0) + pts;
-                            }
-                        });
-                    }
-                }
-            }
-        });
-
-        document.getElementById("stat-passed").innerText = passedCount;
-        document.getElementById("stat-failed").innerText = failedCount;
-
-        // ==========================================
-        // المخطط الأول: معدل النقاط اليومي (Line Chart)
-        // ==========================================
-        const ctxProgress = document
-            .getElementById("progressChart")
-            .getContext("2d");
-        if (window.myProgressChart) window.myProgressChart.destroy();
-
-        const chartContainer = document.getElementById(
-            "progress-chart-container",
-        );
-        if (chartContainer) {
-            const calculatedWidth = dates.length * 45;
-            chartContainer.style.minWidth =
-                calculatedWidth > window.innerWidth
-                    ? `${calculatedWidth}px`
-                    : "100%";
-        }
-
-        window.myProgressChart = new Chart(ctxProgress, {
-            type: "line",
-            data: {
-                labels: dates,
-                datasets: [
-                    {
-                        label: "النقاط المحصلة",
-                        data: points,
-                        borderColor: "#a855f7",
-                        backgroundColor: "rgba(168, 85, 247, 0.15)",
-                        borderWidth: 2,
-                        fill: true,
-                        tension: 0.4,
-                        pointBackgroundColor: "#a855f7",
-                        pointRadius: 4,
-                    },
-                ],
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        labels: { color: "#f3f4f6", font: { family: "Cairo" } },
-                    },
-                },
-                scales: {
-                    x: {
-                        ticks: { color: "#9ca3af" },
-                        grid: { color: "#2a2a35" },
-                    },
-                    y: {
-                        ticks: { color: "#9ca3af" },
-                        grid: { color: "#2a2a35" },
-                    },
-                },
-            },
-        });
-
-        // ==========================================
-        // المخطط الثاني: تحليل الأقسام (Radar Chart) - مبرمج لآخر 7 أيام
-        // ==========================================
-        const ctxCategory = document
-            .getElementById("categoryChart")
-            .getContext("2d");
-        if (window.myCategoryChart) window.myCategoryChart.destroy();
-
-        // عزل بيانات آخر 7 أيام فقط لمنع الماضي من تدمير النسبة الحالية
-        const recentLogs = logsArray.slice(-7);
-        const recentTotalDays = recentLogs.length > 0 ? recentLogs.length : 1;
-        let recentCategoryPoints = {};
-
-        // حساب النقاط المكتسبة في هذه الأيام السبعة فقط
-        recentLogs.forEach((log) => {
-            if (log.selections) {
-                for (const [taskId, selectionData] of Object.entries(
-                    log.selections,
-                )) {
-                    const task = tasksMap[taskId];
-                    if (task && task.options) {
-                        const cat = task.category || "مهام عامة";
-                        const selectedIndices = Array.isArray(selectionData)
-                            ? selectionData
-                            : [selectionData];
-                        selectedIndices.forEach((idx) => {
-                            if (task.options[idx]) {
-                                recentCategoryPoints[cat] =
-                                    (recentCategoryPoints[cat] || 0) +
-                                    (task.options[idx].points || 0);
-                            }
-                        });
-                    }
-                }
-            }
-        });
-
-        // تحويل النقاط المكتسبة حديثاً إلى نسبة مئوية
-        const catLabels = Object.keys(maxDailyPointsPerCategory);
-        const catDataPercentages = [];
-
-        catLabels.forEach((cat) => {
-            const earnedPoints = recentCategoryPoints[cat] || 0;
-            const maxDaily = maxDailyPointsPerCategory[cat] || 1;
-            const maxTotalPossible = maxDaily * recentTotalDays;
-
-            let percentage =
-                Math.round((earnedPoints / maxTotalPossible) * 100) || 0;
-            if (percentage > 100) percentage = 100;
-
-            catDataPercentages.push(percentage);
-        });
-
-        if (catLabels.length > 0) {
-            window.myCategoryChart = new Chart(ctxCategory, {
-                type: "radar",
-                data: {
-                    labels: catLabels,
-                    datasets: [
-                        {
-                            label: "نسبة الإنجاز (آخر 7 أيام)",
-                            data: catDataPercentages,
-                            backgroundColor: "rgba(217, 70, 239, 0.12)",
-                            borderColor: "#9ca3af",
-                            pointBackgroundColor: "#9ca3af",
-                            pointBorderColor: "#fff",
-                            pointHoverBackgroundColor: "#fff",
-                            pointHoverBorderColor: "#9ca3af",
-                            borderWidth: 2,
-                        },
-                    ],
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                            callbacks: {
-                                label: function (context) {
-                                    return context.raw + "%";
-                                },
-                            },
-                        },
-                    },
-                    scales: {
-                        r: {
-                            min: 0,
-                            max: 100,
-                            angleLines: { color: "rgba(255, 255, 255, 0.1)" },
-                            grid: { color: "rgba(255, 255, 255, 0.1)" },
-                            pointLabels: {
-                                color: "#f3f4f6",
-                                font: { family: "Cairo", size: 12 },
-                            },
-                            ticks: { stepSize: 20, display: false },
-                        },
-                    },
-                },
-            });
-        }
-    } catch (e) {
-        console.error("خطأ في تحميل الإحصائيات:", e);
-    }
-}
 
 function getRankFrameClass(points) {
     if (points <= 1000) return "frame-wood";
@@ -2756,8 +2690,6 @@ navItems.forEach((item) => {
             await window.silentRefreshTasks();
         } else if (targetId === "leaderboard-page") {
             if (typeof loadLeaderboard === "function") loadLeaderboard();
-        } else if (targetId === "analytics-page" || targetId === "stats-page") {
-            if (typeof loadAnalytics === "function") loadAnalytics();
         }
     });
 });
@@ -2900,7 +2832,7 @@ window.buyDoubleXP = async function () {
     // 1. هل استخدمها مسبقاً في هذا التحدي؟
     if (userData.usedDoubleXP) {
         return CustomDialog.alert(
-            "لقد استخدمت مضاعف النقاط بالفعل في هذا التحدي. لا يمكنك استخدامه مرة أخرى.",
+            "لقد استخدمت مضاعف النقاط بالفعل في هذه الدورة. لا يمكنك استخدامه مرة أخرى.",
             "مرفوض ❌",
         );
     }
@@ -2947,6 +2879,412 @@ window.buyDoubleXP = async function () {
     }
 };
 
+// ==========================================
+// 🛒 شراء إنعاش الستريك
+// ==========================================
+window.buyStreakResurrection = async function () {
+    try {
+        const userRef = doc(db, "users", auth.currentUser.uid);
+        const userSnap = await getDoc(userRef);
+
+        if (!userSnap.exists()) return;
+        const userData = userSnap.data();
+
+        // 1. فحص الرصيد
+        if ((userData.walletCoins || 0) < 1000) {
+            await CustomDialog.alert(
+                "رصيدك لا يكفي لدفع فدية الإنعاش. عد للقتال واجمع العملات.",
+                "مرفوض ❌",
+            );
+            return;
+        }
+
+        // 2. فحص حالة الستريك الحالي (يجب أن يكون مفلساً)
+        if ((userData.currentStreak || 0) > 0) {
+            await CustomDialog.alert(
+                "ستريكك حي! لا يمكنك إنعاش ما لم يمت.",
+                "تنبيه ⚠️",
+            );
+            return;
+        }
+
+        // 3. فحص هل يوجد ستريك ميت مسجل في السجل؟
+        const streakToRestore = userData.lostStreak || 0;
+        if (streakToRestore === 0) {
+            await CustomDialog.alert(
+                "لا يوجد ستريك مفقود مسجل لإنعاشه. أنت تبدأ من الصفر.",
+                "مرفوض ❌",
+            );
+            return;
+        }
+
+        // 4. تأكيد العملية الصارمة
+        const confirmBuy = await CustomDialog.confirm(
+            `هل أنت متأكد من دفع 1000 عملة لاسترجاع ستريك (${streakToRestore} يوم) والعودة فوراً للمنطقة الخضراء؟`,
+            "تأكيد الإنعاش ❤️‍🔥",
+        );
+
+        if (!confirmBuy) return;
+
+        // 5. خصم العملات، استرجاع الستريك، وتصفير الستريك المفقود لكي لا يستخدمه مرتين
+        await updateDoc(userRef, {
+            walletCoins: increment(-1000),
+            currentStreak: streakToRestore,
+            currentZone: "green",
+            lostStreak: 0,
+        });
+
+        await CustomDialog.alert(
+            `تم إنعاش ستريكك بنجاح وعاد إلى ${streakToRestore} يوم. لا تخذل المعسكر مرة أخرى!`,
+            "عملية ناجحة 🦅",
+        );
+
+        // تحديث الواجهة (تأكد من استدعاء الدالة المسؤولة عن تحديث الـ UI لديك)
+        if (typeof syncUserUI === "function") {
+            syncUserUI();
+        } else {
+            window.location.reload();
+        }
+    } catch (error) {
+        console.error("حدث خطأ أثناء شراء الإنعاش:", error);
+        await CustomDialog.alert(
+            "حدث خطأ في الاتصال بالسيرفر. حاول مجدداً.",
+            "خطأ ❌",
+        );
+    }
+};
+
+// ==========================================
+// 👑 نظام التخصيص الملكي (VIP Cosmetics) - الإصدار الصحيح
+// ==========================================
+
+// 1. مصفوفة الإطارات (السلايدر) - الخيار الأول فارغ ليدل على الافتراضي
+const vipFrames = [
+    { class: "", name: "الافتراضي (حسب الرتبة)", price: 0 },
+    { class: "frame-1", name: "الاطار الاول", price: 800 },
+    { class: "frame-2", name: "الاطار الثاني", price: 800 },
+    { class: "frame-3", name: "الاطار الثالث", price: 800 },
+    { class: "frame-4", name: "الاطار الرابع", price: 800 },
+    { class: "frame-5", name: "الاطار الخامس", price: 800 },
+    { class: "frame-6", name: "الاطار السادس", price: 800 },
+    { class: "frame-7", name: "الاطار السابع", price: 800 },
+    { class: "frame-8", name: "الاطار الثامن", price: 800 },
+    { class: "frame-9", name: "الاطار التاسع", price: 800 },
+    { class: "frame-10", name: "الاطار العاشر", price: 800 },
+    { class: "frame-11", name: "الاطار الحادي عشر", price: 800 },
+    { class: "frame-12", name: "الاطار الثاني عشر", price: 800 },
+    { class: "frame-13", name: "الاطار الثالث عشر", price: 800 },
+    { class: "frame-14", name: "الاطار الرابع عشر", price: 800 },
+    { class: "frame-15", name: "الاطار الخامس عشر", price: 800 },
+    { class: "frame-16", name: "الاطار السادس عشر", price: 800 },
+    { class: "frame-17", name: "الاطار السابع عشر", price: 800 },
+    { class: "frame-18", name: "الاطار الثامن عشر", price: 800 },
+];
+
+let currentFrameIndex = 0;
+let selectedIcon = "";
+let selectedColor = "";
+
+// متغيرات قاعدة البيانات
+let dbFrame = "";
+let dbTagText = "";
+let dbTagIcon = "";
+let dbTagColor = "";
+let dbLifetimeScore = 0; // 🛑 متغير جديد لحفظ رتبة الجندي لكي نرسم إطاره الافتراضي بدقة
+
+let tagCheckTimeout = null;
+
+window.openVipModal = async function () {
+    if (!currentUser) return;
+    const userSnap = await getDoc(doc(db, "users", currentUser.uid));
+
+    if (userSnap.exists()) {
+        const data = userSnap.data();
+        dbFrame = data.customFrame || "";
+        dbTagText = data.customTagText || "";
+        dbTagIcon = data.customTagIcon || "";
+        dbTagColor = data.customTagColor || "";
+        dbLifetimeScore = data.lifetimeScore || 0; // 🛑 سحب النقاط لمعرفة رتبته الحالية
+
+        // 🛑 السطرين الجدد: سحب صورة المستخدم الحقيقية وعرضها في السلايدر 🛑
+        const previewImg = document.getElementById("vip-avatar-preview-img");
+        if (previewImg) previewImg.src = data.photoURL || "images/profile.webp";
+
+        currentFrameIndex = vipFrames.findIndex((f) => f.class === dbFrame);
+        if (currentFrameIndex === -1) currentFrameIndex = 0;
+
+        document.getElementById("vip-tag-input").value = dbTagText;
+        selectedIcon = dbTagIcon;
+        selectedColor = dbTagColor;
+
+        document.querySelectorAll(".icon-box").forEach((box) => {
+            box.classList.remove("selected");
+            if (box.getAttribute("data-icon") === selectedIcon)
+                box.classList.add("selected");
+        });
+
+        document.querySelectorAll(".color-box").forEach((box) => {
+            box.classList.remove("selected");
+            if (box.getAttribute("data-color") === selectedColor)
+                box.classList.add("selected");
+        });
+
+        updateFrameUI();
+        updateLivePreview();
+    }
+
+    document.getElementById("tag-error-msg").style.display = "none";
+    document.getElementById("vip-modal-overlay").classList.add("show");
+};
+
+// --- محرك السلايدر للإطارات ---
+function updateFrameUI() {
+    const frame = vipFrames[currentFrameIndex];
+    const wrapper = document.getElementById("vip-avatar-preview-wrapper");
+
+    wrapper.className = "avatar-wrapper"; // تنظيف الكلاسات
+
+    // 🛑 المنطق القاطع: إذا كان الخيار فارغاً، نعطيه فريم رتبته الحقيقية، وإلا نعطيه فريم الـ VIP
+    if (frame.class === "") {
+        const userRankClass = getRankFrameClass(dbLifetimeScore);
+        wrapper.classList.add(userRankClass);
+    } else {
+        wrapper.classList.add(frame.class, "has-custom-frame");
+    }
+
+    document.getElementById("vip-frame-name").innerText = frame.name;
+    document.getElementById("vip-frame-price").innerText =
+        frame.price === 0 ? "مجاني" : `${frame.price} 🪙`;
+
+    updateVipPrice();
+}
+
+document.getElementById("next-frame-btn")?.addEventListener("click", () => {
+    currentFrameIndex = (currentFrameIndex + 1) % vipFrames.length;
+    updateFrameUI();
+});
+
+document.getElementById("prev-frame-btn")?.addEventListener("click", () => {
+    currentFrameIndex =
+        (currentFrameIndex - 1 + vipFrames.length) % vipFrames.length;
+    updateFrameUI();
+});
+
+document.getElementById("reset-frame-btn")?.addEventListener("click", () => {
+    currentFrameIndex = 0;
+    updateFrameUI();
+});
+
+// --- محرك الأيقونات والألوان ---
+document.querySelectorAll(".icon-box").forEach((box) => {
+    box.addEventListener("click", function () {
+        document
+            .querySelectorAll(".icon-box")
+            .forEach((b) => b.classList.remove("selected"));
+        this.classList.add("selected");
+        selectedIcon = this.getAttribute("data-icon");
+        updateLivePreview();
+    });
+});
+
+document.querySelectorAll(".color-box").forEach((box) => {
+    box.addEventListener("click", function () {
+        document
+            .querySelectorAll(".color-box")
+            .forEach((b) => b.classList.remove("selected"));
+        this.classList.add("selected");
+        selectedColor = this.getAttribute("data-color");
+        updateLivePreview();
+    });
+});
+
+// --- محرك المعاينة الحية وفحص التكرار ---
+document
+    .getElementById("vip-tag-input")
+    ?.addEventListener("input", function () {
+        updateLivePreview();
+
+        clearTimeout(tagCheckTimeout);
+        document.getElementById("tag-error-msg").style.display = "none";
+
+        const tagText = this.value.trim();
+        if (tagText !== "" && tagText !== dbTagText) {
+            tagCheckTimeout = setTimeout(async () => {
+                const isAvailable = await checkTagAvailability(tagText);
+                if (!isAvailable) {
+                    document.getElementById("tag-error-msg").style.display =
+                        "block";
+                }
+            }, 800);
+        }
+    });
+
+function updateLivePreview() {
+    const textInput = document.getElementById("vip-tag-input").value.trim();
+    const previewText = document.getElementById("preview-text");
+    const previewIcon = document.getElementById("preview-icon");
+    const previewTag = document.getElementById("vip-live-preview-tag");
+
+    // 🛑 سحب لقب الرتبة الأصلي إذا كان الحقل فارغاً
+    const userRankInfo = getRankDetails(dbLifetimeScore);
+    const rawRankText = userRankInfo.title.replace(/<[^>]*>?/gm, "").trim();
+
+    previewText.innerText = textInput || "اللقب";
+    previewIcon.className = selectedIcon;
+    previewIcon.style.display = selectedIcon ? "inline-block" : "none";
+
+    // 🛑 تطبيق لون الـ VIP أو لون الرتبة الأصلي
+    previewTag.className = selectedColor
+        ? `${selectedColor}`
+        : userRankInfo.tagClass;
+
+    updateVipPrice();
+}
+
+async function checkTagAvailability(requestedTag) {
+    if (!requestedTag) return true;
+
+    const q = query(
+        collection(db, "users"),
+        where("customTagText", "==", requestedTag),
+    );
+    const snap = await getDocs(q);
+
+    let isUsedByOthers = false;
+    snap.forEach((doc) => {
+        if (doc.id !== currentUser.uid) isUsedByOthers = true;
+    });
+
+    return !isUsedByOthers;
+}
+
+// --- حساب السعر الديناميكي (صلحنا الأخطاء القديمة هنا) ---
+// --- حساب السعر الديناميكي المفصول ---
+window.updateVipPrice = function () {
+    let cost = 0;
+    const currentFrame = vipFrames[currentFrameIndex];
+    const currentText = document.getElementById("vip-tag-input").value.trim();
+
+    // 🛑 حدد أسعارك المستقلة هنا 🛑
+    const TEXT_PRICE = 200; // سعر تغيير النص
+    const ICON_PRICE = 100; // سعر تغيير الأيقونة
+    const COLOR_PRICE = 100; // سعر تغيير اللون
+
+    // 1. حساب سعر الفريم
+    if (currentFrame.class !== dbFrame) {
+        cost += currentFrame.price;
+    }
+
+    // 2. حساب سعر تغيير اللقب (النص)
+    // يُحاسب إذا كان النص مختلفاً عن المحفوظ، ولا يُحاسب إذا قام بتفريغ الحقل (العودة للافتراضي)
+    if (currentText !== dbTagText && currentText !== "") {
+        cost += TEXT_PRICE;
+    }
+
+    // 3. حساب سعر تغيير الأيقونة
+    if (selectedIcon !== dbTagIcon && selectedIcon !== "") {
+        cost += ICON_PRICE;
+    }
+
+    // 4. حساب سعر تغيير اللون
+    if (selectedColor !== dbTagColor && selectedColor !== "") {
+        cost += COLOR_PRICE;
+    }
+
+    const btn = document.getElementById("vip-save-btn");
+    if (btn) {
+        btn.innerHTML = `شراء وتطبيق (${cost} <i class="fa-solid fa-coins fa-fw"></i>)`;
+        btn.setAttribute("data-total-cost", cost);
+    }
+};
+
+// --- دالة الحفظ النهائية المربوطة بالزر ---
+window.saveVipCosmetics = async function () {
+    if (!currentUser) return;
+
+    const currentText = document.getElementById("vip-tag-input").value.trim();
+    const currentFrameClass = vipFrames[currentFrameIndex].class;
+
+    // فحص نهائي للتكرار قبل الدفع
+    if (currentText !== "" && currentText !== dbTagText) {
+        const isAvailable = await checkTagAvailability(currentText);
+        if (!isAvailable) {
+            document.getElementById("tag-error-msg").style.display = "block";
+            return await CustomDialog.alert(
+                "لا يمكنك الحفظ. هذا اللقب مأخوذ بواسطة محارب آخر!",
+                "لقب محجوز ⚠️",
+            );
+        }
+    }
+
+    const btn = document.getElementById("vip-save-btn");
+    const totalCost = parseInt(btn.getAttribute("data-total-cost") || 0);
+
+    const userRef = doc(db, "users", currentUser.uid);
+    const userSnap = await getDoc(userRef);
+    if (!userSnap.exists()) return;
+    const userData = userSnap.data();
+
+    if (totalCost > 0) {
+        if ((userData.walletCoins || 0) < totalCost) {
+            return await CustomDialog.alert(
+                `رصيدك لا يكفي. تحتاج إلى ${totalCost} عملة لتأكيد هويتك الجديدة.`,
+                "رصيد غير كافٍ ❌",
+            );
+        }
+        if (userData.lifetimeScore < 10000) {
+            return await CustomDialog.alert(
+                `عليك أن تكون على الأقل في رتبة "الاسطورة" لشراء التخصيصات. استمر في القتال لترتقي!`,
+                "رتبة غير كافية ⚔️",
+            );
+        }
+        const confirmBuy = await CustomDialog.confirm(
+            `سيتم خصم ${totalCost} عملة لتطبيق التعديلات. هل أنت متأكد؟`,
+            "تأكيد الشراء 👑",
+        );
+        if (!confirmBuy) return;
+    }
+
+    const originalText = btn.innerHTML;
+    btn.innerHTML = "جاري نقش هويتك... ⏳";
+    btn.disabled = true;
+
+    try {
+        let updates = {
+            customFrame: currentFrameClass, // سيُحفظ كنص فارغ "" في حال كان الافتراضي
+            customTagText: currentText,
+            customTagIcon: selectedIcon,
+            customTagColor: selectedColor,
+        };
+
+        if (totalCost > 0) {
+            updates.walletCoins = increment(-totalCost);
+        }
+
+        await updateDoc(userRef, updates);
+        document.getElementById("vip-modal-overlay").classList.remove("show");
+
+        if (totalCost > 0) {
+            new Audio(
+                "https://cdn.pixabay.com/download/audio/2021/08/04/audio_0625c1539c.mp3?filename=success-1-6297.mp3",
+            )
+                .play()
+                .catch(() => {});
+            await CustomDialog.alert(
+                "تم التجهيز بنجاح! هويتك الجديدة مرئية الآن لجميع المحاربين.",
+                "مبارك 🛡️",
+            );
+        }
+
+        window.syncUserUI();
+    } catch (error) {
+        console.error(error);
+        await CustomDialog.alert("حدث خطأ أثناء حفظ التعديلات.");
+    } finally {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    }
+};
 // ==========================================
 // نظام المهام الحرة (To-Do List) - LocalStorage
 // ==========================================
@@ -3029,174 +3367,6 @@ window.deleteTodo = function (index) {
 
 // تشغيل العرض الأولي عند تحميل الصفحة
 renderTodos();
-
-// ==========================================
-// الجولة التعريفية (Smart Onboarding Tour)
-// ==========================================
-function startTour() {
-    // 1. هل أتم الجولة مسبقاً؟
-
-    if (localStorage.getItem("brainrot_tour_completed")) return;
-
-    // 2. هل هو يقف في صفحة المهام حالياً؟ (لتجنب تشغيلها إذا فتح المتجر مباشرة)
-    const activeTab =
-        localStorage.getItem("dashboardActiveTab") || "tasks-page";
-    if (activeTab !== "tasks-page") return;
-
-    // 3. الحاجز الأمني: هل الواجهة مرسومة بالكامل؟ (إذا لم يكن هناك تحدي، سيتوقف الكود هنا)
-    const reflectionBox = document.getElementById("reflection-container");
-    if (!reflectionBox || reflectionBox.offsetParent === null) return;
-
-    const driver = window.driver.js.driver;
-    const tour = driver({
-        showProgress: true,
-        allowClose: false,
-        doneBtnText: "فهمت، لننطلق ⚔️",
-        nextBtnText: "التالي ❯",
-        prevBtnText: "❮ السابق",
-        // --- هذا هو التعديل الجديد ---
-        onDestroyed: async () => {
-            const tasksBtn = document.querySelector(
-                '[data-target="tasks-page"]',
-            );
-            if (tasksBtn) tasksBtn.click();
-
-            // طلب تفعيل الإشعارات بعد الجولة مباشرة
-            await CustomDialog.alert(
-                "لضمان التزامك بالمعسكر، يجب تفعيل الإشعارات الآن لتصلك تنبيهات المهام اليومية.",
-                "تفعيل الإشعارات 🔔",
-            );
-            requestNotificationPermission();
-        },
-        steps: [
-            {
-                element: ".sidebar",
-                popover: {
-                    title: "مرحباً بك في المعسكر 🛡️",
-                    description:
-                        "هنا تبدأ رحلتك. القائمة الجانبية هي مركز القيادة للتنقل بين المهام، المتجر، والإحصائيات.",
-                    side: "left",
-                    align: "start",
-                },
-            },
-            {
-                element: ".user-menu",
-                popover: {
-                    title: "معلومات المستخدم 👤",
-                    description:
-                        "انقر على صورتك لعرض ملفك الشخصي، حيث يمكنك رؤية تقدمك، الأوسمة التي حصلت عليها، وتعديل اسمك أو صورتك.",
-                    side: "bottom",
-                    align: "center",
-                },
-            },
-            {
-                element: ".points-div-info",
-                popover: {
-                    title: "لوحة المعلومات 📊",
-                    description:
-                        "هنا يظهر مستواك الحالي، نقاطك، والستريك (أيام التزامك). إياك أن تكسر الستريك!",
-                    side: "bottom",
-                    align: "center",
-                },
-            },
-            {
-                element: "#challenge-info",
-                popover: {
-                    title: "معلومات التحدي 🎯",
-                    description:
-                        "هنا ستجد معلومات عن التحدي مدتة, الحد الادنى للنقاط اليومية, ونقاطك التي جمعتها خلال اليوم. تأكد من تحقيق الحد الأدنى كل يوم لتتجنب العقوبات القاسية!",
-                    side: "bottom",
-                    align: "center",
-                },
-            },
-            {
-                element: ".challenge-note",
-                popover: {
-                    title: "تنبيه التحدي ⚠️",
-                    description:
-                        "في حال لم تستطع تجميع نقاط كافية للنجاح في هذا اليوم ستجد تكلفة (طوق النجاة) مكتوبة هنا.",
-                    side: "bottom",
-                    align: "center",
-                },
-            },
-            {
-                element: ".tasks-list-class",
-                popover: {
-                    title: "ساحة المعركة ⚔️",
-                    description:
-                        "هذه مهامك اليومية. اختر مستوى إنجازك لكل مهمة بصدق، الموجه الذكي سيحاسبك لاحقاً.",
-                    side: "top",
-                    align: "center",
-                },
-            },
-            {
-                element: "#submit-day-btn",
-                popover: {
-                    title: "إنهاء اليوم 🕒",
-                    description:
-                        "عند الضغط هنا، ستُقفل مهام اليوم وسيبدأ الموجه الذكي بتحليل تقريرك. كن صادقاً، فهو لا يغفر الكذب أو الأعذار.",
-                    side: "top",
-                    align: "center",
-                },
-            },
-            {
-                element: '[data-target="store-page"]',
-                popover: {
-                    title: "متجر الادوات 🛒",
-                    description:
-                        "استخدم نقاطك بحكمة هنا لشراء أو فتح أدوات جديدة.",
-                    side: "left",
-                    align: "center",
-                },
-                // هذا السطر يجبر النظام على فتح صفحة المتجر فوراً بمجرد وصول الجولة له
-                onHighlightStarted: () => {
-                    const storeBtn = document.querySelector(
-                        '[data-target="store-page"]',
-                    );
-                    if (storeBtn) storeBtn.click();
-                },
-            },
-            {
-                element: '[data-target="leaderboard-page"]',
-                popover: {
-                    title: "جدول القيادة 🏆",
-                    description:
-                        "اطلع على ترتيبك بين المستخدمين الآخرين وتحقيق إنجازاتك.",
-                    side: "left",
-                    align: "center",
-                },
-                // هذا السطر يجبر النظام على فتح صفحة المتجر فوراً بمجرد وصول الجولة له
-                onHighlightStarted: () => {
-                    const storeBtn = document.querySelector(
-                        '[data-target="leaderboard-page"]',
-                    );
-                    if (storeBtn) storeBtn.click();
-                },
-            },
-            // {
-            //     element: '[data-target="analytics-page"]',
-            //     popover: {
-            //         title: "لوحة الاحصائيات 📊",
-            //         description:
-            //             "هنا يمكنك رؤية تقدمك اليومي، تحليل نقاطك، وأداءك في الجوانب المختلفة. استخدم هذه البيانات لتعديل استراتيجيتك وتحسين أدائك.",
-            //         side: "left",
-            //         align: "center",
-            //     },
-            //     // هذا السطر يجبر النظام على فتح صفحة المتجر فوراً بمجرد وصول الجولة له
-            //     onHighlightStarted: () => {
-            //         const storeBtn = document.querySelector(
-            //             '[data-target="analytics-page"]',
-            //         );
-            //         if (storeBtn) storeBtn.click();
-            //     },
-            // },
-        ],
-    });
-
-    // تشغيل الجولة بعد التأكد من كل شيء
-    tour.drive();
-    localStorage.setItem("brainrot_tour_completed", "true");
-}
 
 // ==========================================
 // نظام أكواد الهدايا (Redeem Codes)
@@ -3469,31 +3639,86 @@ function startDoomsdayClock() {
 // ==========================================
 // عداد الدورة الأسبوعية (يحسب الوقت حتى منتصف ليل الجمعة/السبت)
 // ==========================================
+// function startCycleCountdown() {
+//     const daysLeftEl = document.getElementById("days-left");
+//     if (!daysLeftEl) return;
+
+//     function update() {
+//         const now = getRealNow();
+//         const currentDay = now.getDay(); // الأحد = 0, الاثنين = 1, ... الجمعة = 5, السبت = 6
+
+//         // حساب الأيام المتبقية حتى يوم السبت القادم
+//         let daysUntilSat = 6 - currentDay;
+
+//         // إذا كان اليوم هو السبت، فالدورة تنتهي السبت القادم (بعد 7 أيام)
+//         if (daysUntilSat === 0) {
+//             daysUntilSat = 7;
+//         }
+
+//         // تحديد الهدف: السبت القادم الساعة 00:00:00 (منتصف ليل الجمعة)
+//         const targetDate = new Date(
+//             now.getFullYear(),
+//             now.getMonth(),
+//             now.getDate() + daysUntilSat,
+//             0,
+//             0,
+//             0,
+//         );
+//         const diffMs = targetDate - now;
+
+//         if (diffMs <= 0) {
+//             daysLeftEl.innerHTML = `<span style="color: var(--danger); font-weight: bold;">جاري المحاسبة والتصفير ⚖️...</span>`;
+//             return;
+//         }
+
+//         const d = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+//         const h = Math.floor((diffMs / (1000 * 60 * 60)) % 24);
+//         const m = Math.floor((diffMs / 1000 / 60) % 60);
+
+//         if (d > 0) {
+//             daysLeftEl.innerHTML = `<span style="font-weight:bold; color: var(--gold-primary); font-size: 20px;">${d}</span> أيام و <span style="font-weight:bold; color: var(--gold-primary);">${h}</span> ساعات`;
+//             daysLeftEl.style.color = "var(--text-main)";
+//             daysLeftEl.style.textShadow = "none";
+//         } else {
+//             // في اليوم الأخير (الجمعة) يتحول العداد للون الأحمر للتنبيه
+//             daysLeftEl.innerHTML = `⚠️ <span style="font-weight:bold; font-size: 20px;">${h}</span> ساعة و <span style="font-weight:bold;">${m}</span> دقيقة`;
+//             daysLeftEl.style.color = "var(--danger)";
+//             daysLeftEl.style.textShadow = "0 0 10px rgba(244,63,94,0.5)";
+//         }
+//     }
+
+//     update(); // تشغيل فوري
+//     setInterval(update, 60000); // تحديث كل دقيقة (كافي جداً لعداد الأيام/الساعات)
+// }
+
 function startCycleCountdown() {
     const daysLeftEl = document.getElementById("days-left");
     if (!daysLeftEl) return;
 
     function update() {
-        const now = getRealNow();
-        const currentDay = now.getDay(); // الأحد = 0, الاثنين = 1, ... الجمعة = 5, السبت = 6
+        const now = getRealNow(); // توقيت القاهرة
+        const currentDay = now.getDay();
+        const currentHour = now.getHours();
 
-        // حساب الأيام المتبقية حتى يوم السبت القادم
+        // 🛑 تحديد وقت الإغلاق: السبت الساعة 4 فجراً
+        let targetDate = new Date(now);
+
+        // حساب عدد الأيام المتبقية حتى السبت
         let daysUntilSat = 6 - currentDay;
 
-        // إذا كان اليوم هو السبت، فالدورة تنتهي السبت القادم (بعد 7 أيام)
-        if (daysUntilSat === 0) {
+        // منطق دقيق:
+        // إذا كنا يوم الجمعة، فاليوم هو الجمعة (الهدف السبت).
+        // إذا كنا يوم السبت وقبل الساعة 4 فجراً، الهدف هو نفس اليوم (السبت الساعة 4).
+        // إذا كنا يوم السبت وبعد الساعة 4 فجراً، الهدف هو السبت القادم.
+        if (currentDay === 6 && currentHour >= 4) {
             daysUntilSat = 7;
+        } else if (currentDay === 6 && currentHour < 4) {
+            daysUntilSat = 0;
         }
 
-        // تحديد الهدف: السبت القادم الساعة 00:00:00 (منتصف ليل الجمعة)
-        const targetDate = new Date(
-            now.getFullYear(),
-            now.getMonth(),
-            now.getDate() + daysUntilSat,
-            0,
-            0,
-            0,
-        );
+        targetDate.setDate(now.getDate() + daysUntilSat);
+        targetDate.setHours(4, 0, 0, 0); // 🛑 ضبط الساعة على 4 فجراً
+
         const diffMs = targetDate - now;
 
         if (diffMs <= 0) {
@@ -3506,19 +3731,17 @@ function startCycleCountdown() {
         const m = Math.floor((diffMs / 1000 / 60) % 60);
 
         if (d > 0) {
-            daysLeftEl.innerHTML = `<span style="font-weight:bold; color: var(--gold-primary); font-size: 20px;">${d}</span> أيام و <span style="font-weight:bold; color: var(--gold-primary);">${h}</span> ساعات`;
-            daysLeftEl.style.color = "var(--text-main)";
-            daysLeftEl.style.textShadow = "none";
+            daysLeftEl.innerHTML = `<span style="font-weight:bold; color: var(--gold-primary); font-size: 20px;">${d}</span> يوم و <span style="font-weight:bold; color: var(--gold-primary);">${h}</span> ساعة`;
         } else {
-            // في اليوم الأخير (الجمعة) يتحول العداد للون الأحمر للتنبيه
+            // يوم الجمعة + الساعات الأولى من السبت (حتى الـ 4 فجراً) سيظهر باللون الأحمر
             daysLeftEl.innerHTML = `⚠️ <span style="font-weight:bold; font-size: 20px;">${h}</span> ساعة و <span style="font-weight:bold;">${m}</span> دقيقة`;
             daysLeftEl.style.color = "var(--danger)";
             daysLeftEl.style.textShadow = "0 0 10px rgba(244,63,94,0.5)";
         }
     }
 
-    update(); // تشغيل فوري
-    setInterval(update, 60000); // تحديث كل دقيقة (كافي جداً لعداد الأيام/الساعات)
+    update();
+    setInterval(update, 60000);
 }
 
 function initializeChecklists() {
@@ -3764,60 +3987,6 @@ window.submitTriviaAnswer = async function (
 };
 
 // ==========================================
-// نظام تجديد النية اليومي (Niyyah Reminder)
-// ==========================================
-
-// 1. تحويل الفحص إلى "بوابة انتظار" تجمد باقي الموقع
-window.checkNiyyahReminder = function (userData) {
-    return new Promise((resolve) => {
-        const realNow = getRealNow();
-        const todayStr = getCairoDateString(realNow);
-
-        if (userData.lastNiyyahDate !== todayStr) {
-            document.getElementById("niyyah-modal").style.display = "flex";
-            // نربط فتح البوابة بمتغير عالمي لكي يستخدمه الزر لاحقاً
-            window.resolveNiyyah = resolve;
-        } else {
-            // إذا كان مجدد النية مسبقاً، افتح البوابة فوراً بصمت
-            resolve();
-        }
-    });
-};
-
-// 2. دالة الإخفاء تقوم بفتح البوابة والسماح للمنقذ بالظهور
-window.dismissNiyyahReminder = async function () {
-    if (!currentUser) return;
-
-    const btn = document.getElementById("niyyah-btn");
-    btn.innerHTML =
-        'جاري توثيق النية... <i class="fa-solid fa-spinner fa-spin"></i>';
-    btn.disabled = true;
-
-    const realNow = getRealNow();
-    const todayStr = getCairoDateString(realNow);
-    const userRef = doc(db, "users", currentUser.uid);
-
-    try {
-        await updateDoc(userRef, { lastNiyyahDate: todayStr });
-        document.getElementById("niyyah-modal").style.opacity = "0";
-
-        setTimeout(() => {
-            document.getElementById("niyyah-modal").style.display = "none";
-            // إعادة الزر لحالته الأصلية
-            btn.innerHTML = "فهمت";
-            btn.disabled = false;
-
-            // 🔥 هنا السحر: إعطاء الضوء الأخضر للمنقذ الذكي وباقي الموقع للعمل
-            if (window.resolveNiyyah) window.resolveNiyyah();
-        }, 300);
-    } catch (error) {
-        console.error("حدث خطأ أثناء حفظ النية:", error);
-        btn.innerHTML = "حدث خطأ، حاول مجدداً";
-        btn.disabled = false;
-    }
-};
-
-// ==========================================
 // تشغيل محرك الكاش (Service Worker)
 // ==========================================
 if ("serviceWorker" in navigator) {
@@ -3920,11 +4089,6 @@ window.syncUserUI = async function () {
                 await loadTasks(todayLogData, userData);
             } else if (activeTab === "leaderboard-page") {
                 if (typeof loadLeaderboard === "function") loadLeaderboard();
-            } else if (
-                activeTab === "analytics-page" ||
-                activeTab === "stats-page"
-            ) {
-                if (typeof loadAnalytics === "function") loadAnalytics();
             }
         }
     } catch (error) {
@@ -4337,6 +4501,270 @@ document
         } catch (error) {
             console.error("Willpower Submit Error:", error);
             await CustomDialog.alert("حدث خطأ أثناء اعتماد التحدي.", "خطأ ❌");
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        }
+    });
+
+// ==========================================
+// 📄 محرك استخراج التقرير الأسبوعي (مدفوع التكلفة)
+// ==========================================
+document
+    .getElementById("generate-user-report-btn")
+    ?.addEventListener("click", async () => {
+        if (!currentUser) return;
+
+        // 1. فحص الرصيد قبل أي حركة
+        const userRef = doc(db, "users", currentUser.uid);
+        const userSnap = await getDoc(userRef);
+        const userData = userSnap.data() || {};
+
+        const currentCoins = userData.walletCoins || 0;
+        const reportCost = 50; // يمكنك تغيير التكلفة من هنا
+
+        if (currentCoins < reportCost) {
+            return await CustomDialog.alert(
+                `رصيدك لا يكفي. تحتاج إلى ${reportCost} عملة لاستخراج التقرير الاستخباراتي، بينما تملك ${currentCoins} فقط. التزم بمهامك لتجمع المزيد.`,
+                "رصيد غير كافٍ 💳",
+            );
+        }
+
+        // 2. تأكيد الدفع
+        const confirmPrint = await CustomDialog.confirm(
+            `استخراج هذا التقرير سيكلفك ${reportCost} عملة من محفظتك. هل تريد الاستمرار؟`,
+            "تأكيد الدفع 💰",
+        );
+        if (!confirmPrint) return;
+
+        const btn = document.getElementById("generate-user-report-btn");
+        const originalText = btn.innerHTML;
+        btn.innerHTML =
+            "<i class='fa-solid fa-spinner fa-spin'></i> جاري سحب البيانات وبناء التقرير...";
+        btn.disabled = true;
+
+        try {
+            // 3. خصم التكلفة فوراً وتحديث الواجهة
+            await updateDoc(userRef, {
+                walletCoins: increment(-reportCost),
+            });
+            window.syncUserUI();
+
+            // 4. جلب مرجع المهام لمعرفة أسمائها
+            const tasksMap = {};
+            const [normSnap, relSnap] = await Promise.all([
+                getDocs(collection(db, "tasks")),
+                getDocs(collection(db, "religiousTasks")),
+            ]);
+            normSnap.forEach(
+                (d) =>
+                    (tasksMap[d.id] = { title: d.data().name, type: "دنيوي" }),
+            );
+            relSnap.forEach(
+                (d) =>
+                    (tasksMap[d.id] = { title: d.data().title, type: "ديني" }),
+            );
+
+            // 5. جلب سجلات آخر 7 أيام
+            const logsSnap = await getDocs(
+                query(
+                    collection(db, `users/${currentUser.uid}/dailyLogs`),
+                    orderBy("date", "desc"),
+                ),
+            );
+            const logsArray = [];
+            logsSnap.forEach((doc) => {
+                if (doc.data().isFinalized) logsArray.push(doc.data());
+            });
+
+            const last7Logs = logsArray.slice(0, 7).reverse();
+
+            if (last7Logs.length === 0) {
+                // إذا لم يجد بيانات، نعيد له أمواله
+                await updateDoc(userRef, {
+                    walletCoins: increment(reportCost),
+                });
+                window.syncUserUI();
+                await CustomDialog.alert(
+                    "لا توجد سجلات معتمدة لآخر 7 أيام لبناء التقرير. تمت إعادة أموالك.",
+                    "لا توجد بيانات",
+                );
+                return;
+            }
+
+            // 6. تجهيز بيانات الرسوم البيانية والجداول
+            const dates = [];
+            const points = [];
+            let passedDays = 0;
+            let totalDopamineGained = 0;
+            let totalAIWasted = 0;
+            let totalReportedWasted = 0;
+            const taskAdherence = {};
+
+            let dopamineRowsHtml = "";
+
+            last7Logs.forEach((log) => {
+                dates.push(log.date);
+                points.push(log.pointsEarned || 0);
+                if (log.passed) passedDays++;
+
+                // تحليل الدوبامين
+                const dop = log.dopamineData;
+                if (dop) {
+                    totalDopamineGained += dop.pointsAwarded || 0;
+                    totalReportedWasted +=
+                        (dop.reportedScreenMinutes || 0) +
+                        (dop.reportedShortsMinutes || 0);
+                    totalAIWasted +=
+                        (dop.aiEvaluatedWastedScreen || 0) +
+                        (dop.aiEvaluatedWastedShorts || 0);
+
+                    let judgment =
+                        dop.pointsAwarded >= 50
+                            ? "<span style='color:green;'>مقبول</span>"
+                            : "<span style='color:red;'>كارثي</span>";
+                    dopamineRowsHtml += `
+                    <tr>
+                        <td>${log.date}</td>
+                        <td>${(dop.reportedScreenMinutes || 0) + (dop.reportedShortsMinutes || 0)} دقيقة</td>
+                        <td style="font-weight:bold; color:#f97316;">${(dop.aiEvaluatedWastedScreen || 0) + (dop.aiEvaluatedWastedShorts || 0)} دقيقة</td>
+                        <td>+${dop.pointsAwarded || 0}</td>
+                        <td>${judgment}</td>
+                    </tr>
+                `;
+                }
+
+                // تحليل المهام (الدينية والدنيوية)
+                const combinedSels = {
+                    ...(log.selections || {}),
+                    ...(log.religiousSelections || {}),
+                };
+                Object.entries(combinedSels).forEach(([taskId, sel]) => {
+                    if (!taskAdherence[taskId])
+                        taskAdherence[taskId] = { completed: 0, total: 0 };
+                    taskAdherence[taskId].total++;
+
+                    let isDone = false;
+                    if (typeof sel === "boolean") isDone = sel;
+                    else if (Array.isArray(sel))
+                        isDone =
+                            sel.length > 1 ||
+                            (sel.length === 1 && sel[0] !== 0);
+                    else isDone = sel > 0;
+
+                    if (isDone) taskAdherence[taskId].completed++;
+                });
+            });
+
+            // بناء جدول المهام
+            let taskRowsHtml = "";
+            Object.entries(taskAdherence).forEach(([taskId, stats]) => {
+                const tInfo = tasksMap[taskId] || {
+                    title: "مهمة محذوفة",
+                    type: "-",
+                };
+                const perc = Math.round((stats.completed / stats.total) * 100);
+                let color =
+                    perc === 100 ? "green" : perc >= 60 ? "orange" : "red";
+
+                taskRowsHtml += `
+                <tr>
+                    <td>${tInfo.title}</td>
+                    <td style="color:${tInfo.type === "ديني" ? "green" : "gray"};">${tInfo.type}</td>
+                    <td>${stats.completed} من ${stats.total}</td>
+                    <td style="color:${color}; font-weight:bold;">${perc}%</td>
+                </tr>
+            `;
+            });
+
+            // 7. بناء صفحة الـ HTML المستقلة للتقرير
+            const reportHtml = `
+            <!DOCTYPE html>
+            <html lang="ar" dir="rtl">
+            <head>
+                <meta charset="UTF-8">
+                <title>التقرير الاستخباراتي - ${currentUser.displayName || "الجندي"}</title>
+                <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+                <style>
+                    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap');
+                    body { font-family: 'Cairo', sans-serif; padding: 40px; color: #111; background: #fff; line-height: 1.6; }
+                    h1 { color: #1e3a8a; border-bottom: 3px solid #1e3a8a; padding-bottom: 10px; text-align: center; }
+                    .header-info { display: flex; justify-content: space-between; background: #f3f4f6; padding: 15px; border-radius: 8px; margin-bottom: 30px; font-weight: bold; }
+                    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px; }
+                    .stat-box { background: #fff; border: 1px solid #d1d5db; padding: 20px; border-radius: 8px; text-align: center; }
+                    .stat-box span { display: block; font-size: 24px; font-weight: 900; margin-top: 10px; color: #3b82f6; }
+                    table { width: 100%; border-collapse: collapse; margin-bottom: 40px; font-size: 14px; }
+                    th, td { padding: 12px; text-align: right; border: 1px solid #d1d5db; }
+                    th { background: #1e3a8a; color: white; }
+                    tr:nth-child(even) { background-color: #f9fafb; }
+                    @media print { body { padding: 0; } button { display: none; } }
+                </style>
+            </head>
+            <body>
+                <button onclick="window.print()" style="position:fixed; top:20px; left:20px; background:#1e3a8a; color:white; padding:10px 20px; border:none; border-radius:5px; cursor:pointer; font-family:'Cairo';">طباعة التقرير</button>
+                
+                <h1>🛡️ التقرير الاستخباراتي (آخر 7 أيام)</h1>
+                <div class="header-info">
+                    <span>الجندي: ${document.getElementById("profile-name-input").value}</span>
+                    <span>تاريخ الاستخراج: ${new Date().toLocaleDateString("en-GB")}</span>
+                </div>
+
+                <div class="grid-2">
+                    <div class="stat-box">أيام النجاح (من ${last7Logs.length})<span style="color:green;">${passedDays} يوم</span></div>
+                    <div class="stat-box">إجمالي الدوبامين المكتسب<span>+${totalDopamineGained} نقطة</span></div>
+                </div>
+
+                <div style="height: 300px; margin-bottom: 40px; border: 1px solid #d1d5db; padding: 15px; border-radius: 8px;">
+                    <canvas id="pointsChart"></canvas>
+                </div>
+
+                <h3 style="color:#f97316;">مقارنة استهلاك الدوبامين (أنت ضد الذكاء الاصطناعي)</h3>
+                <table>
+                    <thead><tr><th>التاريخ</th><th>المبلغ عنه (أنت)</th><th>الوقت المهدر (حكم AI)</th><th>النقاط الممنوحة</th><th>التقييم</th></tr></thead>
+                    <tbody>${dopamineRowsHtml || "<tr><td colspan='5' style='text-align:center;'>لا توجد إثباتات دوبامين</td></tr>"}</tbody>
+                </table>
+
+                <h3 style="color:#10b981;">معدل الالتزام بالمهام (الدينية والدنيوية)</h3>
+                <table>
+                    <thead><tr><th>المهمة</th><th>النوع</th><th>مرات الإنجاز</th><th>نسبة الالتزام</th></tr></thead>
+                    <tbody>${taskRowsHtml}</tbody>
+                </table>
+
+                <script>
+                    const ctx = document.getElementById('pointsChart').getContext('2d');
+                    new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: ${JSON.stringify(dates)},
+                            datasets: [{
+                                label: 'النقاط اليومية',
+                                data: ${JSON.stringify(points)},
+                                borderColor: '#3b82f6',
+                                backgroundColor: 'rgba(59, 130, 246, 0.2)',
+                                borderWidth: 3, fill: true, tension: 0.3
+                            }]
+                        },
+                        options: {
+                            responsive: true, maintainAspectRatio: false,
+                            plugins: { legend: { display: false } },
+                            scales: { y: { beginAtZero: true } }
+                        }
+                    });
+                </script>
+            </body>
+            </html>
+        `;
+
+            // فتح التقرير في نافذة جديدة
+            const printWindow = window.open("", "_blank");
+            printWindow.document.write(reportHtml);
+            printWindow.document.close();
+        } catch (error) {
+            console.error("Report Generation Error:", error);
+            await CustomDialog.alert(
+                "حدث خطأ أثناء تجميع البيانات أو الخصم.",
+                "خطأ ❌",
+            );
+        } finally {
             btn.innerHTML = originalText;
             btn.disabled = false;
         }

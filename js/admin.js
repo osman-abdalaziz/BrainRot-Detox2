@@ -1,4 +1,4 @@
-import { auth, db, storage, app, messaging } from "./firebase-config.js"; // أضفنا app هنا
+import { auth, db, storage, app, messaging } from "./firebase-config.js";
 import {
     getToken,
     onMessage,
@@ -746,7 +746,7 @@ document
 
             usersSnap.forEach((userDoc) => {
                 const uData = userDoc.data();
-                if (uData.role === "admin") return; // تجاهل حسابك كأدمن
+                // if (uData.role === "admin") return; // تجاهل حسابك كأدمن
 
                 const userRef = doc(db, "users", userDoc.id);
                 batch.update(userRef, {

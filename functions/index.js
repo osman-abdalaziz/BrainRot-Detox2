@@ -173,11 +173,12 @@ exports.doomsdayWarning = onSchedule(
 );
 
 // ========================================================
-// 🚀 القاضي الآلي: تقييم الجمعة، وتصفير الدورة (V4 - محصنة بالكامل ومنظفة)
+// 🚀 القاضي الآلي: تقييم الجمعة، وتصفير الدورة (V4 - الإزاحة الوقتية)
 // ========================================================
 exports.weeklyWipeAndEvaluate = onSchedule(
     {
-        schedule: "1 0 * * 6", // الدقيقة 1، الساعة 0 (منتصف الليل)، كل يوم سبت
+        // 🛑 التعديل الأول: تأخير الإطلاق إلى 4 فجراً يوم السبت لإعطاء مهلة للمحاربين
+        schedule: "0 4 * * 6",
         timeZone: "Africa/Cairo",
         timeoutSeconds: 300, // 5 دقائق لاستيعاب عدد كبير من المستخدمين
     },
@@ -230,7 +231,12 @@ exports.weeklyWipeAndEvaluate = onSchedule(
             });
 
             const now = new Date();
-            now.setHours(now.getHours() - 2);
+
+            // 🛑 التعديل الثاني (الكي البرمجي): الإزاحة الوقتية (Time Offset)
+            // إذا انطلق القاضي 4 فجراً (السبت)، خصم 6 ساعات يرجعه لـ 10 مساءً (الجمعة)
+            // هذا يضمن أن اليوم المستهدف للتقييم هو الجمعة بدون أي خطأ منطقي
+            now.setHours(now.getHours() - 6);
+
             const formatter = new Intl.DateTimeFormat("en-CA", {
                 timeZone: "Africa/Cairo",
                 year: "numeric",
@@ -261,7 +267,6 @@ exports.weeklyWipeAndEvaluate = onSchedule(
                 let freezeCount = userData.freezeCount || 0;
                 let walletCoins = userData.walletCoins || 0;
 
-                // 🛑 تم تأمين جلب هذه المتغيرات
                 let lifetimeScore = userData.lifetimeScore || 0;
                 let hasDoubleXP = userData.hasDoubleXP || false;
                 let currentMultiplier = userData.currentMultiplier || 1.0;
@@ -295,7 +300,6 @@ exports.weeklyWipeAndEvaluate = onSchedule(
                         let religiousSelections =
                             logData.religiousSelections || {};
 
-                        // الفحص القاطع للمهام الدينية الإجبارية (بالصيغة الجديدة + التوافق العكسي)
                         let missingRel = false;
                         for (let id of importantRelTaskIds) {
                             let sel = religiousSelections[id];
@@ -360,7 +364,6 @@ exports.weeklyWipeAndEvaluate = onSchedule(
                             newStreak++;
                             if (newZone === "yellow") newZone = "green";
 
-                            // 🛑 حساب وتحديث المضاعف
                             if (newStreak >= 21) currentMultiplier = 2.0;
                             else if (newStreak >= 14) currentMultiplier = 1.6;
                             else if (newStreak >= 7) currentMultiplier = 1.4;
@@ -387,13 +390,14 @@ exports.weeklyWipeAndEvaluate = onSchedule(
                             if (freezeCount > 0) {
                                 freezeCount--;
                             } else {
+                                // 🛑 التعديل الجراحي: تسجيل الستريك الحالي قبل إعدامه لكي يستخدمه في الإنعاش
+                                u.lostStreak = newStreak; // نحتفظ بالرقم القديم
+
                                 newStreak = 0;
                                 if (newZone === "green") newZone = "yellow";
                                 else if (newZone === "yellow") newZone = "red";
 
-                                // 🛑 تصفير المضاعف عند الفشل
                                 currentMultiplier = 1.0;
-
                                 const penaltyCoins = Math.floor(
                                     targetPoints / 2,
                                 );
@@ -401,11 +405,9 @@ exports.weeklyWipeAndEvaluate = onSchedule(
                             }
                         }
 
-                        // إنشاء طابع زمني منطقي لنهاية اليوم لضمان سلامة الإحصائيات
                         const logicalTimestamp = new Date(evalDate);
                         logicalTimestamp.setHours(23, 59, 59);
 
-                        // 🛑 استخدام السلة الديناميكية للحفظ
                         batch.set(
                             logRef,
                             {
@@ -431,17 +433,23 @@ exports.weeklyWipeAndEvaluate = onSchedule(
                 for (let m of milestones) {
                     if (newStreak >= m && !earnedStreakBadges.includes(m)) {
                         earnedStreakBadges.push(m);
+
+                        let dayWord = "";
+                        if (m >= 3 && m <= 10) dayWord = "أيام";
+                        else if (m >= 11 && m <= 99) dayWord = "يوماً";
+                        else dayWord = "يوم";
+
                         badges.push({
                             id: `streak_${m}`,
-                            title: `بطل صمود - ${m} أيام`,
-                            imagePath: `images/badge.webp`,
+                            title: `بطل صمود - ${m} ${dayWord}`,
+                            description: `أكملت ${m} ${dayWord} من الالتزام المتتالي القاسي .`,
+                            imagePath: `images/streaks/streak-${m}.webp`,
                             date: new Date().toISOString(),
                             type: "streak",
                         });
                     }
                 }
 
-                // 🛑 إصلاح الخلل: دفع جميع المتغيرات للمصفوفة لكي لا يتم مسحها لاحقاً
                 usersList.push({
                     uid,
                     cycleScore,
@@ -455,6 +463,7 @@ exports.weeklyWipeAndEvaluate = onSchedule(
                     earnedStreakBadges,
                     badges,
                     lastEvalDate: currentEvalDateStr,
+                    lostStreak: u.lostStreak || 0,
                 });
             }
 
@@ -466,8 +475,9 @@ exports.weeklyWipeAndEvaluate = onSchedule(
                 if (rank <= 3 && u.cycleScore > 0) {
                     u.badges.push({
                         id: `top${rank}_cycle_${currentCycle}`,
-                        title: `TOP ${rank} للدورة رقم ${currentCycle}`,
-                        imagePath: `images/rank-${rank}-bg.webp`,
+                        title: `TOP ${rank}`,
+                        description: `تصدرت المرتبة ${rank} على المعسكر وتفوقت على الجميع في الدورة التنافسية رقم ${currentCycle}.`,
+                        imagePath: `images/top-${rank}.webp`,
                         date: new Date().toISOString(),
                         type: "cycle",
                     });
@@ -476,7 +486,6 @@ exports.weeklyWipeAndEvaluate = onSchedule(
 
                 const uRef = db.doc(`users/${u.uid}`);
 
-                // 🛑 استخدام السلة الديناميكية للحفظ وتمرير المتغيرات بشكل صحيح
                 batch.update(uRef, {
                     currentStreak: u.newStreak,
                     currentZone: u.newZone,
@@ -488,6 +497,7 @@ exports.weeklyWipeAndEvaluate = onSchedule(
                     earnedStreakBadges: u.earnedStreakBadges,
                     badges: u.badges,
                     cycleScore: 0,
+                    usedDoubleXP: false,
                     coreTasksCompletedToday: false,
                     lastEvalDate: u.lastEvalDate,
                 });
@@ -502,13 +512,12 @@ exports.weeklyWipeAndEvaluate = onSchedule(
             });
             operationCount++;
 
-            // 🛑 تفريغ أي عمليات متبقية في السلة الأخيرة
             if (operationCount > 0) {
                 await batch.commit();
             }
 
             console.log(
-                `تم إغلاق الدورة ${currentCycle} بنجاح. تم استخدام ${Math.ceil(operationCount / 450)} سلال حفظ.`,
+                `تم إغلاق الدورة ${currentCycle} بنجاح باستخدام الإزاحة الوقتية (تأخير 4 فجراً). تم استخدام ${Math.ceil(operationCount / 450)} سلال حفظ.`,
             );
             return null;
         } catch (error) {
@@ -517,7 +526,6 @@ exports.weeklyWipeAndEvaluate = onSchedule(
         }
     },
 );
-
 // ========================================================
 // 🤖 القاضي الآلي: تحليل صور فك القيود بواسطة Gemini
 // ========================================================

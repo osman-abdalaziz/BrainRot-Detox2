@@ -20,14 +20,11 @@
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="BrainRot Detox">
 
-    <link rel="stylesheet" href="css/style.css?v=22">
+    <link rel="stylesheet" href="css/style.css?v=50">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.1/css/all.min.css"
         integrity="sha512-2SwdPD6INVrV/lHTZbO2nodKhrnDdJK9/kg2XD1r9uGqPo1cUbujc+IYdlYdEErWNu69gVcYgdxlmVmzTWnetw=="
         crossorigin="anonymous" referrerpolicy="no-referrer" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/driver.js@1.0.1/dist/driver.css" />
-
-
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js" defer></script>
@@ -216,7 +213,7 @@
                             إجبارية"</strong> هي
                         شروط لا يقبل النظام المساومة عليها (مثل الصلوات الخمس). لن يفتح لك النظام باب اعتماد مهامك
                         الدنيوية في قسم
-                        "المهام اليومية" حتى تُتم أساسياتك هنا. المهام الإضافية بينك وبين ربك ولا تعطيك نقاطاً للتفاخر.
+                        "المهام اليومية" حتى تُتم أساسياتك هنا. المهام الإضافية بينك وبين ربك ولا تعطيك نقاطاً .
                     </p>
                 </div>
 
@@ -568,68 +565,89 @@
             </section>
 
             <section id="profile-page" class="page-section">
-                <h2 class="gold-text" style="margin-bottom: 20px;">الملف الشخصي</h2>
-                <div class="glass-card" style="max-width: 500px; margin: 0 auto; text-align: center;">
+
+                <div class="glass-card"
+                    style="position: relative; display: flex; flex-direction: column; align-items: center; text-align: center; padding: 40px 20px 30px; margin-bottom: 20px;">
+                    <button id="manual-notify-btn" class="action-btn"
+                        style="cursor: pointer; border-radius: 8px; position: absolute; top: 15px; left: 15px; background: rgba(0,0,0,0.3); border: 1px dashed var(--text-muted); color: var(--text-muted); font-size: 12px; padding: 5px 10px;">
+                        <i class="fa-solid fa-bell"></i> الإشعارات
+                    </button>
+
                     <div id="profile-avatar-wrapper" class="avatar-wrapper"
-                        style="width: 140px; height: 140px; margin-bottom: 15px;">
+                        style="width: 140px; height: 140px; margin-bottom: 20px; position: relative;">
                         <img src="images/profile.webp" alt="Profile" id="profile-avatar-preview">
+                        <input type="file" id="avatar-upload" accept="image/*" style="display: none;">
+                        <button id="trigger-upload-btn"
+                            style="position: absolute; bottom: -15px; right: -15px; background: var(--gold-primary); color: #fff; border:none; border-radius: 50%; width: 40px; height: 40px; cursor: pointer; transition: 0.2s;"><i
+                                class="fa-solid fa-camera"></i></button>
                     </div>
-                    <input type="file" id="avatar-upload" accept="image/*" style="display: none;">
-                    <button id="trigger-upload-btn" class="gold-btn upload-btn">تغيير الصورة</button>
+
                     <div
-                        style="background: rgba(0,0,0,0.2); border: 1px solid var(--gold-primary); padding: 20px; border-radius: 12px; margin: 25px auto; width: 100%; box-shadow: 0 4px 15px rgba(0,0,0,0.2);">
+                        style="display: flex; gap: 10px; width: 100%; max-width: 300px; margin-bottom: 25px; margin-top: 15px;">
+                        <input type="text" id="profile-name-input" class="dialog-input"
+                            style="margin: 0; text-align: center; font-size: 18px; font-weight: bold; background: rgba(0,0,0,0.4); flex: 1;">
+                        <button id="save-profile-btn" class="gold-btn"
+                            style="margin: 0; width: auto; padding: 0 15px; font-size: 15px;"><i
+                                class="fa-solid fa-save"></i></button>
+                    </div>
+
+                    <div
+                        style="background: rgba(0,0,0,0.4); border: 1px solid var(--border-color); padding: 20px; border-radius: 12px; width: 100%;">
                         <h4 style="color: var(--text-muted); font-size: 13px; margin-bottom: 5px;">الرتبة العسكرية
                             الحالية</h4>
-                        <h2 id="profile-rank-title" class="gold-text"
-                            style="font-size: 28px; margin-bottom: 15px; text-shadow: 0 0 10px rgba(168, 85, 247, 0.6)">
-                            متدرب</h2>
+                        <h2 id="profile-rank-title" class="gold-text" style="font-size: 28px; margin-bottom: 15px;">-
+                        </h2>
 
                         <div
                             style="display: flex; justify-content: space-between; align-items: center; font-size: 15px; margin-bottom: 8px;">
-                            <span style="color: var(--text-main);">نقاط الشرف:</span>
+                            <span style="color: var(--text-main);">الـ XP التراكمي:</span>
                             <strong id="profile-lifetime-score"
-                                style="color: var(--success); font-size: 18px; font-weight: bold;">0
-                                XP</strong>
+                                style="color: var(--success); font-size: 18px;">0</strong>
                         </div>
 
                         <div
-                            style="width: 100%; background: rgba(255,255,255,0.1); height: 8px; border-radius: 4px; overflow: hidden; position: relative;">
+                            style="width: 100%; background: rgba(255,255,255,0.05); height: 10px; border-radius: 5px; overflow: hidden; position: relative;">
                             <div id="profile-rank-progress"
-                                style="height: 100%; width: 0%; background: var(--gold-primary); box-shadow: 0 0 10px var(--gold-primary); transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);">
+                                style="height: 100%; width: 0%; background: var(--gold-primary); box-shadow: 0 0 15px var(--gold-primary); transition: width 1s;">
                             </div>
                         </div>
 
                         <div style="display: flex; justify-content: space-between; margin-top: 8px;">
                             <span id="profile-next-rank-text" style="font-size: 12px; color: var(--text-muted);">متبقي
-                                -- للرتبة
-                                القادمة</span>
+                                --</span>
                             <span id="profile-next-rank-name"
-                                style="font-size: 12px; color: var(--text-muted); font-weight: bold;">محارب <i
-                                    class="fa-solid fa-lock fa-fw" style="font-size: 10px;"></i></span>
+                                style="font-size: 12px; font-weight: bold; color: var(--text-muted);">الرتبة القادمة <i
+                                    class="fa-solid fa-lock"></i></span>
                         </div>
                     </div>
-                    <div class="profile-form">
-                        <label class="profile-label">الاسم</label>
-                        <input type="text" id="profile-name-input">
-                        <button id="save-profile-btn" class="gold-btn">حفظ التعديلات</button>
-                    </div>
+                </div>
 
-                    <hr style="border-top: 1px solid var(--border-color); margin: 30px 0;">
-                    <h3 class="gold-text" style="text-align: right; margin-bottom: 15px;">🛡️ خزانة الأوسمة (Trophies)
+                <div class="glass-card" style="padding: 30px 20px;">
+                    <h3 class="gold-text"
+                        style="text-align: right; margin-bottom: 25px; font-size: 20px; border-bottom: 2px solid rgba(234, 179, 8, 0.2); padding-bottom: 10px;">
+                        🛡️ خزانة الأوسمة والغنائم
                     </h3>
-                    <div id="badges-container"
-                        style="display: flex; gap: 15px; flex-wrap: wrap; justify-content: center;">
-                        <p style="color: var(--text-muted); font-size: 14px; width: 100%; text-align: right;">لا توجد
-                            أوسمة حتى
-                            الآن. شارك واصمد للنهاية!</p>
+                    <div id="trophy-room-container">
+                        <p style="color: var(--text-muted); font-size: 14px; text-align: center;">لا توجد أوسمة حتى
+                            الآن. المعركة في
+                            بدايتها!</p>
                     </div>
                 </div>
-                <div class="glass-card" style=" text-align: center; max-width: 500px; margin: 15px auto;">
-                    <h3 class="gold-text" style="margin-bottom: 10px; font-size: 18px;">إعدادات الجهاز ⚙️</h3>
-                    <p style="font-size: 14px; color: #ccc; margin-bottom: 15px;">
-                        إذا لم تكن تصلك الإشعارات، اضغط هنا لربط هذا الجهاز لتلقي تنبيهات المعسكر.
+
+                <div class="glass-card"
+                    style="margin-bottom: 20px; border-color: #3b82f6; background: rgba(59, 130, 246, 0.05); padding: 25px; text-align: center;">
+                    <h3 style="color: #3b82f6; margin-bottom: 10px; font-size: 18px;"><i
+                            class="fa-solid fa-file-contract"></i>
+                        التقرير الاستخباراتي (آخر 7 أيام)</h3>
+                    <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 20px; line-height: 1.6;">
+                        تقييم شامل لأدائك في الأسبوع الأخير. يشمل رسوماً بيانية لمعدل النقاط، تحليل لمدى صدقك في تقارير
+                        الدوبامين،
+                        ومستوى التزامك بالمهام الدينية والدنيوية.
                     </p>
-                    <button id="manual-notify-btn" class="gold-btn" style="width: 100%;">تفعيل الإشعارات 🔔</button>
+                    <button id="generate-user-report-btn" class="gold-btn"
+                        style="margin: 0; width: 100%; background: #3b82f6; border-color: #3b82f6;">
+                        <i class="fa-solid fa-print"></i> استخراج التقرير (50 <i class="fa-solid fa-coins fa-fw"></i>)
+                    </button>
                 </div>
             </section>
 
@@ -674,6 +692,32 @@
                             <button onclick="buyDoubleXP()" class="gold-btn"
                                 style="padding: 8px 15px; font-size: 14px; direction: ltr;">شراء
                                 (500 <i class="fa-solid fa-coins fa-fw"></i>)</button>
+                        </div>
+                        <div class="store-item"
+                            style="border: 1px solid var(--border-color); padding: 15px; border-radius: 12px;">
+                            <div><img src="images/streak-resus.webp" style="width: 100px; object-fit: contain;"></div>
+                            <h4>إنعاش الستريك</h4>
+                            <p style="font-size: 12px; color: var(--text-muted); margin: 10px 0;">يعيد ستريكك الميت من
+                                الصفر ويعيدك للمنطقة
+                                الخضراء. (صالح فقط إذا كان لديك ستريك مفقود).</p>
+                            <button onclick="buyStreakResurrection()" class="gold-btn"
+                                style="padding: 8px 15px; font-size: 14px; direction: ltr;">
+                                شراء (1000 <i class="fa-solid fa-coins fa-fw"></i>)
+                            </button>
+                        </div>
+                        <div class="store-item" id="vip-cosmetics-item"
+                            style="display: none; border: 1px solid var(--gold-primary); padding: 15px; border-radius: 12px; background: rgba(234, 179, 8, 0.05); position: relative; overflow: hidden;">
+                            <div
+                                style="position: absolute; top: 0; right: 0; background: var(--gold-primary); color: #000; font-size: 10px; font-weight: bold; padding: 3px 10px; border-bottom-left-radius: 8px;">
+                                10k+ CLUB</div>
+                            <div><img src="images/royal.webp" style="width: 100px; object-fit: contain;"></div>
+                            <h4 class="gold-text">الخزانة الملكية</h4>
+                            <p style="font-size: 12px; color: var(--text-muted); margin: 10px 0;">مفتوحة فقط للأساطير
+                                (10,000 XP). ميز نفسك في
+                                قائمة المتصدرين بإطارات وألقاب خاصة.</p>
+                            <button onclick="openVipModal()" class="gold-btn"
+                                style="padding: 8px 15px; font-size: 14px;">تخصيص الهوية
+                                🛡️</button>
                         </div>
                     </div>
 
@@ -760,35 +804,6 @@
             </div>
         </div>
     </div>
-    <div id="niyyah-modal"
-        style="display: none; z-index: 100000; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(10, 5, 20, 0.95); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); justify-content: center; align-items: center; padding: 20px;">
-        <div class="glass-card"
-            style="max-width: 450px; width: 100%; text-align: center; border-color: var(--gold-primary); animation: slideUp 0.4s ease;">
-            <div style="font-size: 40px; margin-bottom: 15px;">🤍</div>
-            <h3 class="gold-text" style="margin-bottom: 15px; font-size: 22px;">وقفة لتجديد النية</h3>
-            <p style="font-size: 15px; line-height: 1.7; color: #eee; margin-bottom: 20px;">
-                يا محارب، تذكر أن هذا المعسكر، والنقاط، والرتب ما هي إلا <strong>وسائل دنيوية</strong> لترويض كسلك وبناء
-                انضباطك.<br>
-                أما <strong>غايتك الحقيقية</strong> فهي رضا الله عز وجل.<br>
-                احذر أن تصلي أو تقرأ القرآن من أجل النقاط، بل اجعل العبادة خالصة لله عز وجل.
-            </p>
-
-            <div
-                style="background: rgba(255, 215, 0, 0.05); padding: 15px; border-radius: 8px; margin-bottom: 25px; border-right: 4px solid var(--gold-primary); text-align: right;">
-                <p style="font-size: 16px; font-weight: bold; color: var(--gold-light); margin: 0; line-height: 1.6;">
-                    قال رسول الله ﷺ:<br>
-                    <span style="color: #fff; font-weight: normal;">"إنما الأعمال بالنيّات ، وإنما لكل امريء مانوى ، فمن
-                        كانت هجرته إلى الله ورسوله ، فهجرته إلى الله ورسوله ، ومن كانت هجرته
-                        لدنيا يصيبها ، أو امرأة ينكحها ، فهجرته إلى ما هاجر إليه"</span>
-                </p>
-            </div>
-
-            <button onclick="dismissNiyyahReminder()" id="niyyah-btn" class="gold-btn"
-                style="width: 100%; font-size: 16px; padding: 12px;">
-                فهمت.
-            </button>
-        </div>
-    </div>
     <div id="badge-celebration-overlay" class="custom-dialog-overlay"
         style="z-index: 999999; display: none; background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(10px);">
 
@@ -831,6 +846,140 @@
             <button id="close-celebration-btn" class="gold-btn"
                 style="width: 100%; font-size: 18px; font-weight: bold; position: relative; z-index: 1;">استلام
                 الأوسمة 🏆</button>
+        </div>
+    </div>
+
+    <!-- نافذة التخصيص الملكية -->
+    <!-- 👑 نافذة التخصيص الملكية (VIP) -->
+    <div id="vip-modal-overlay" class="modal-overlay">
+        <div class="glass-card user-modal"
+            style="width: 95%; max-width: 620px; padding: 25px; max-height: 90vh; overflow-y: auto;">
+            <h3 class="gold-text" style="text-align: center; margin-bottom: 20px;">✨ الخزانة الملكية</h3>
+
+            <!-- القسم الأول: سلايدر الإطارات (Frames) -->
+            <div
+                style="background: rgba(0,0,0,0.3); padding: 15px; border-radius: 12px; margin-bottom: 20px; border: 1px solid var(--border-color);">
+                <label
+                    style="color: var(--text-muted); font-size: 13px; margin-bottom: 10px; display: block; text-align: center;">إطار
+                    الصورة (Slider)</label>
+
+                <div
+                    style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; max-width: 500px; margin-left: auto; margin-right: auto;">
+                    <button id="prev-frame-btn" class="dialog-btn-cancel"
+                        style="padding: 10px; max-width: 65px !important; margin: 0; font-size: 35px; border:none"><i
+                            class="fa-solid fa-chevron-right"></i></button>
+
+                    <div id="vip-avatar-preview-wrapper" class="avatar-wrapper"
+                        style="width: 140px; height: 140px; flex-shrink: 0; transition: all 0.3s;">
+                        <img id="vip-avatar-preview-img" src="images/profile.webp" alt="Avatar"
+                            style="width:70%; height:70%; border-radius:50%; object-fit:cover;">
+                    </div>
+
+                    <button id="next-frame-btn" class="dialog-btn-cancel"
+                        style="padding: 10px; max-width: 65px !important; margin: 0; font-size: 35px; border:none"><i
+                            class="fa-solid fa-chevron-left"></i></button>
+                </div>
+
+                <div style="text-align: center; margin-bottom: 10px;">
+                    <span id="vip-frame-name"
+                        style="color: var(--gold-light); font-size: 14px; font-weight: bold;">الافتراضي</span>
+                    <span id="vip-frame-price" style="display: block; color: var(--text-muted); font-size: 12px;">0
+                        <i class="fa-solid fa-coins fa-fw"></i></span>
+                </div>
+
+                <button id="reset-frame-btn" class="dialog-btn-cancel"
+                    style="width: 100%; font-size: 12px; padding: 8px; border: none; max-width: 200px; margin: auto;">إزالة
+                    الإطار (الافتراضي)</button>
+            </div>
+
+            <!-- القسم الثاني: كتابة اللقب -->
+            <div style="margin-bottom: 20px; text-align: right;">
+                <label style="color: var(--text-main); font-size: 13px; margin-bottom: 8px; display: block;">اللقب
+                    الفريد
+                    (Tag):</label>
+                <input type="text" id="vip-tag-input" class="dialog-input" placeholder="اكتب لقبك (لن يقبل التكرار)..."
+                    maxlength="15" style="margin-bottom: 5px;">
+                <span id="tag-error-msg" style="font-size: 11px; color: var(--danger); display: none;">هذا اللقب محجوز
+                    مسبقاً!</span>
+            </div>
+
+            <!-- القسم الثالث: الأيقونات -->
+            <div style="margin-bottom: 20px; text-align: right;">
+                <label style="color: var(--text-main); font-size: 13px; margin-bottom: 8px; display: block;">الأيقونة
+                    (Icon):</label>
+                <div id="vip-icons-grid"
+                    style="display: flex; gap: 10px; padding: 5px; flex-wrap: wrap; justify-content: center;max-width: 500px; margin: auto;">
+                    <!-- سيتم حقن الأيقونات هنا عبر JS، وضعنا افتراضي كعينة للتصميم -->
+                    <!-- استبدل الدائرة الأولى فقط بهذه الدائرة -->
+                    <div class="vip-choice-box icon-box selected" data-icon=""><i class="fa-solid fa-ban"></i></div>
+                    <div class="vip-choice-box icon-box" data-icon="fa-solid fa-skull"><i class="fa-solid fa-skull"></i>
+                    </div>
+                    <div class="vip-choice-box icon-box" data-icon="fa-solid fa-khanda"><i
+                            class="fa-solid fa-khanda"></i>
+                    </div>
+                    <div class="vip-choice-box icon-box" data-icon="fa-solid fa-bolt"><i class="fa-solid fa-bolt"></i>
+                    </div>
+                    <div class="vip-choice-box icon-box" data-icon="fa-solid fa-eye"><i class="fa-solid fa-eye"></i>
+                    </div>
+                    <div class="vip-choice-box icon-box" data-icon="fa-solid fa-fire"><i class="fa-solid fa-fire"></i>
+                    </div>
+                    <div class="vip-choice-box icon-box" data-icon="fa-solid fa-award"><i class="fa-solid fa-award"></i>
+                    </div>
+                    <div class="vip-choice-box icon-box" data-icon="fa-solid fa-brain"><i class="fa-solid fa-brain"></i>
+                    </div>
+                    <div class="vip-choice-box icon-box" data-icon="fa-solid fa-chess-queen"><i
+                            class="fa-solid fa-chess-queen"></i>
+                    </div>
+                    <div class="vip-choice-box icon-box" data-icon="fa-solid fa-feather"><i
+                            class="fa-solid fa-feather"></i>
+                    </div>
+                    <div class="vip-choice-box icon-box" data-icon="fa-solid fa-ghost"><i class="fa-solid fa-ghost"></i>
+                    </div>
+                    <div class="vip-choice-box icon-box" data-icon="fa-solid fa-biohazard"><i
+                            class="fa-solid fa-biohazard"></i>
+                    </div>
+                </div>
+            </div>
+
+            <!-- القسم الرابع: الألوان -->
+            <div style="margin-bottom: 25px; text-align: right;">
+                <label style="color: var(--text-main); font-size: 13px; margin-bottom: 8px; display: block;">لون اللقب
+                    (Color):</label>
+                <div id="vip-colors-grid"
+                    style="display: flex; gap: 10px; padding: 5px; flex-wrap: wrap; justify-content: center; max-width: 500px; margin: auto;">
+                    <!-- دوائر الألوان -->
+                    <div class="vip-choice-box color-box selected" data-color=""><i class="fa-solid fa-ban"></i></div>
+                    <div class="vip-choice-box color-box tag-color-gray" data-color="tag-color-gray">
+                    </div>
+                    <div class="vip-choice-box color-box tag-color-gold" data-color="tag-color-gold"></div>
+                    <div class="vip-choice-box color-box tag-color-bronze" data-color="tag-color-bronze"></div>
+                    <div class="vip-choice-box color-box tag-color-orange" data-color="tag-color-orange"></div>
+                    <div class="vip-choice-box color-box tag-color-pink" data-color="tag-color-pink"></div>
+                    <div class="vip-choice-box color-box tag-color-crimson" data-color="tag-color-crimson"></div>
+                    <div class="vip-choice-box color-box tag-color-void" data-color="tag-color-void"></div>
+                    <div class="vip-choice-box color-box tag-color-toxic" data-color="tag-color-toxic"></div>
+                    <div class="vip-choice-box color-box tag-color-ice" data-color="tag-color-ice"></div>
+                </div>
+            </div>
+
+            <!-- المعاينة الحية للقب -->
+            <div
+                style="background: rgba(0,0,0,0.5); padding: 15px; border-radius: 8px; margin-bottom: 20px; text-align: center; border: 1px dashed var(--gold-primary);">
+                <span style="font-size: 12px; color: var(--text-muted); display: block; margin-bottom: 10px;">معاينة
+                    هويتك:</span>
+                <span id="vip-live-preview-tag" class="rank-vip-tag tag-color-default"
+                    style="border:2px solid; font-size: 15px; padding: 5px 15px; border-radius: 20px; display: inline-block;">
+                    <i id="preview-icon" class="" style="margin-left: 5px;"></i><span id="preview-text">اللقب</span>
+                </span>
+            </div>
+
+            <!-- أزرار الحفظ -->
+            <div class="dialog-buttons">
+                <button onclick="document.getElementById('vip-modal-overlay').classList.remove('show')"
+                    class="dialog-btn-cancel">إلغاء</button>
+                <button id="vip-save-btn" onclick="saveVipCosmetics()" class="gold-btn dialog-btn-confirm">شراء وتطبيق
+                    (0 🪙)</button>
+            </div>
         </div>
     </div>
 
@@ -916,9 +1065,8 @@
         document.addEventListener('click', () => document.getElementById('user-dropdown').classList.remove('show'));
         document.getElementById('trigger-upload-btn').addEventListener('click', () => document.getElementById('avatar-upload').click());
     </script>
-    <script src="https://cdn.jsdelivr.net/npm/driver.js@1.0.1/dist/driver.js.iife.js"></script>
     <script type="module" src="js/firebase-config.js"></script>
-    <script type="module" src="js/dashboard.js?v=45"></script>
+    <script type="module" src="js/dashboard.js?v=50"></script>
 </body>
 
 </html>
