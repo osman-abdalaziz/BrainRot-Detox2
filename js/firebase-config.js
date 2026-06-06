@@ -20,6 +20,7 @@ const firebaseConfig = {
     storageBucket: "brainrot-detox.firebasestorage.app",
     messagingSenderId: "274779527121",
     appId: "1:274779527121:web:b2f9f556b3e765063572f0",
+    databaseURL: "https://brainrot-detox-default-rtdb.firebaseio.com",
 };
 
 // تهيئة التطبيق

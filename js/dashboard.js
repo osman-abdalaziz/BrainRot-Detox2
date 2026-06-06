@@ -1734,6 +1734,93 @@ async function autoSaveTasks(saveToDb = true) {
 }
 
 // ==========================================
+// 🛡️ فحص صلاحية الصورة (التاريخ + الوقت)
+// ==========================================
+function validateProofImage(file) {
+    return new Promise((resolve) => {
+        const now = getRealNow();
+        const todayStr = getCairoDateString(now);
+        const cairoNowStr = now.toLocaleString("en-US", {
+            timeZone: "Africa/Cairo",
+            hour12: false,
+        });
+        const cairoNow = new Date(cairoNowStr);
+
+        const yesterdayDate = new Date(now);
+        yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+        const yesterdayStr = getCairoDateString(yesterdayDate);
+
+        function checkDateOnly(fileDateStr, source) {
+            console.log(
+                `[${source}] تاريخ الصورة: ${fileDateStr} | اليوم: ${todayStr}`,
+            );
+
+            const isToday = fileDateStr === todayStr;
+            // نسمح بصور الأمس فقط في الساعات الأولى من الفجر
+            const isYesterdayAllowed =
+                cairoNow.getHours() < window.dayStartHour &&
+                fileDateStr === yesterdayStr;
+
+            if (!isToday && !isYesterdayAllowed) {
+                resolve({
+                    valid: false,
+                    reason: `📅 تاريخ الصورة (${fileDateStr}) لا يطابق تاريخ اليوم (${todayStr}).\nيجب رفع لقطة شاشة التقطتها اليوم فقط.`,
+                });
+                return;
+            }
+            resolve({ valid: true });
+        }
+
+        // محاولة EXIF أولاً
+        if (typeof EXIF !== "undefined") {
+            EXIF.getData(file, function () {
+                const exifDate = EXIF.getTag(this, "DateTimeOriginal");
+                if (exifDate) {
+                    const parts = exifDate.split(" ");
+                    const d = parts[0].split(":");
+                    const t = parts[1].split(":");
+                    const exifObj = new Date(
+                        +d[0],
+                        +d[1] - 1,
+                        +d[2],
+                        +t[0],
+                        +t[1],
+                        +t[2],
+                    );
+                    const cairoStr = exifObj.toLocaleString("en-US", {
+                        timeZone: "Africa/Cairo",
+                        hour12: false,
+                    });
+                    const cairoExif = new Date(cairoStr);
+                    const y = cairoExif.getFullYear();
+                    const m = String(cairoExif.getMonth() + 1).padStart(2, "0");
+                    const dd = String(cairoExif.getDate()).padStart(2, "0");
+                    checkDateOnly(`${y}-${m}-${dd}`, "EXIF");
+                } else {
+                    // لا EXIF → lastModified للتاريخ فقط
+                    fallbackToLastModified();
+                }
+            });
+        } else {
+            fallbackToLastModified();
+        }
+
+        function fallbackToLastModified() {
+            const fileDate = new Date(file.lastModified);
+            const cairoStr = fileDate.toLocaleString("en-US", {
+                timeZone: "Africa/Cairo",
+                hour12: false,
+            });
+            const d = new Date(cairoStr);
+            const y = d.getFullYear();
+            const m = String(d.getMonth() + 1).padStart(2, "0");
+            const dd = String(d.getDate()).padStart(2, "0");
+            checkDateOnly(`${y}-${m}-${dd}`, "lastModified");
+        }
+    });
+}
+
+// ==========================================
 // 2. مستمع زر اعتماد اليوم (النظام الجديد مع تحليل الدوبامين بالـ AI)
 // ==========================================
 document
@@ -1769,6 +1856,21 @@ document
             );
         }
         // ==========================================
+        // // --- 1. التحقق من محلل الدوبامين ---
+        // const dopamineData = calculateTotalDopamineTime();
+        // if (!dopamineData.isValid) {
+        //     return await CustomDialog.alert(
+        //         "يجب إدخال وقت الشاشة لجهاز واحد على الأقل لتجاوز الفحص.",
+        //         "تنبيه ⚠️",
+        //     );
+        // }
+        // if (dopamineData.files.length === 0) {
+        //     return await CustomDialog.alert(
+        //         "يجب إرفاق صورة إثبات (Screenshot) لوقت الشاشة. لا يمكن المرور بدونها.",
+        //         "إثبات مطلوب 📸",
+        //     );
+        // }
+
         // --- 1. التحقق من محلل الدوبامين ---
         const dopamineData = calculateTotalDopamineTime();
         if (!dopamineData.isValid) {
@@ -1783,6 +1885,7 @@ document
                 "إثبات مطلوب 📸",
             );
         }
+
         const justification = document
             .getElementById("dopamine-justification")
             .value.trim();
@@ -1791,6 +1894,18 @@ document
                 "يجب كتابة تبرير لاستهلاكك. كن صادقاً، الذكاء الاصطناعي يحلل كل حرف ولن يتهاون.",
                 "التبرير مطلوب ✍️",
             );
+        }
+
+        // 🛑 فحص صلاحية كل صورة (التاريخ + الوقت)
+        for (let i = 0; i < dopamineData.files.length; i++) {
+            const file = dopamineData.files[i];
+            const validation = await validateProofImage(file);
+            if (!validation.valid) {
+                return await CustomDialog.alert(
+                    `صورة الجهاز رقم ${i + 1} مرفوضة:\n\n${validation.reason}`,
+                    "صورة غير صالحة ❌",
+                );
+            }
         }
 
         // --- 2. سحب نقاط المهام الدنيوية والدينية ---
@@ -1883,11 +1998,11 @@ document
 
             // --- 6. تطبيق معادلة الدوبامين العكسية (Capped Linear Decay) ---
             // أقصى نقاط للشاشة: 100 | حد التسامح: 4 ساعات (300 دقيقة)
-            let screenPoints = 100 * (1 - wastedScreen / 300);
+            let screenPoints = 75 * (1 - wastedScreen / 300);
             if (screenPoints < 0) screenPoints = 0;
 
             // أقصى نقاط للشورتس: 100 | حد التسامح: 45 دقيقة
-            let shortsPoints = 100 * (1 - wastedShorts / 45);
+            let shortsPoints = 75 * (1 - wastedShorts / 45);
             if (shortsPoints < 0) shortsPoints = 0;
 
             const dopaminePoints = Math.floor(screenPoints + shortsPoints);
@@ -4290,15 +4405,25 @@ submitUnchainingBtn?.addEventListener("click", async () => {
 
     // 2. فحص حداثة الصورة (يجب أن تكون التقطت خلال آخر 30 دقيقة كحد أقصى)
     // هذا يغنينا عن مشاكل اختلاف التاريخ بعد منتصف الليل، ويمنع التلاعب نهائياً.
-    const fileTime = new Date(unchainingImageFile.lastModified);
-    const diffMinutes = (now - fileTime) / (1000 * 60);
+    // const fileTime = new Date(unchainingImageFile.lastModified);
+    // const diffMinutes = (now - fileTime) / (1000 * 60);
 
-    if (diffMinutes > 30 || diffMinutes < 0) {
-        return CustomDialog.alert(
-            "هذا الإثبات قديم. يجب التقاط لقطة الشاشة ورفعها فوراً (خلال 30 دقيقة كحد أقصى). التقط واحدة جديدة الآن.",
-            "إثبات باطل ❌",
+    // if (diffMinutes > 30 || diffMinutes < 0) {
+    //     return CustomDialog.alert(
+    //         "هذا الإثبات قديم. يجب التقاط لقطة الشاشة ورفعها فوراً (خلال 30 دقيقة كحد أقصى). التقط واحدة جديدة الآن.",
+    //         "إثبات باطل ❌",
+    //     );
+    // }
+
+    // 🛑 فحص صلاحية صورة فك القيود (التاريخ + الوقت)
+    const validation = await validateProofImage(unchainingImageFile);
+    if (!validation.valid) {
+        return await CustomDialog.alert(
+            `الصورة مرفوضة:\n\n${validation.reason}`,
+            "إثبات غير صالح ❌",
         );
     }
+
     // ==========================================
 
     const confirmSubmit = await CustomDialog.confirm(

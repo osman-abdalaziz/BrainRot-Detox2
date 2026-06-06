@@ -270,8 +270,10 @@ exports.weeklyWipeAndEvaluate = onSchedule(
                 let lifetimeScore = userData.lifetimeScore || 0;
                 let hasDoubleXP = userData.hasDoubleXP || false;
                 let currentMultiplier = userData.currentMultiplier || 1.0;
+                let lostStreak = userData.lostStreak || 0; // 🛑 إضافة المتغير هنا
 
                 let currentEvalDateStr = userData.lastEvalDate;
+
                 if (!currentEvalDateStr) {
                     let t = new Date(now);
                     t.setDate(t.getDate() - 1);
@@ -391,8 +393,7 @@ exports.weeklyWipeAndEvaluate = onSchedule(
                                 freezeCount--;
                             } else {
                                 // 🛑 التعديل الجراحي: تسجيل الستريك الحالي قبل إعدامه لكي يستخدمه في الإنعاش
-                                u.lostStreak = newStreak; // نحتفظ بالرقم القديم
-
+                                lostStreak = newStreak; // 🛑 تصحيح الخطأ: استخدام المتغير المحلي
                                 newStreak = 0;
                                 if (newZone === "green") newZone = "yellow";
                                 else if (newZone === "yellow") newZone = "red";
@@ -463,7 +464,7 @@ exports.weeklyWipeAndEvaluate = onSchedule(
                     earnedStreakBadges,
                     badges,
                     lastEvalDate: currentEvalDateStr,
-                    lostStreak: u.lostStreak || 0,
+                    lostStreak: lostStreak, // 🛑 تصحيح الخطأ: تمرير المتغير المحلي
                 });
             }
 
@@ -500,6 +501,7 @@ exports.weeklyWipeAndEvaluate = onSchedule(
                     usedDoubleXP: false,
                     coreTasksCompletedToday: false,
                     lastEvalDate: u.lastEvalDate,
+                    lostStreak: u.lostStreak, // 🛑 إضافة ضرورية للحفظ الفعلي في الداتابيز
                 });
 
                 operationCount++;
@@ -691,6 +693,22 @@ exports.evaluateScreenTime = onCall(
                         response.headers.get("content-type") || "image/jpeg",
                 },
             };
+            // توليد التاريخ والوقت الحالي بتوقيت القاهرة لتمريره للـ AI
+            const now = new Date();
+            const cairoFormatter = new Intl.DateTimeFormat("en-CA", {
+                timeZone: "Africa/Cairo",
+                year: "numeric",
+                month: "2-digit",
+                day: "2-digit",
+            });
+            const cairoTimeFormatter = new Intl.DateTimeFormat("en-US", {
+                timeZone: "Africa/Cairo",
+                hour: "2-digit",
+                minute: "2-digit",
+                hour12: false,
+            });
+            const todayStr = cairoFormatter.format(now);
+            const submissionTimeStr = cairoTimeFormatter.format(now);
 
             // 3. التلقين الصارم للذكاء الاصطناعي (Strict Prompt)
             const prompt = `
@@ -701,12 +719,28 @@ exports.evaluateScreenTime = onCall(
 - إجمالي وقت الشاشة المبلغ عنه: ${totalScreenMinutes} دقيقة.
 - وقت Shorts/Reels/TikTok: ${totalShortsMinutes} دقيقة.
 - التبرير المقدم: "${justification}"
+- وقت رفع الصورة (توقيت القاهرة): ${submissionTimeStr}
+- تاريخ اليوم المطلوب (توقيت القاهرة): ${todayStr}
 
-القواعد العسكرية للتقييم:
-1. تحقق أن الصور المرفقة هي بالفعل لقطات شاشة توضح وقت الاستهلاك (Screen Time / Digital Wellbeing / Battery Usage).
-2. إذا كانت الصورة لا علاقة لها بوقت الشاشة (صورة سوداء، حائط، سيلفي، احتيال)، قم بمعاقبته فوراً بجعل "الوقت المهدر" 999 دقيقة.
-3. اقرأ التبرير بتمعن. إذا كان منطقياً ويشرح استهلاكاً دراسياً أو عملاً (مثل تطبيقات إنتاجية، Zoom، منصات تعليمية)، اطرح هذا الوقت من الإجمالي لتصل إلى "الوقت المهدر الفعلي".
-4. السوشيال ميديا، الألعاب، والشورتس (TikTok/Reels/Shorts) تعتبر ترفيه وضياع وقت (مهدر كلياً)، ولا يقبل تبريرها تحت أي ظرف دراسي.
+
+━━━━━━━━━━━━━━━━━━━
+القواعد العسكرية للتقييم (مرتبة بالأولوية):
+━━━━━━━━━━━━━━━━━━━
+
+[1] فحص صحة الصورة (الأهم):
+- يجب أن تكون لقطة شاشة حقيقية لـ Screen Time / Digital Wellbeing / إعدادات الاستخدام.
+- إذا كانت الصورة لا علاقة لها بوقت الشاشة (سوداء، سيلفي، احتيال، صورة من الإنترنت) → اجعل wastedScreenMinutes = 999.
+
+[2] فحص التوقيت:
+- ابحث في الصورة عن أي مؤشر زمني: ساعة الجهاز، تاريخ التقرير، عبارات مثل "اليوم" / "Today" / "آخر 24 ساعة".
+- إذا وجدت تاريخاً في الصورة وكان مختلفاً عن تاريخ اليوم (${todayStr}) → اجعل wastedScreenMinutes = 999 وأضف سبب الرفض.
+- إذا وجدت ساعة في الصورة وكانت قبل الساعة 9 مساءً (21:00) بتوقيت القاهرة → اجعل wastedScreenMinutes = 999.
+- إذا لم يظهر في الصورة أي تاريخ أو ساعة → تجاوز هذا الفحص (لا تعاقب على غياب المعلومة).
+
+[3] تقييم الاستهلاك:
+- اقرأ التبرير: إذا كان منطقياً ويشرح استخداماً إنتاجياً (Zoom، منصات تعليمية، عمل)، اطرح هذا الوقت من الإجمالي.
+- السوشيال ميديا، الألعاب، والشورتس = مهدر كلياً بلا استثناء.
+
 
 الرد المطلوب:
 يجب أن يكون ردك عبارة عن كائن JSON فقط، بدون أي نصوص تمهيدية وبدون علامات Markdown، مطابق لهذا الهيكل بالضبط:
@@ -715,15 +749,6 @@ exports.evaluateScreenTime = onCall(
   "wastedShortsMinutes": [الرقم الصافي لشورتس المهدر]
 }
 `;
-            // 4. استخراج الحكم
-            // const result = await model.generateContent([prompt, imagePart]);
-            // let text = result.response.text().trim();
-
-            // // تنظيف الـ JSON لضمان عدم انهيار الكود
-            // if (text.startsWith("\`\`\`json"))
-            //     text = text.replace(/\`\`\`json/g, "");
-            // if (text.startsWith("\`\`\`")) text = text.replace(/\`\`\`/g, "");
-            // text = text.trim();
 
             // const aiData = JSON.parse(text);
             // 4. استخراج الحكم
