@@ -393,7 +393,8 @@ exports.weeklyWipeAndEvaluate = onSchedule(
                                 freezeCount--;
                             } else {
                                 // 🛑 التعديل الجراحي: تسجيل الستريك الحالي قبل إعدامه لكي يستخدمه في الإنعاش
-                                lostStreak = newStreak; // 🛑 تصحيح الخطأ: استخدام المتغير المحلي
+                                lostStreak = newStreak; // 🛑 تصحيح الخطأ: استخدام المتغير المحلي.
+                                u.streakDeathTimestamp = Date.now(); // 🛑 تسجيل لحظة الوفاة في السيرفر
                                 newStreak = 0;
                                 if (newZone === "green") newZone = "yellow";
                                 else if (newZone === "yellow") newZone = "red";
@@ -465,6 +466,7 @@ exports.weeklyWipeAndEvaluate = onSchedule(
                     badges,
                     lastEvalDate: currentEvalDateStr,
                     lostStreak: lostStreak, // 🛑 تصحيح الخطأ: تمرير المتغير المحلي
+                    streakDeathTimestamp: u.streakDeathTimestamp || null, // 🛑 تمرير وقت الوفاة للسيرفر
                 });
             }
 
@@ -502,6 +504,8 @@ exports.weeklyWipeAndEvaluate = onSchedule(
                     coreTasksCompletedToday: false,
                     lastEvalDate: u.lastEvalDate,
                     lostStreak: u.lostStreak, // 🛑 إضافة ضرورية للحفظ الفعلي في الداتابيز
+                    streakDeathTimestamp: u.streakDeathTimestamp || null,
+                    isStreakRestoreUsed: false, // إعادة تعيين علامة استخدام الإنعاش مع كل دورة جديدة
                 });
 
                 operationCount++;

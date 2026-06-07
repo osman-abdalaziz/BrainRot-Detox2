@@ -758,6 +758,21 @@ async function processActiveParticipant(userData, userDocRef) {
         if (noteEl) noteEl.style.display = "none";
     }
 
+    // 🛑 الكنّاس الصامت: تنظيف الستريك المتعفن إذا انتهت الـ 24 ساعة
+    if (userData.lostStreak > 0 && userData.streakDeathTimestamp) {
+        const hoursSinceDeath =
+            (getRealNow().getTime() - userData.streakDeathTimestamp) /
+            (1000 * 60 * 60);
+        if (hoursSinceDeath > 24) {
+            userData.lostStreak = 0;
+            userData.streakDeathTimestamp = null;
+            await updateDoc(userDocRef, {
+                lostStreak: 0,
+                streakDeathTimestamp: null,
+            });
+        }
+    }
+
     // 1. جلب المهام الإجبارية (النشطة فقط)
     const importantRelTaskIds = [];
     const relSnap = await getDocs(query(collection(db, "religiousTasks")));
@@ -951,7 +966,7 @@ async function processActiveParticipant(userData, userDocRef) {
                 } else {
                     // 🛑 التعديل الجراحي الأول: حفظ الستريك الميت في كائن المستخدم قبل تصفيره
                     userData.lostStreak = currentStreak;
-
+                    userData.streakDeathTimestamp = getRealNow().getTime(); // 🛑 تسجيل لحظة الوفاة بأثر رجعي
                     currentStreak = 0;
                     if (currentZone === "green") currentZone = "yellow";
                     else if (currentZone === "yellow") currentZone = "red";
@@ -988,6 +1003,7 @@ async function processActiveParticipant(userData, userDocRef) {
             walletCoins,
             currentStreak,
             lostStreak: userData.lostStreak || 0, // 🛑 إضافة الستريك المفقود للحفظ
+            streakDeathTimestamp: userData.streakDeathTimestamp || null,
             cycleScore,
             currentZone,
             freezeCount,
@@ -2143,7 +2159,7 @@ document
 
                     // 🛑 التعديل الجراحي الثاني: حفظ الستريك الميت في التحديثات
                     dbUpdates.lostStreak = userDataLocal.currentStreak || 0;
-
+                    dbUpdates.streakDeathTimestamp = getRealNow().getTime(); // 🛑 تسجيل لحظة الوفاة
                     dbUpdates.currentStreak = 0;
                     dbUpdates.currentZone = currentZone;
                     dbUpdates.walletCoins = increment(-penaltyCoins);
@@ -2995,7 +3011,7 @@ window.buyDoubleXP = async function () {
 };
 
 // ==========================================
-// 🛒 شراء إنعاش الستريك
+// 🛒 شراء إنعاش الستريك (نظام التضخم العقابي)
 // ==========================================
 window.buyStreakResurrection = async function () {
     try {
@@ -3005,14 +3021,36 @@ window.buyStreakResurrection = async function () {
         if (!userSnap.exists()) return;
         const userData = userSnap.data();
 
-        // 1. فحص الرصيد
-        if ((userData.walletCoins || 0) < 1000) {
+        // 1. فحص هل يوجد ستريك ميت مسجل في السجل أصلاً؟
+        const streakToRestore = userData.lostStreak || 0;
+        // 🛑 جدار الـ 24 ساعة (نافذة الموت السريري)
+        const deathTime = userData.streakDeathTimestamp || 0;
+        if (streakToRestore > 0 && deathTime > 0) {
+            const hoursSinceDeath =
+                (getRealNow().getTime() - deathTime) / (1000 * 60 * 60);
+            if (hoursSinceDeath > 24) {
+                await updateDoc(userRef, {
+                    lostStreak: 0,
+                    streakDeathTimestamp: null,
+                });
+                return await CustomDialog.alert(
+                    "فات الأوان! لقد مر أكثر من 24 ساعة وتعفن ستريكك نهائياً. لم يعد قابلاً للإنعاش.",
+                    "الستريك تعفن 💀",
+                );
+            }
+        }
+        if (streakToRestore === 0) {
             await CustomDialog.alert(
-                "رصيدك لا يكفي لدفع فدية الإنعاش. عد للقتال واجمع العملات.",
+                "لا يوجد ستريك مفقود مسجل لإنعاشه. أنت تبدأ من الصفر.",
                 "مرفوض ❌",
             );
             return;
         }
+
+        // 🛑 معادلة التضخم العقابي (Dynamic Pricing)
+        // الحد الأدنى 1000 عملة. وكل يوم مسجل في الستريك يرفع السعر 100 عملة.
+        // مثال: ستريك 15 = 1500 عملة، ستريك 30 = 3000 عملة.
+        const resurrectionCost = Math.max(1000, streakToRestore * 100);
 
         // 2. فحص حالة الستريك الحالي (يجب أن يكون مفلساً)
         if ((userData.currentStreak || 0) > 0) {
@@ -3023,30 +3061,41 @@ window.buyStreakResurrection = async function () {
             return;
         }
 
-        // 3. فحص هل يوجد ستريك ميت مسجل في السجل؟
-        const streakToRestore = userData.lostStreak || 0;
-        if (streakToRestore === 0) {
+        // 3. فحص سقف الاستخدام (مرة واحدة بالدورة)
+        const usedRestore = userData.isStreakRestoreUsed || false;
+        if (usedRestore) {
             await CustomDialog.alert(
-                "لا يوجد ستريك مفقود مسجل لإنعاشه. أنت تبدأ من الصفر.",
+                "لقد استخدمت إنعاش الستريك بالفعل في هذه الدورة. لا يمكنك استخدامه مرة أخرى.",
                 "مرفوض ❌",
             );
             return;
         }
 
-        // 4. تأكيد العملية الصارمة
+        // 4. فحص الرصيد بناءً على السعر الديناميكي الجديد
+        if ((userData.walletCoins || 0) < resurrectionCost) {
+            await CustomDialog.alert(
+                `رصيدك لا يكفي لدفع الفدية. استرجاع ستريك (${streakToRestore} يوم) سيكلفك ${resurrectionCost} عملة.\nتذكر: كلما طال ستريكك، زادت تكلفة استعادته!`,
+                "مرفوض ❌",
+            );
+            return;
+        }
+
+        // 5. تأكيد العملية الصارمة
         const confirmBuy = await CustomDialog.confirm(
-            `هل أنت متأكد من دفع 1000 عملة لاسترجاع ستريك (${streakToRestore} يوم) والعودة فوراً للمنطقة الخضراء؟`,
+            `هل أنت متأكد من دفع ${resurrectionCost} عملة لاسترجاع ستريكك (${streakToRestore} يوم) والعودة فوراً للمنطقة الخضراء؟`,
             "تأكيد الإنعاش ❤️‍🔥",
         );
 
         if (!confirmBuy) return;
 
-        // 5. خصم العملات، استرجاع الستريك، وتصفير الستريك المفقود لكي لا يستخدمه مرتين
+        // 6. خصم العملات الديناميكية واسترجاع الستريك
         await updateDoc(userRef, {
-            walletCoins: increment(-1000),
+            walletCoins: increment(-resurrectionCost),
             currentStreak: streakToRestore,
             currentZone: "green",
-            lostStreak: 0,
+            lostStreak: 0, // تصفير الميت لكي لا يكرر العملية
+            streakDeathTimestamp: null, // 🛑 مسح وقت الوفاة بعد الإنعاش الناجح
+            isStreakRestoreUsed: true, // تفعيل الحظر لنهاية الدورة
         });
 
         await CustomDialog.alert(
@@ -3054,7 +3103,6 @@ window.buyStreakResurrection = async function () {
             "عملية ناجحة 🦅",
         );
 
-        // تحديث الواجهة (تأكد من استدعاء الدالة المسؤولة عن تحديث الـ UI لديك)
         if (typeof syncUserUI === "function") {
             syncUserUI();
         } else {
