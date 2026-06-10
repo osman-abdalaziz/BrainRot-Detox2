@@ -177,7 +177,7 @@ exports.doomsdayWarning = onSchedule(
 // ========================================================
 exports.weeklyWipeAndEvaluate = onSchedule(
     {
-        // 🛑 التعديل الأول: تأخير الإطلاق إلى 4 فجراً يوم السبت لإعطاء مهلة للمحاربين
+        // 🛑 تأخير الإطلاق إلى 4 فجراً يوم السبت لإعطاء مهلة للمحاربين
         schedule: "0 4 * * 6",
         timeZone: "Africa/Cairo",
         timeoutSeconds: 300, // 5 دقائق لاستيعاب عدد كبير من المستخدمين
@@ -232,7 +232,7 @@ exports.weeklyWipeAndEvaluate = onSchedule(
 
             const now = new Date();
 
-            // 🛑 التعديل الثاني (الكي البرمجي): الإزاحة الوقتية (Time Offset)
+            // 🛑 الإزاحة الوقتية (Time Offset)
             // إذا انطلق القاضي 4 فجراً (السبت)، خصم 6 ساعات يرجعه لـ 10 مساءً (الجمعة)
             // هذا يضمن أن اليوم المستهدف للتقييم هو الجمعة بدون أي خطأ منطقي
             now.setHours(now.getHours() - 6);
@@ -270,7 +270,11 @@ exports.weeklyWipeAndEvaluate = onSchedule(
                 let lifetimeScore = userData.lifetimeScore || 0;
                 let hasDoubleXP = userData.hasDoubleXP || false;
                 let currentMultiplier = userData.currentMultiplier || 1.0;
-                let lostStreak = userData.lostStreak || 0; // 🛑 إضافة المتغير هنا
+
+                // 🛑 تعريف المتغيرات المحلية بشكل صحيح
+                let lostStreak = userData.lostStreak || 0;
+                let streakDeathTimestamp =
+                    userData.streakDeathTimestamp || null;
 
                 let currentEvalDateStr = userData.lastEvalDate;
 
@@ -392,18 +396,43 @@ exports.weeklyWipeAndEvaluate = onSchedule(
                             if (freezeCount > 0) {
                                 freezeCount--;
                             } else {
-                                // 🛑 التعديل الجراحي: تسجيل الستريك الحالي قبل إعدامه لكي يستخدمه في الإنعاش
-                                lostStreak = newStreak; // 🛑 تصحيح الخطأ: استخدام المتغير المحلي.
-                                u.streakDeathTimestamp = Date.now(); // 🛑 تسجيل لحظة الوفاة في السيرفر
+                                // 🛑 التعديل الجراحي: تسجيل الستريك وتاريخ الوفاة باستخدام المتغيرات المحلية الصحيحة
+                                lostStreak = newStreak;
+                                streakDeathTimestamp = Date.now();
                                 newStreak = 0;
-                                if (newZone === "green") newZone = "yellow";
-                                else if (newZone === "yellow") newZone = "red";
-
                                 currentMultiplier = 1.0;
-                                const penaltyCoins = Math.floor(
-                                    targetPoints / 2,
-                                );
-                                walletCoins -= penaltyCoins;
+
+                                // 🛑 فرز الجندي وتحديد رتبته العسكرية
+                                let isBeginner = lifetimeScore <= 1000;
+                                let isIntermediate =
+                                    lifetimeScore > 1000 &&
+                                    lifetimeScore <= 5000;
+                                let isPro = lifetimeScore > 5000;
+
+                                // 🛑 تطبيق العقوبات الصارمة بناءً على الرتبة
+                                if (isBeginner) {
+                                    // المبتدئ: لا يُخصم منه شيء ولا يطرد للمناطق
+                                } else if (isIntermediate) {
+                                    if (newZone === "green") newZone = "yellow";
+                                    else if (newZone === "yellow")
+                                        newZone = "red";
+
+                                    const penaltyCoins = Math.floor(
+                                        targetPoints / 2,
+                                    );
+                                    walletCoins =
+                                        (Number(walletCoins) || 0) -
+                                        penaltyCoins;
+                                } else if (isPro) {
+                                    if (newZone === "green") newZone = "yellow";
+                                    else if (newZone === "yellow")
+                                        newZone = "red";
+
+                                    const penaltyCoins = targetPoints;
+                                    walletCoins =
+                                        (Number(walletCoins) || 0) -
+                                        penaltyCoins;
+                                }
                             }
                         }
 
@@ -452,6 +481,7 @@ exports.weeklyWipeAndEvaluate = onSchedule(
                     }
                 }
 
+                // 🛑 تم إزالة u. من المتغيرات لأنها تمرر مباشرة من الـ Scope المحلي
                 usersList.push({
                     uid,
                     cycleScore,
@@ -465,8 +495,8 @@ exports.weeklyWipeAndEvaluate = onSchedule(
                     earnedStreakBadges,
                     badges,
                     lastEvalDate: currentEvalDateStr,
-                    lostStreak: lostStreak, // 🛑 تصحيح الخطأ: تمرير المتغير المحلي
-                    streakDeathTimestamp: u.streakDeathTimestamp || null, // 🛑 تمرير وقت الوفاة للسيرفر
+                    lostStreak: lostStreak,
+                    streakDeathTimestamp: streakDeathTimestamp,
                 });
             }
 
@@ -474,7 +504,7 @@ exports.weeklyWipeAndEvaluate = onSchedule(
 
             let rank = 1;
             for (let i = 0; i < usersList.length; i++) {
-                let u = usersList[i];
+                let u = usersList[i]; // 🛑 هنا فقط يتم تعريف u.
                 if (rank <= 3 && u.cycleScore > 0) {
                     u.badges.push({
                         id: `top${rank}_cycle_${currentCycle}`,
@@ -503,9 +533,9 @@ exports.weeklyWipeAndEvaluate = onSchedule(
                     usedDoubleXP: false,
                     coreTasksCompletedToday: false,
                     lastEvalDate: u.lastEvalDate,
-                    lostStreak: u.lostStreak, // 🛑 إضافة ضرورية للحفظ الفعلي في الداتابيز
+                    lostStreak: u.lostStreak,
                     streakDeathTimestamp: u.streakDeathTimestamp || null,
-                    isStreakRestoreUsed: false, // إعادة تعيين علامة استخدام الإنعاش مع كل دورة جديدة
+                    isStreakRestoreUsed: false,
                 });
 
                 operationCount++;
@@ -523,7 +553,7 @@ exports.weeklyWipeAndEvaluate = onSchedule(
             }
 
             console.log(
-                `تم إغلاق الدورة ${currentCycle} بنجاح باستخدام الإزاحة الوقتية (تأخير 4 فجراً). تم استخدام ${Math.ceil(operationCount / 450)} سلال حفظ.`,
+                `تم إغلاق الدورة ${currentCycle} بنجاح. تم استخدام ${Math.ceil(operationCount / 450)} سلال حفظ.`,
             );
             return null;
         } catch (error) {
@@ -547,6 +577,7 @@ exports.verifyUnchainingProof = onCall(
             );
 
         const storagePath = request.data.storagePath;
+        const justification = request.data.justification || ""; // 🛑 سحب التبرير
         if (!storagePath)
             throw new HttpsError(
                 "invalid-argument",
@@ -576,18 +607,20 @@ exports.verifyUnchainingProof = onCall(
             });
 
             const prompt = `أنت قاضٍ آلي صارم في منصة تحديات قاسية. 
-المستخدم معاقب، وللخروج من العقوبة يجب أن يرفع إثباتاً عبارة عن لقطة شاشة (Screenshot) توضح إجمالي وقت استخدام الهاتف (Screen Time) وتفصيل التطبيقات.
+المستخدم معاقب، وللخروج من العقوبة يجب أن يرفع إثباتاً يوضح أن "الوقت المهدر الصافي" على الهاتف أقل من ساعتين.
 
-قم بتحليل الصورة بدقة بناءً على هذه القواعد الصارمة التي لا تقبل الاستثناء:
-1. يجب أن تكون الصورة لقطة شاشة حقيقية لإعدادات "وقت الشاشة" (Screen Time / Digital Wellbeing) من هاتف أو حاسوب المستخدم.
-2. يجب أن يكون "إجمالي وقت الشاشة" (Total Screen Time) الظاهر في الصورة أقل من ساعتين (أي أقصى حد مسموح هو 1 ساعة و 59 دقيقة).
-3. يجب أن يكون الوقت المستهلك على تطبيقات الفيديوهات القصيرة (TikTok, Reels, Shorts, Instagram, YouTube) أقل من 30 دقيقة.
-4. لا تشترط وقتاً معيناً في ساعة الهاتف الظاهرة في الصورة، ركز فقط على أرقام الاستهلاك.
+التبرير المقدم من المستخدم لأوقات العمل/الدراسة: "${justification}"
+
+قم بتحليل الصورة بدقة بناءً على هذه القواعد الصارمة:
+1. اقرأ "إجمالي وقت الشاشة" (Total Screen Time) من الصورة.
+2. اقرأ التبرير المقدم: إذا كان منطقياً ويشرح استخداماً إنتاجياً (منصات تعليمية، عمل، محاضرات، ملفات PDF)، اطرح هذا الوقت "الإنتاجي" من "إجمالي وقت الشاشة" لتحصل على "وقت الشاشة المهدر الصافي".
+3. يجب أن يكون "وقت الشاشة المهدر الصافي" أقل من ساعتين (120 دقيقة). (مثال: إذا كان إجمالي الشاشة 5 ساعات، ولكن التبرير أثبت أن هناك 4 ساعات دراسة، فالمهدر هو ساعة واحدة، وهذا يعتبر مقبول).
+4. يجب أن يكون الوقت المستهلك على تطبيقات الفيديوهات القصيرة (TikTok, Reels, Shorts, Instagram, YouTube) أقل من 30 دقيقة. (هذا الوقت لا يقبل التبرير أبداً ويعتبر مهدراً دائماً).
 5. هل تبدو معدلة ببرامج، أو صورة عامة من الإنترنت، أو شاشة سوداء؟ ارفضها فوراً.
 
 التعليمات الصارمة للإجابة:
-- إذا كانت الصورة إثباتاً حقيقياً ومقنعاً وحققت الشرطين (الشاشة < ساعتين، والشورتس < 30 دقيقة)، اكتب كلمة واحدة فقط: قبول
-- إذا كانت الصورة احتيالية، أو الشاشة ساعتين فأكثر، أو الشورتس 30 دقيقة فأكثر، أو لا علاقة لها بالمطلوب، اكتب: رفض: [اكتب سبب الرفض باختصار شديد يوضح الرقم الذي تجاوزه المستخدم]`;
+- إذا كان "الوقت المهدر الصافي" أقل من ساعتين، والشورتس أقل من 30 دقيقة، اكتب كلمة واحدة فقط: قبول
+- إذا كان "الوقت المهدر الصافي" ساعتين فأكثر، أو الشورتس 30 دقيقة فأكثر، اكتب: رفض: [اكتب سبب الرفض باختصار مع ذكر كم كان الوقت المهدر الصافي بعد الحساب]`;
 
             const result = await model.generateContent([prompt, ...imageParts]);
             const responseText = result.response.text().trim();

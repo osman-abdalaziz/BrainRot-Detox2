@@ -1113,3 +1113,358 @@ function initFloatingTimer() {
 }
 // استدعاء الدالة لتشغيل النظام فوراً
 initFloatingTimer();
+
+
+-------
+
+// ==========================================
+// 2. مستمع زر اعتماد اليوم (النظام الجديد مع تحليل الدوبامين بالـ AI)
+// ==========================================
+document
+    .getElementById("submit-day-btn")
+    ?.addEventListener("click", async () => {
+        if (!currentUser || isTodayFinalized) return;
+        // ==========================================
+        // 🛑 جدار الحماية الزمني الديناميكي
+        // ==========================================
+        const now = getRealNow();
+        const cairoTimeStr = now.toLocaleString("en-US", {
+            timeZone: "Africa/Cairo",
+            hour12: false,
+        });
+        const cairoDate = new Date(cairoTimeStr);
+        const currentHour = cairoDate.getHours();
+
+        const startH = window.submissionStartHour;
+        const endH = window.dayStartHour;
+
+        // إذا لم يكن الوقت داخل النافذة (من وقت فتح الاعتماد وحتى وقت نهاية اليوم)
+        if (!(currentHour >= startH || currentHour < endH)) {
+            // دالة صغيرة لتحويل نظام الـ 24 إلى 12 ساعة لرسالة الخطأ
+            const formatHour = (h) => {
+                let ampm = h >= 12 ? "مساءً" : "صباحاً";
+                let hours12 = h % 12 || 12;
+                return `${hours12}:00 ${ampm}`;
+            };
+
+            return await CustomDialog.alert(
+                `لا يمكنك اعتماد مهام اليوم الآن. نافذة التقييم تفتح فقط من ${formatHour(startH)} وحتى ${formatHour(endH)} بتوقيت القاهرة.`,
+                "النافذة مغلقة 🛑",
+            );
+        }
+        // ==========================================
+        // // --- 1. التحقق من محلل الدوبامين ---
+        // const dopamineData = calculateTotalDopamineTime();
+        // if (!dopamineData.isValid) {
+        //     return await CustomDialog.alert(
+        //         "يجب إدخال وقت الشاشة لجهاز واحد على الأقل لتجاوز الفحص.",
+        //         "تنبيه ⚠️",
+        //     );
+        // }
+        // if (dopamineData.files.length === 0) {
+        //     return await CustomDialog.alert(
+        //         "يجب إرفاق صورة إثبات (Screenshot) لوقت الشاشة. لا يمكن المرور بدونها.",
+        //         "إثبات مطلوب 📸",
+        //     );
+        // }
+
+        // --- 1. التحقق من محلل الدوبامين ---
+        const dopamineData = calculateTotalDopamineTime();
+        if (!dopamineData.isValid) {
+            return await CustomDialog.alert(
+                "يجب إدخال وقت الشاشة لجهاز واحد على الأقل لتجاوز الفحص.",
+                "تنبيه ⚠️",
+            );
+        }
+        if (dopamineData.files.length === 0) {
+            return await CustomDialog.alert(
+                "يجب إرفاق صورة إثبات (Screenshot) لوقت الشاشة. لا يمكن المرور بدونها.",
+                "إثبات مطلوب 📸",
+            );
+        }
+
+        const justification = document
+            .getElementById("dopamine-justification")
+            .value.trim();
+        if (!justification) {
+            return await CustomDialog.alert(
+                "يجب كتابة تبرير لاستهلاكك. كن صادقاً، الذكاء الاصطناعي يحلل كل حرف ولن يتهاون.",
+                "التبرير مطلوب ✍️",
+            );
+        }
+
+        // 🛑 فحص صلاحية كل صورة (التاريخ + الوقت)
+        for (let i = 0; i < dopamineData.files.length; i++) {
+            const file = dopamineData.files[i];
+            const validation = await validateProofImage(file);
+            if (!validation.valid) {
+                return await CustomDialog.alert(
+                    `صورة الجهاز رقم ${i + 1} مرفوضة:\n\n${validation.reason}`,
+                    "صورة غير صالحة ❌",
+                );
+            }
+        }
+
+        // --- 2. سحب نقاط المهام الدنيوية والدينية ---
+        const {
+            totalPoints: taskPoints,
+            selections,
+            missingNormalImportant,
+        } = getCurrentSelectionsAndPoints();
+
+        const currentRelSelections = {};
+        document.querySelectorAll(".rel-task-select").forEach((s) => {
+            currentRelSelections[s.getAttribute("data-task-id")] = parseInt(
+                s.options[s.selectedIndex].getAttribute("data-index"),
+            );
+        });
+        document.querySelectorAll(".rel-checklist-container").forEach((c) => {
+            let arr = [];
+            c.querySelectorAll(".rel-task-checkbox:checked").forEach((cb) =>
+                arr.push(parseInt(cb.getAttribute("data-index"))),
+            );
+            if (arr.length === 0) arr = [0];
+            currentRelSelections[c.getAttribute("data-task-id")] = arr;
+        });
+
+        let missingRelImportant = false;
+        for (let id of window.importantRelTaskIds || []) {
+            let sel = currentRelSelections[id];
+            let isDone = false;
+            if (Array.isArray(sel)) {
+                if (sel.length > 1 || (sel.length === 1 && sel[0] !== 0))
+                    isDone = true;
+            } else {
+                if (sel > 0) isDone = true;
+            }
+            if (!isDone) {
+                missingRelImportant = true;
+                break;
+            }
+        }
+
+        // --- 3. الفحص الإجباري وتأكيد الإرسال ---
+        if (missingNormalImportant || missingRelImportant) {
+            const isSure = await CustomDialog.confirm(
+                "لقد تجاهلت مهام إجبارية أساسية. الاعتماد الآن سيؤدي حتماً إلى الفشل وكسر الستريك مهما كانت نقاطك. هل أنت متأكد من هذا التخاذل؟",
+                "تحذير صارم 🛑",
+            );
+            if (!isSure) return;
+        } else {
+            const confirmSubmit = await CustomDialog.confirm(
+                "سيتم الآن دمج صور الأجهزة وإرسالها للقاضي الآلي (Gemini) لتقييم استهلاكك واعتماد اليوم. هل أنت مستعد لمواجهة نتيجتك؟",
+                "تحكيم الذكاء الاصطناعي 🤖",
+            );
+            if (!confirmSubmit) return;
+        }
+
+        const btn = document.getElementById("submit-day-btn");
+        const originalText = btn.innerText;
+        btn.innerText = "القاضي الآلي يحلل بياناتك... 🤖⏳";
+        btn.disabled = true;
+
+        try {
+            const realNow = getRealNow();
+            const today = getCairoDateString(realNow);
+
+            // --- 4. دمج الصور ورفعها للسيرفر ---
+            const mergedFile = await window.mergeDeviceImagesToCanvas(
+                dopamineData.files,
+            );
+            const storagePath = `dopamine_proofs/${currentUser.uid}_${Date.now()}.jpg`;
+            const storageRefPath = ref(storage, storagePath);
+            await uploadBytes(storageRefPath, mergedFile);
+            const imageUrl = await getDownloadURL(storageRefPath);
+
+            // --- 5. طلب الحكم من السيرفر السحابي ---
+            const evaluateScreenTimeFunc = httpsCallable(
+                functions,
+                "evaluateScreenTime",
+            );
+            const aiResult = await evaluateScreenTimeFunc({
+                totalScreenMinutes: dopamineData.totalScreenMinutes,
+                totalShortsMinutes: dopamineData.totalShortsMinutes,
+                justification: justification,
+                imageUrl: imageUrl,
+            });
+
+            if (!aiResult.data.success) throw new Error("فشل التحليل الذكي.");
+
+            const wastedScreen = aiResult.data.wastedScreenMinutes;
+            const wastedShorts = aiResult.data.wastedShortsMinutes;
+
+            // --- 6. تطبيق معادلة الدوبامين العكسية (Capped Linear Decay) ---
+            // أقصى نقاط للشاشة: 100 | حد التسامح: 4 ساعات (300 دقيقة)
+            let screenPoints = 100 * (1 - wastedScreen / 300);
+            if (screenPoints < 0) screenPoints = 0;
+
+            // أقصى نقاط للشورتس: 100 | حد التسامح: 45 دقيقة
+            let shortsPoints = 100 * (1 - wastedShorts / 45);
+            if (shortsPoints < 0) shortsPoints = 0;
+
+            const dopaminePoints = Math.floor(screenPoints + shortsPoints);
+            const finalTotalPoints = taskPoints + dopaminePoints;
+
+            // --- 7. تحديد النجاح الفعلي ---
+            const passedToday =
+                finalTotalPoints >= dailyTargetPoints &&
+                !missingRelImportant &&
+                !missingNormalImportant;
+
+            // --- 8. توثيق السجل اليومي ---
+            await setDoc(
+                doc(db, `users/${currentUser.uid}/dailyLogs`, today),
+                {
+                    date: today,
+                    pointsEarned: finalTotalPoints,
+                    selections: selections,
+                    religiousSelections: currentRelSelections,
+                    passed: passedToday,
+                    isFinalized: true,
+                    timestamp: realNow,
+                    dopamineData: {
+                        // حفظ بيانات الدوبامين للإحصائيات المستقبلية
+                        reportedScreenMinutes: dopamineData.totalScreenMinutes,
+                        reportedShortsMinutes: dopamineData.totalShortsMinutes,
+                        justification: justification,
+                        proofImageUrl: imageUrl,
+                        aiEvaluatedWastedScreen: wastedScreen,
+                        aiEvaluatedWastedShorts: wastedShorts,
+                        pointsAwarded: dopaminePoints,
+                    },
+                },
+                { merge: true },
+            );
+
+            const pointsDisplay = document.getElementById("today-points");
+            if (pointsDisplay) pointsDisplay.innerText = finalTotalPoints;
+
+            // --- 9. تحديث الحساب وتطبيق العقوبات أو الجوائز ---
+            const userDocRef = doc(db, "users", currentUser.uid);
+            const userDocSnap = await getDoc(userDocRef);
+            const userDataLocal = userDocSnap.data() || {};
+
+            let currentZone = userDataLocal.currentZone || "green";
+            const hasDoubleXP = userDataLocal.hasDoubleXP || false;
+            let dbUpdates = { lastEvalDate: today };
+
+            if (passedToday) {
+                // حالة النجاح
+                const successSound = new Audio(
+                    "https://cdn.pixabay.com/download/audio/2021/08/04/audio_0625c1539c.mp3?filename=success-1-6297.mp3",
+                );
+                successSound.volume = 0.7;
+                successSound.play().catch(() => {});
+
+                const end = Date.now() + 3000;
+                (function frame() {
+                    confetti({
+                        particleCount: 5,
+                        angle: 60,
+                        spread: 55,
+                        origin: { x: 0 },
+                        colors: ["#a855f7", "#d946ef", "#eab308"],
+                        zIndex: 10005,
+                    });
+                    confetti({
+                        particleCount: 5,
+                        angle: 120,
+                        spread: 55,
+                        origin: { x: 1 },
+                        colors: ["#a855f7", "#d946ef", "#eab308"],
+                        zIndex: 10005,
+                    });
+                    if (Date.now() < end) requestAnimationFrame(frame);
+                })();
+
+                if (currentZone === "yellow") currentZone = "green";
+
+                const newStreak = (userDataLocal.currentStreak || 0) + 1;
+                let streakMultiplier = 1.0;
+                if (newStreak >= 21) streakMultiplier = 2.0;
+                else if (newStreak >= 14) streakMultiplier = 1.6;
+                else if (newStreak >= 7) streakMultiplier = 1.4;
+                else if (newStreak >= 3) streakMultiplier = 1.2;
+
+                const multipliedPoints = Math.floor(
+                    finalTotalPoints * streakMultiplier,
+                );
+                let earnedCoins = Math.floor(multipliedPoints / 1.5);
+                let earnedXP = multipliedPoints;
+                let xpLabel = "";
+                let streakLabel =
+                    streakMultiplier > 1
+                        ? `<span style="color:#f97316; display: block; font-size: 14px; margin-top: 5px;">(مضاعف الستريك: x${streakMultiplier} 🔥)</span>`
+                        : "";
+
+                dbUpdates.walletCoins = increment(earnedCoins);
+                dbUpdates.currentStreak = increment(1);
+                dbUpdates.currentZone = currentZone;
+                dbUpdates.currentMultiplier = streakMultiplier;
+
+                if (hasDoubleXP) {
+                    earnedXP *= 2;
+                    dbUpdates.cycleScore = increment(earnedXP);
+                    dbUpdates.lifetimeScore = increment(earnedXP);
+                    dbUpdates.hasDoubleXP = false;
+                    dbUpdates.usedDoubleXP = true;
+                    xpLabel = `<span style="color:#eab308; display: block;">(مضاعف المتجر ⚡)</span>`;
+                } else {
+                    dbUpdates.cycleScore = increment(earnedXP);
+                    dbUpdates.lifetimeScore = increment(earnedXP);
+                }
+
+                await updateDoc(userDocRef, dbUpdates);
+                await CustomDialog.alert(
+                    `<span style="display: block;">🔥 تم الاعتماد بنجاح!</span> 
+                <span style="font-size: 13px; color: var(--text-muted); display: block; margin-top: 5px;">تقييم القاضي الآلي للدوبامين: +${dopaminePoints} نقطة</span>
+                ${streakLabel} ${xpLabel} \n <span><span class="win-info-boxs xp">+${earnedXP} XP</span> <span class="win-info-boxs coins">+${earnedCoins} <i class="fa-solid fa-coins fa-fw"></i></span> <span class="win-info-boxs ">+1 <i class="fa-solid fa-fire fa-fw"></i></span></span>`,
+                    "عمل عظيم ",
+                );
+            } else {
+                // حالة الفشل
+                const hasFreeze = (userDataLocal.freezeCount || 0) > 0;
+
+                if (hasFreeze) {
+                    dbUpdates.freezeCount = increment(-1);
+                    await updateDoc(userDocRef, dbUpdates);
+                    await CustomDialog.alert(
+                        `جمعت ${finalTotalPoints} نقطة فقط. تم استهلاك "تجميد الستريك" ❄️ بنجاح للحماية من السقوط.`,
+                        "تفعيل التجميد التلقائي ❄️",
+                    );
+                } else {
+                    if (currentZone === "green") currentZone = "yellow";
+                    else if (currentZone === "yellow") currentZone = "red";
+
+                    const penaltyCoins = Math.floor(dailyTargetPoints / 2);
+
+                    // 🛑 التعديل الجراحي الثاني: حفظ الستريك الميت في التحديثات
+                    dbUpdates.lostStreak = userDataLocal.currentStreak || 0;
+                    dbUpdates.streakDeathTimestamp = getRealNow().getTime(); // 🛑 تسجيل لحظة الوفاة
+                    dbUpdates.currentStreak = 0;
+                    dbUpdates.currentZone = currentZone;
+                    dbUpdates.walletCoins = increment(-penaltyCoins);
+                    dbUpdates.currentMultiplier = 1.0;
+
+                    await updateDoc(userDocRef, dbUpdates);
+
+                    await CustomDialog.alert(
+                        `المجموع ${finalTotalPoints} نقطة (القاضي أعطاك ${dopaminePoints} لدوبامينك). تم اعتماد اليوم كفشل! تصفير الستريك وخصم ${penaltyCoins} عملة ديون. 💔\nأنت الآن في المنطقة: ${currentZone === "yellow" ? "الصفراء ⚠️" : "الحمراء 🛑"}`,
+                        "تحذير شديد اللهجة",
+                    );
+                }
+            }
+
+            isTodayFinalized = true;
+            window.syncUserUI();
+            if (typeof applyZoneUI === "function") applyZoneUI(currentZone);
+        } catch (error) {
+            console.error(error);
+            await CustomDialog.alert(
+                "حدث خطأ أثناء تقييم القاضي الآلي: " + error.message,
+                "خطأ ⚠️",
+            );
+            btn.innerText = originalText;
+            btn.disabled = false;
+        }
+    });

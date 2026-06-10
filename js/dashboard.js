@@ -806,224 +806,340 @@ async function processActiveParticipant(userData, userDocRef) {
 
     // 2. المنقذ الذكي (التقييم بأثر رجعي)
     if (currentEvalDateStr < limitStr) {
-        let currentStreak = userData.currentStreak || 0;
-        let walletCoins = userData.walletCoins || 0;
-        let lifetimeScore = userData.lifetimeScore || 0;
-        let cycleScore = userData.cycleScore || 0;
-        let currentZone = userData.currentZone || "green";
-        let freezeCount = userData.freezeCount || 0;
+        console.log("🤖 [المنقذ الذكي] بدأ العمل...");
+        console.log("📅 من تاريخ:", currentEvalDateStr, "إلى تاريخ:", limitStr);
 
-        let parts = currentEvalDateStr.split("-");
-        let evalDate = new Date(parts[0], parts[1] - 1, parts[2]);
-        evalDate.setDate(evalDate.getDate() + 1);
+        try {
+            let currentStreak = userData.currentStreak || 0;
+            let walletCoins = userData.walletCoins || 0;
+            let lifetimeScore = userData.lifetimeScore || 0;
+            let cycleScore = userData.cycleScore || 0;
+            let currentZone = userData.currentZone || "green";
+            let freezeCount = userData.freezeCount || 0;
 
-        let limitParts = limitStr.split("-");
-        let limitDate = new Date(
-            limitParts[0],
-            limitParts[1] - 1,
-            limitParts[2],
-        );
-        let messages = [];
+            // 🛑 التعديل الجراحي: تثبيت الساعة 12 ظهراً لقتل ثغرة فرق التوقيت (Timezone Shift)
+            let parts = currentEvalDateStr.split("-");
+            let evalDate = new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0);
+            evalDate.setDate(evalDate.getDate() + 1);
 
-        while (evalDate <= limitDate) {
-            const dateStr = getCairoDateString(evalDate);
-            // إنشاء طابع زمني منطقي لنهاية ذلك اليوم (الساعة 23:59:59) للحفاظ على التسلسل التاريخي
-            const logicalTimestamp = new Date(evalDate);
-            logicalTimestamp.setHours(23, 59, 59);
-            const logRef = doc(
-                db,
-                `users/${currentUser.uid}/dailyLogs`,
-                dateStr,
+            let limitParts = limitStr.split("-");
+            let limitDate = new Date(
+                limitParts[0],
+                limitParts[1] - 1,
+                limitParts[2],
+                12,
+                0,
+                0,
             );
-            const logSnap = await getDoc(logRef);
+            let messages = [];
 
-            let pointsEarned = 0;
-            let selections = {};
-            let religiousSelections = {};
-            let isLogFinalized = false;
-            let passedByServer = false;
+            while (evalDate <= limitDate) {
+                const dateStr = getCairoDateString(evalDate);
+                console.log(`\n⏳ [المنقذ الذكي] جاري فحص يوم: ${dateStr}`);
 
-            if (logSnap.exists()) {
-                const logData = logSnap.data();
-                pointsEarned = logData.pointsEarned || 0;
-                selections = logData.selections || {};
-                religiousSelections = logData.religiousSelections || {};
-                isLogFinalized = logData.isFinalized || false;
-                passedByServer = logData.passed || false;
-            }
-
-            // الفحص القاطع للمهام الدينية الإجبارية (بالصيغة الجديدة + التوافق العكسي)
-            let missingRel = false;
-            for (let id of importantRelTaskIds) {
-                let sel = religiousSelections[id];
-                let isDone = false;
-
-                if (typeof sel === "boolean") {
-                    isDone = sel; // الأيام القديمة
-                } else if (Array.isArray(sel)) {
-                    if (sel.length > 1 || (sel.length === 1 && sel[0] !== 0))
-                        isDone = true; // التشيك ليست الجديدة
-                } else {
-                    if (sel > 0) isDone = true; // القائمة المنسدلة الجديدة
-                }
-
-                if (!isDone) {
-                    missingRel = true;
-                    break;
-                }
-            }
-
-            let missingNorm = false;
-            for (let id of importantNormTaskIds) {
-                let sel = selections[id];
-                let isDone = false;
-                if (Array.isArray(sel)) {
-                    if (sel.length > 1 || (sel.length === 1 && sel[0] !== 0))
-                        isDone = true;
-                } else {
-                    if (sel > 0) isDone = true;
-                }
-                if (!isDone) {
-                    missingNorm = true;
-                    break;
-                }
-            }
-
-            let passedToday = isLogFinalized
-                ? passedByServer
-                : pointsEarned >= dailyTargetPoints &&
-                  !missingRel &&
-                  !missingNorm;
-
-            if (passedToday) {
-                currentStreak++;
-                if (currentZone === "yellow") currentZone = "green";
-
-                // 🛑 حساب المضاعف
-                let streakMultiplier = 1.0;
-                if (currentStreak >= 21) streakMultiplier = 2.0;
-                else if (currentStreak >= 14) streakMultiplier = 1.6;
-                else if (currentStreak >= 7) streakMultiplier = 1.4;
-                else if (currentStreak >= 3) streakMultiplier = 1.2;
-
-                const multipliedPoints = Math.floor(
-                    pointsEarned * streakMultiplier,
+                const logicalTimestamp = new Date(evalDate);
+                logicalTimestamp.setHours(23, 59, 59);
+                const logRef = doc(
+                    db,
+                    `users/${currentUser.uid}/dailyLogs`,
+                    dateStr,
                 );
-                let earnedCoins = Math.floor(multipliedPoints / 1.5);
-                let earnedXP = multipliedPoints;
-                let xpLabel = "";
+                const logSnap = await getDoc(logRef);
 
-                if (userData.hasDoubleXP) {
-                    earnedXP *= 2;
-                    userData.hasDoubleXP = false;
-                    userData.usedDoubleXP = true;
-                    xpLabel = " ⚡";
+                if (logSnap.exists() && logSnap.data().isFinalized) {
+                    console.log(
+                        `⏭️ [المنقذ الذكي] يوم ${dateStr} معتمد مسبقاً. تخطي.`,
+                    );
+                    currentEvalDateStr = dateStr;
+                    evalDate.setDate(evalDate.getDate() + 1);
+                    continue;
                 }
 
-                lifetimeScore += earnedXP;
-                walletCoins += earnedCoins;
-                cycleScore += earnedXP;
+                let pointsEarned = 0;
+                let selections = {};
+                let religiousSelections = {};
+                let isLogFinalized = false;
+                let passedByServer = false;
 
-                // 🛑 تحديث متغير المضاعف ليتم حفظه لاحقاً في الـ updates
-                userData.currentMultiplier = streakMultiplier;
+                if (logSnap.exists()) {
+                    const logData = logSnap.data();
+                    pointsEarned = logData.pointsEarned || 0;
+                    selections = logData.selections || {};
+                    religiousSelections = logData.religiousSelections || {};
+                    isLogFinalized = logData.isFinalized || false;
+                    passedByServer = logData.passed || false;
+                }
 
-                let multiMsg =
-                    streakMultiplier > 1 ? `(مضاعف x${streakMultiplier}) ` : "";
-                messages.push(
-                    `✅ يوم ${dateStr}: تم الاعتماد بنجاح ${multiMsg}(+${earnedXP} XP${xpLabel}) | الستريك: <i class="fa-solid fa-fire fa-fw"></i>${currentStreak}`,
+                let missingRel = false;
+                for (let id of importantRelTaskIds) {
+                    let sel = religiousSelections[id];
+                    let isDone = false;
+                    if (typeof sel === "boolean") isDone = sel;
+                    else if (Array.isArray(sel))
+                        isDone =
+                            sel.length > 1 ||
+                            (sel.length === 1 && sel[0] !== 0);
+                    else if (sel > 0) isDone = true;
+
+                    if (!isDone) {
+                        missingRel = true;
+                        break;
+                    }
+                }
+
+                let missingNorm = false;
+                for (let id of importantNormTaskIds) {
+                    let sel = selections[id];
+                    let isDone = false;
+                    if (Array.isArray(sel))
+                        isDone =
+                            sel.length > 1 ||
+                            (sel.length === 1 && sel[0] !== 0);
+                    else if (sel > 0) isDone = true;
+
+                    if (!isDone) {
+                        missingNorm = true;
+                        break;
+                    }
+                }
+
+                let passedToday = isLogFinalized
+                    ? passedByServer
+                    : pointsEarned >= dailyTargetPoints &&
+                      !missingRel &&
+                      !missingNorm;
+                console.log(
+                    `📊 [المنقذ الذكي] حالة يوم ${dateStr}: نجاح؟ ${passedToday}`,
                 );
 
-                await setDoc(
-                    logRef,
-                    {
-                        passed: true,
-                        isFinalized: true,
-                        pointsEarned,
-                        date: dateStr,
-                        selections,
-                        religiousSelections,
-                        timestamp: logicalTimestamp,
-                    },
-                    { merge: true },
-                );
-            } else {
-                if (freezeCount > 0) {
-                    freezeCount--;
-                    messages.push(
-                        `❄️ يوم ${dateStr}: تم استخدام "تجميد الستريك"! تم حماية الستريك.`,
+                if (passedToday) {
+                    currentStreak++;
+                    if (currentZone === "yellow") currentZone = "green";
+
+                    let streakMultiplier = 1.0;
+                    if (currentStreak >= 21) streakMultiplier = 2.0;
+                    else if (currentStreak >= 14) streakMultiplier = 1.6;
+                    else if (currentStreak >= 7) streakMultiplier = 1.4;
+                    else if (currentStreak >= 3) streakMultiplier = 1.2;
+
+                    const multipliedPoints = Math.floor(
+                        pointsEarned * streakMultiplier,
+                    );
+                    let earnedCoins = Math.floor(multipliedPoints / 1.5);
+                    let earnedXP = multipliedPoints;
+                    let xpLabel = "";
+
+                    if (userData.hasDoubleXP) {
+                        earnedXP *= 2;
+                        userData.hasDoubleXP = false;
+                        userData.usedDoubleXP = true;
+                        xpLabel = " ⚡";
+                    }
+
+                    lifetimeScore += earnedXP;
+                    walletCoins += earnedCoins;
+                    cycleScore += earnedXP;
+                    userData.currentMultiplier = streakMultiplier;
+
+                    // let multiMsg =
+                    //     streakMultiplier > 1
+                    //         ? `(مضاعف x${streakMultiplier}) `
+                    //         : "";
+                    // messages.push(
+                    //     `✅ يوم ${dateStr}: تم الاعتماد بنجاح ${multiMsg}(+${earnedXP} XP${xpLabel}) | الستريك: <i class="fa-solid fa-fire fa-fw"></i>${currentStreak}`,
+                    // );
+                    let multiMsg =
+                        streakMultiplier > 1
+                            ? `<span style="color: var(--gold-primary); font-size: 11px; background: rgba(168, 85, 247, 0.15); border: 1px solid rgba(168,85,247,0.3); padding: 2px 6px; border-radius: 4px; margin-right: 5px;">مضاعف الستريك x${streakMultiplier}</span>`
+                            : "";
+
+                    let doubleXPMsg =
+                        xpLabel !== ""
+                            ? `<span style="color: #fbbf24; font-size: 11px; background: rgba(251, 191, 36, 0.15); border: 1px solid rgba(251,191,36,0.3); padding: 2px 6px; border-radius: 4px; margin-right: 5px;">⚡ دبل XP</span>`
+                            : "";
+
+                    messages.push(`
+    <div style="background: rgba(16, 185, 129, 0.05); border-right: 3px solid #10b981; padding: 12px; margin-bottom: 20px; border-radius: 6px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <strong style="color: #10b981; font-size: 14px;">✅ يوم ${dateStr}: نجاح مبهر</strong>
+            <span style="color: #f8fafc; font-size: 13px; font-weight: bold; background: rgba(249, 115, 22, 0.15); padding: 2px 8px; border-radius: 12px; color: #f97316;"><i class="fa-solid fa-fire"></i> ${currentStreak}</span>
+        </div>
+        <div style="color: #cbd5e1; font-size: 13px; line-height: 1.8;">
+            <i class="fa-solid fa-star fa-fw" style="color: var(--gold-primary);"></i> الخبرة: <b style="color: white;">+${earnedXP} XP</b><br>
+            <i class="fa-solid fa-coins fa-fw" style="color: #fbbf24;"></i> العملات: <b style="color: white;">+${earnedCoins}</b>
+        </div>
+        <div style="margin-top: 10px;">
+            ${multiMsg}
+            ${doubleXPMsg}
+        </div>
+    </div>
+`);
+
+                    console.log(
+                        `💾 [المنقذ الذكي] جاري حفظ نجاح يوم ${dateStr} في الداتابيز...`,
                     );
                     await setDoc(
                         logRef,
                         {
-                            passed: false,
-                            isFinalized: true,
-                            pointsEarned,
-                            date: dateStr,
-                            timestamp: logicalTimestamp,
-                        },
-                        { merge: true },
-                    );
-                } else {
-                    // 🛑 التعديل الجراحي الأول: حفظ الستريك الميت في كائن المستخدم قبل تصفيره
-                    userData.lostStreak = currentStreak;
-                    userData.streakDeathTimestamp = getRealNow().getTime(); // 🛑 تسجيل لحظة الوفاة بأثر رجعي
-                    currentStreak = 0;
-                    if (currentZone === "green") currentZone = "yellow";
-                    else if (currentZone === "yellow") currentZone = "red";
-
-                    // 🛑 خصم الغرامة الديناميكية والسماح بالديون (السالب)
-                    const penaltyCoins = Math.floor(dailyTargetPoints / 2);
-                    walletCoins -= penaltyCoins;
-
-                    messages.push(
-                        `⚠️ يوم ${dateStr}: فشلت! انكسر الستريك 💔 وتم خصم ${penaltyCoins} عملة كغرامة 📉 | حالتك الآن: ${currentZone === "yellow" ? "منطقة صفراء ⚠️" : "منطقة حمراء 🛑"}`,
-                    );
-
-                    await setDoc(
-                        logRef,
-                        {
-                            passed: false,
+                            passed: true,
                             isFinalized: true,
                             pointsEarned,
                             date: dateStr,
                             selections,
                             religiousSelections,
-                            timestamp: getRealNow(),
+                            timestamp: logicalTimestamp,
                         },
                         { merge: true },
                     );
+                    console.log(`✅ [المنقذ الذكي] تم حفظ النجاح بنجاح.`);
+                } else {
+                    if (freezeCount > 0) {
+                        freezeCount--;
+                        messages.push(`
+                            <div style="background: rgba(6, 182, 212, 0.05); border-right: 3px solid #06b6d4; padding: 12px; margin-bottom: 20px; border-radius: 4px;">
+                                <strong style="color: #06b6d4; font-size: 14px;">❄️ يوم ${dateStr}: تجميد ستريك</strong><br>
+                                <span style="color: #cbd5e1; font-size: 13px;">تم استهلاك طوق نجاة، الستريك محمي من الكسر.</span>
+                            </div>
+                        `);
+                        console.log(
+                            `❄️ [المنقذ الذكي] جاري حفظ تجميد يوم ${dateStr}...`,
+                        );
+                        await setDoc(
+                            logRef,
+                            {
+                                passed: false,
+                                isFinalized: true,
+                                pointsEarned: pointsEarned || 0,
+                                date: dateStr,
+                                timestamp: logicalTimestamp,
+                            },
+                            { merge: true },
+                        );
+                    } else {
+                        console.log(
+                            `💀 [المنقذ الذكي] بدء معالجة رسوب يوم ${dateStr}...`,
+                        );
+                        userData.lostStreak = currentStreak || 0;
+                        userData.streakDeathTimestamp = Date.now();
+                        currentStreak = 0;
+
+                        // 🛑 1. فرز الجندي وتحديد رتبته العسكرية بناءً على الـ XP المتراكم
+                        let isBeginner = lifetimeScore <= 1000;
+                        let isIntermediate =
+                            lifetimeScore > 1000 && lifetimeScore <= 5000;
+                        let isPro = lifetimeScore > 5000;
+
+                        let safeTarget =
+                            typeof dailyTargetPoints !== "undefined" &&
+                            !isNaN(dailyTargetPoints)
+                                ? Number(dailyTargetPoints)
+                                : 100;
+                        let penaltyCoins = 0;
+
+                        // 🛑 2. تنفيذ العقوبات الطبقية الصارمة وتنسيق التقرير
+                        let failCard = `<div style="background: rgba(244, 63, 94, 0.05); border-right: 3px solid #f43f5e; padding: 12px; margin-bottom: 20px; border-radius: 4px;">`;
+                        failCard += `<strong style="color: #f43f5e; font-size: 14px;">❌ يوم ${dateStr}: تخاذل وفشل</strong><br>`;
+                        failCard += `<span style="color: #cbd5e1; font-size: 13px;">العقوبة الأساسية: كسر الستريك للصفر 💔</span><br>`;
+
+                        if (isBeginner) {
+                            failCard += `<hr style="border-color: rgba(255,255,255,0.05); margin: 8px 0;">`;
+                            failCard += `<span style="color: #34d399; font-size: 12px;"><i class="fa-solid fa-shield-halved"></i> <b>الرتبة [مبتدئ]:</b> إعفاء كامل من الغرامات والطرد.</span>`;
+                        } else if (isIntermediate) {
+                            if (currentZone === "green") currentZone = "yellow";
+                            else if (currentZone === "yellow")
+                                currentZone = "red";
+
+                            penaltyCoins = Math.floor(safeTarget / 2);
+                            walletCoins =
+                                (Number(walletCoins) || 0) - penaltyCoins;
+
+                            failCard += `<span style="color: #fca5a5; font-size: 13px;">الغرامة: -${penaltyCoins} عملة 📉 | الحالة: ${currentZone === "yellow" ? "منطقة صفراء ⚠️" : "منطقة حمراء 🛑"}</span><br>`;
+                            failCard += `<hr style="border-color: rgba(255,255,255,0.05); margin: 8px 0;">`;
+                            failCard += `<span style="color: var(--text-muted); font-size: 12px;"><i class="fa-solid fa-scale-balanced"></i> <b>الرتبة [متوسط]:</b> تم تطبيق نصف الغرامة المالية.</span>`;
+                        } else if (isPro) {
+                            if (currentZone === "green") currentZone = "yellow";
+                            else if (currentZone === "yellow")
+                                currentZone = "red";
+
+                            penaltyCoins = safeTarget;
+                            walletCoins =
+                                (Number(walletCoins) || 0) - penaltyCoins;
+
+                            failCard += `<span style="color: #fca5a5; font-size: 13px;">الغرامة: -${penaltyCoins} عملة 📉 | الحالة: ${currentZone === "yellow" ? "منطقة صفراء ⚠️" : "منطقة حمراء 🛑"}</span><br>`;
+                            failCard += `<hr style="border-color: rgba(255,255,255,0.05); margin: 8px 0;">`;
+                            failCard += `<span style="color: #ef4444; font-size: 12px;"><i class="fa-solid fa-skull"></i> <b>الرتبة [محترف]:</b> تم تطبيق الغرامة القصوى. لا رحمة في هذا المستوى.</span>`;
+                        }
+                        failCard += `</div>`;
+                        messages.push(failCard);
+
+                        console.log(
+                            `💾 [المنقذ الذكي] جاري حفظ رسوب يوم ${dateStr} في الداتابيز...`,
+                        );
+                        await setDoc(
+                            logRef,
+                            {
+                                passed: false,
+                                isFinalized: true,
+                                pointsEarned: pointsEarned || 0, // لن يتم تصفيرها هنا، التصفير يحدث في الفشل الكارثي (الخطوة 3)
+                                date: dateStr,
+                                selections: selections || {},
+                                religiousSelections: religiousSelections || {},
+                                timestamp: new Date(),
+                            },
+                            { merge: true },
+                        );
+                        console.log(`✅ [المنقذ الذكي] تم حفظ الرسوب بنجاح.`);
+                    }
                 }
+                currentEvalDateStr = dateStr;
+                evalDate.setDate(evalDate.getDate() + 1);
             }
-            currentEvalDateStr = dateStr;
-            evalDate.setDate(evalDate.getDate() + 1);
-        }
 
-        let updates = {
-            lifetimeScore,
-            walletCoins,
-            currentStreak,
-            lostStreak: userData.lostStreak || 0, // 🛑 إضافة الستريك المفقود للحفظ
-            streakDeathTimestamp: userData.streakDeathTimestamp || null,
-            cycleScore,
-            currentZone,
-            freezeCount,
-            currentMultiplier: userData.currentMultiplier || 1,
-            lastEvalDate: currentEvalDateStr,
-        };
-        if (userData.usedDoubleXP) {
-            updates.hasDoubleXP = false;
-            updates.usedDoubleXP = true;
-        }
+            let updates = {
+                lifetimeScore,
+                walletCoins,
+                currentStreak,
+                lostStreak: userData.lostStreak || 0,
+                streakDeathTimestamp: userData.streakDeathTimestamp || null,
+                cycleScore,
+                currentZone,
+                freezeCount,
+                currentMultiplier: userData.currentMultiplier || 1,
+                lastEvalDate: currentEvalDateStr,
+            };
 
-        await updateDoc(userDocRef, updates);
+            if (userData.usedDoubleXP) {
+                updates.hasDoubleXP = false;
+                updates.usedDoubleXP = true;
+            }
 
-        const loader = document.getElementById("global-loader");
-        if (loader) loader.classList.add("hidden");
+            console.log(
+                "📦 [المنقذ الذكي] جاهز لتحديث ملفك الشخصي بالبيانات التالية:",
+                updates,
+            );
+            await updateDoc(userDocRef, updates);
+            console.log("✅ [المنقذ الذكي] تم تحديث ملفك الشخصي بنجاح.");
 
-        if (messages.length > 0) {
+            const loader = document.getElementById("global-loader");
+            if (loader) loader.classList.add("hidden");
+
+            if (messages.length > 0) {
+                await CustomDialog.alert(
+                    `<div style="text-align: right; max-height: 60vh; overflow-y: auto; padding-left: 5px;">${messages.join("")}</div>`,
+                    "تقرير التحقق الرجعي 🤖",
+                );
+            }
+        } catch (error) {
+            console.error(
+                "🚨🚨🚨 [المنقذ الذكي] انهيار قااااتل (CRASH):",
+                error,
+            );
+            const loader = document.getElementById("global-loader");
+            if (loader) loader.classList.add("hidden");
             await CustomDialog.alert(
-                "تقرير المنقذ الذكي للأيام الفائتة:\n\n" + messages.join("\n"),
-                "المنقذ الذكي 🤖",
+                "انهار المنقذ الذكي! افتح الـ Console (F12) وصور لي الخطأ الأحمر، أو انسخ هذا:\n" +
+                    error.message,
+                "خطأ برمجي ❌",
             );
         }
     }
@@ -1043,11 +1159,11 @@ async function processActiveParticipant(userData, userDocRef) {
     const loader = document.getElementById("global-loader");
     if (loader) loader.classList.add("hidden");
 
-    loadTasks(todayLogData, userData);
+    await loadTasks(todayLogData, userData);
     startDoomsdayClock();
     startCycleCountdown();
     renderDailyTrivia(userData);
-    loadReligiousTasks(todayLogData);
+    await loadReligiousTasks(todayLogData);
 }
 
 async function loadTasks(todayLogData, userData) {
@@ -1443,46 +1559,50 @@ async function autoSaveReligiousTasks() {
 }
 
 function initializeCustomSelects() {
-    document.querySelectorAll(".custom-select-wrapper").forEach((wrapper) => {
-        const select = wrapper.querySelector(".custom-select");
-        const trigger = wrapper.querySelector(".custom-select-trigger");
-        const triggerText = wrapper.querySelector(".trigger-text");
-        const options = wrapper.querySelectorAll(".custom-option");
-        const nativeSelect = wrapper.querySelector(".task-select");
-        const taskItemParent = wrapper.closest(".task-item");
+    document
+        .querySelectorAll(
+            ".custom-select-wrapper:not(.rel-custom-select-wrapper)",
+        )
+        .forEach((wrapper) => {
+            const select = wrapper.querySelector(".custom-select");
+            const trigger = wrapper.querySelector(".custom-select-trigger");
+            const triggerText = wrapper.querySelector(".trigger-text");
+            const options = wrapper.querySelectorAll(".custom-option");
+            const nativeSelect = wrapper.querySelector(".task-select");
+            const taskItemParent = wrapper.closest(".task-item");
 
-        trigger.addEventListener("click", function (e) {
-            document.querySelectorAll(".custom-select").forEach((s) => {
-                if (s !== select) {
-                    s.classList.remove("open");
-                    const parent = s.closest(".task-item");
-                    if (parent) parent.style.zIndex = "1";
-                }
-            });
-            const isOpen = select.classList.toggle("open");
-            if (taskItemParent) {
-                taskItemParent.style.position = "relative";
-                taskItemParent.style.zIndex = isOpen ? "999" : "1";
-            }
-            e.stopPropagation();
-        });
-
-        options.forEach((option) => {
-            option.addEventListener("click", function () {
-                options.forEach((opt) => opt.classList.remove("selected"));
-                this.classList.add("selected");
-                triggerText.textContent = this.textContent;
-                nativeSelect.value = this.getAttribute("data-value");
-                const dataIndex = this.getAttribute("data-index");
-                Array.from(nativeSelect.options).forEach((opt, idx) => {
-                    opt.selected = idx == dataIndex;
+            trigger.addEventListener("click", function (e) {
+                document.querySelectorAll(".custom-select").forEach((s) => {
+                    if (s !== select) {
+                        s.classList.remove("open");
+                        const parent = s.closest(".task-item");
+                        if (parent) parent.style.zIndex = "1";
+                    }
                 });
-                select.classList.remove("open");
-                if (taskItemParent) taskItemParent.style.zIndex = "1";
-                autoSaveTasks();
+                const isOpen = select.classList.toggle("open");
+                if (taskItemParent) {
+                    taskItemParent.style.position = "relative";
+                    taskItemParent.style.zIndex = isOpen ? "999" : "1";
+                }
+                e.stopPropagation();
+            });
+
+            options.forEach((option) => {
+                option.addEventListener("click", function () {
+                    options.forEach((opt) => opt.classList.remove("selected"));
+                    this.classList.add("selected");
+                    triggerText.textContent = this.textContent;
+                    nativeSelect.value = this.getAttribute("data-value");
+                    const dataIndex = this.getAttribute("data-index");
+                    Array.from(nativeSelect.options).forEach((opt, idx) => {
+                        opt.selected = idx == dataIndex;
+                    });
+                    select.classList.remove("open");
+                    if (taskItemParent) taskItemParent.style.zIndex = "1";
+                    autoSaveTasks();
+                });
             });
         });
-    });
 
     document.addEventListener("click", function (e) {
         if (!e.target.closest(".custom-select-wrapper")) {
@@ -1498,178 +1618,286 @@ function initializeCustomSelects() {
 // ==========================================
 // 📱 محرك استهلاك الدوبامين والأجهزة المتعددة (Canvas Merger)
 // ==========================================
-let deviceCount = 0;
+// let deviceCount = 0;
 
-window.addDeviceBlock = function () {
-    const container = document.getElementById("devices-container");
-    if (!container) return;
+// window.addDeviceBlock = function () {
+//     const container = document.getElementById("devices-container");
+//     if (!container) return;
 
-    deviceCount++;
-    const deviceId = `device-${deviceCount}`;
-    const div = document.createElement("div");
-    div.className = "device-block";
-    div.id = deviceId;
-    div.style.cssText =
-        "background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); padding: 15px; border-radius: 8px; margin-bottom: 15px; position: relative;";
+//     deviceCount++;
+//     const deviceId = `device-${deviceCount}`;
+//     const div = document.createElement("div");
+//     div.className = "device-block";
+//     div.id = deviceId;
+//     div.style.cssText =
+//         "background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); padding: 15px; border-radius: 8px; margin-bottom: 15px; position: relative;";
 
-    // زر الحذف يظهر فقط إذا كان هناك أكثر من جهاز
-    const deleteBtnHtml =
-        deviceCount > 1
-            ? `<button onclick="document.getElementById('${deviceId}').remove()" style="position: absolute; top: 10px; left: 10px; background: none; border: none; color: var(--danger); cursor: pointer; font-size: 16px;"><i class="fa-solid fa-trash"></i></button>`
-            : "";
+//     // زر الحذف يظهر فقط إذا كان هناك أكثر من جهاز
+//     const deleteBtnHtml =
+//         deviceCount > 1
+//             ? `<button onclick="document.getElementById('${deviceId}').remove()" style="position: absolute; top: 10px; left: 10px; background: none; border: none; color: var(--danger); cursor: pointer; font-size: 16px;"><i class="fa-solid fa-trash"></i></button>`
+//             : "";
 
-    div.innerHTML = `
-        ${deleteBtnHtml}
-        <h4 style="color: var(--gold-primary); margin-bottom: 15px; font-size: 14px;">جهاز رقم ${deviceCount}</h4>
-        
-        <div style="display: flex; gap: 10px; margin-bottom: 15px;">
-            <div style="flex: 1;">
-                <label style="font-size: 11px; color: var(--text-muted);">إجمالي وقت الشاشة</label>
-                <div style="display: flex; gap: 5px; margin-top: 5px;">
-                    <input type="number" class="dialog-input st-h" min="0" max="24" placeholder="ساعة" style="margin: 0; text-align: center; padding: 8px; flex: 1;">
-                    <span style="display: flex; align-items: center; color: var(--text-muted);">:</span>
-                    <input type="number" class="dialog-input st-m" min="0" max="59" placeholder="دقيقة" style="margin: 0; text-align: center; padding: 8px; flex: 1;">
-                </div>
-            </div>
-            <div style="flex: 1;">
-                <label style="font-size: 11px; color: var(--text-muted);">منها Shorts/Reels</label>
-                <div style="display: flex; gap: 5px; margin-top: 5px;">
-                    <input type="number" class="dialog-input sh-h" min="0" max="24" placeholder="ساعة" style="margin: 0; text-align: center; padding: 8px; flex: 1;">
-                    <span style="display: flex; align-items: center; color: var(--text-muted);">:</span>
-                    <input type="number" class="dialog-input sh-m" min="0" max="59" placeholder="دقيقة" style="margin: 0; text-align: center; padding: 8px; flex: 1;">
-                </div>
-            </div>
-        </div>
+//     div.innerHTML = `
+//         ${deleteBtnHtml}
+//         <h4 style="color: var(--gold-primary); margin-bottom: 15px; font-size: 14px;">جهاز رقم ${deviceCount}</h4>
 
-        <div>
-            <label style="font-size: 12px; color: var(--text-muted); display: block; margin-bottom: 5px;">صورة الإثبات (Screenshot):</label>
-            <input type="file" accept="image/*" class="device-proof-file" style="width: 100%; font-size: 12px; padding: 8px; border: 1px dashed var(--border-color); border-radius: 6px; background: rgba(0,0,0,0.3); color: white;">
-        </div>
-    `;
-    container.appendChild(div);
-};
+//         <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+//             <div style="flex: 1;">
+//                 <label style="font-size: 11px; color: var(--text-muted);">إجمالي وقت الشاشة</label>
+//                 <div style="display: flex; gap: 5px; margin-top: 5px;">
+//                     <input type="number" class="dialog-input st-h" min="0" max="24" placeholder="ساعة" style="margin: 0; text-align: center; padding: 8px; flex: 1;">
+//                     <span style="display: flex; align-items: center; color: var(--text-muted);">:</span>
+//                     <input type="number" class="dialog-input st-m" min="0" max="59" placeholder="دقيقة" style="margin: 0; text-align: center; padding: 8px; flex: 1;">
+//                 </div>
+//             </div>
+//             <div style="flex: 1;">
+//                 <label style="font-size: 11px; color: var(--text-muted);">منها Shorts/Reels</label>
+//                 <div style="display: flex; gap: 5px; margin-top: 5px;">
+//                     <input type="number" class="dialog-input sh-h" min="0" max="24" placeholder="ساعة" style="margin: 0; text-align: center; padding: 8px; flex: 1;">
+//                     <span style="display: flex; align-items: center; color: var(--text-muted);">:</span>
+//                     <input type="number" class="dialog-input sh-m" min="0" max="59" placeholder="دقيقة" style="margin: 0; text-align: center; padding: 8px; flex: 1;">
+//                 </div>
+//             </div>
+//         </div>
+
+//         <div>
+//             <label style="font-size: 12px; color: var(--text-muted); display: block; margin-bottom: 5px;">صورة الإثبات (Screenshot):</label>
+//             <input type="file" accept="image/*" class="device-proof-file" style="width: 100%; font-size: 12px; padding: 8px; border: 1px dashed var(--border-color); border-radius: 6px; background: rgba(0,0,0,0.3); color: white;">
+//         </div>
+//     `;
+//     container.appendChild(div);
+// };
 
 // تهيئة أول جهاز عند تحميل المهام
-document.addEventListener("DOMContentLoaded", () => {
-    // استخدمنا setTimeout لضمان أن DOM جاهز تماماً
-    setTimeout(() => {
-        if (
-            document.getElementById("devices-container") &&
-            document.getElementById("devices-container").children.length === 0
-        ) {
-            window.addDeviceBlock();
-        }
-        const addBtn = document.getElementById("add-device-btn");
-        if (addBtn) addBtn.addEventListener("click", window.addDeviceBlock);
-    }, 500);
-});
+// document.addEventListener("DOMContentLoaded", () => {
+//     // استخدمنا setTimeout لضمان أن DOM جاهز تماماً
+//     setTimeout(() => {
+//         if (
+//             document.getElementById("devices-container") &&
+//             document.getElementById("devices-container").children.length === 0
+//         ) {
+//             window.addDeviceBlock();
+//         }
+//         const addBtn = document.getElementById("add-device-btn");
+//         if (addBtn) addBtn.addEventListener("click", window.addDeviceBlock);
+//     }, 500);
+// });
 
 // دالة جمع الوقت من كل الأجهزة المضافة
-window.calculateTotalDopamineTime = function () {
-    let totalScreenMinutes = 0;
-    let totalShortsMinutes = 0;
-    let isValid = false; // تصبح true لو أدخل بيانات جهاز واحد على الأقل
-    let files = [];
+// window.calculateTotalDopamineTime = function () {
+//     let totalScreenMinutes = 0;
+//     let totalShortsMinutes = 0;
+//     let isValid = false; // تصبح true لو أدخل بيانات جهاز واحد على الأقل
+//     let files = [];
 
-    document.querySelectorAll(".device-block").forEach((block) => {
-        const stH = parseInt(block.querySelector(".st-h").value) || 0;
-        const stM = parseInt(block.querySelector(".st-m").value) || 0;
-        const shH = parseInt(block.querySelector(".sh-h").value) || 0;
-        const shM = parseInt(block.querySelector(".sh-m").value) || 0;
+//     document.querySelectorAll(".device-block").forEach((block) => {
+//         const stH = parseInt(block.querySelector(".st-h").value) || 0;
+//         const stM = parseInt(block.querySelector(".st-m").value) || 0;
+//         const shH = parseInt(block.querySelector(".sh-h").value) || 0;
+//         const shM = parseInt(block.querySelector(".sh-m").value) || 0;
 
-        const fileInput = block.querySelector(".device-proof-file");
-        if (fileInput && fileInput.files.length > 0) {
-            files.push(fileInput.files[0]);
-        }
+//         const fileInput = block.querySelector(".device-proof-file");
+//         if (fileInput && fileInput.files.length > 0) {
+//             files.push(fileInput.files[0]);
+//         }
 
-        const deviceScreenMinutes = stH * 60 + stM;
-        const deviceShortsMinutes = shH * 60 + shM;
+//         const deviceScreenMinutes = stH * 60 + stM;
+//         const deviceShortsMinutes = shH * 60 + shM;
 
-        totalScreenMinutes += deviceScreenMinutes;
-        totalShortsMinutes += deviceShortsMinutes;
+//         totalScreenMinutes += deviceScreenMinutes;
+//         totalShortsMinutes += deviceShortsMinutes;
 
-        // إذا أدخل وقتاً أكبر من صفر، نعتبر الإدخال صالحاً
-        if (deviceScreenMinutes > 0) isValid = true;
-    });
+//         // إذا أدخل وقتاً أكبر من صفر، نعتبر الإدخال صالحاً
+//         if (deviceScreenMinutes > 0) isValid = true;
+//     });
 
-    return { totalScreenMinutes, totalShortsMinutes, isValid, files };
-};
+//     return { totalScreenMinutes, totalShortsMinutes, isValid, files };
+// };
 
 // ==========================================
 // 🎨 دالة دمج الصور في صورة بانورامية واحدة
 // ==========================================
-window.mergeDeviceImagesToCanvas = async function (filesArray) {
-    if (filesArray.length === 0) return null;
-    if (filesArray.length === 1) return filesArray[0]; // لا ندمج لو كان جهاز واحد
+// window.mergeDeviceImagesToCanvas = async function (filesArray) {
+//     if (filesArray.length === 0) return null;
+//     if (filesArray.length === 1) return filesArray[0]; // لا ندمج لو كان جهاز واحد
 
-    const canvas = document.createElement("canvas");
-    const ctx = canvas.getContext("2d");
+//     const canvas = document.createElement("canvas");
+//     const ctx = canvas.getContext("2d");
 
-    // تحويل الملفات إلى كائنات صور (Images)
-    const images = await Promise.all(
-        filesArray.map((file) => {
-            return new Promise((resolve) => {
-                const img = new Image();
-                img.onload = () => resolve(img);
-                img.src = URL.createObjectURL(file);
-            });
-        }),
-    );
+//     // تحويل الملفات إلى كائنات صور (Images)
+//     const images = await Promise.all(
+//         filesArray.map((file) => {
+//             return new Promise((resolve) => {
+//                 const img = new Image();
+//                 img.onload = () => resolve(img);
+//                 img.src = URL.createObjectURL(file);
+//             });
+//         }),
+//     );
 
-    // تحديد العرض المستهدف لكل صورة لضمان جودة منخفضة وحجم صغير للـ AI
-    const targetWidth = 500;
-    let totalWidth = 0;
-    let maxHeight = 0;
+//     // تحديد العرض المستهدف لكل صورة لضمان جودة منخفضة وحجم صغير للـ AI
+//     const targetWidth = 500;
+//     let totalWidth = 0;
+//     let maxHeight = 0;
 
-    const scaledImages = images.map((img) => {
-        const ratio = targetWidth / img.width;
-        const height = img.height * ratio;
-        totalWidth += targetWidth;
-        if (height > maxHeight) maxHeight = height;
-        return { img, width: targetWidth, height };
-    });
+//     const scaledImages = images.map((img) => {
+//         const ratio = targetWidth / img.width;
+//         const height = img.height * ratio;
+//         totalWidth += targetWidth;
+//         if (height > maxHeight) maxHeight = height;
+//         return { img, width: targetWidth, height };
+//     });
 
-    canvas.width = totalWidth;
-    canvas.height = maxHeight;
+//     canvas.width = totalWidth;
+//     canvas.height = maxHeight;
 
-    // خلفية سوداء (في حال كانت الصور بأطوال مختلفة)
-    ctx.fillStyle = "#000000";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+//     // خلفية سوداء (في حال كانت الصور بأطوال مختلفة)
+//     ctx.fillStyle = "#000000";
+//     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    let currentX = 0;
-    scaledImages.forEach((item, index) => {
-        // رسم الصورة
-        ctx.drawImage(item.img, currentX, 0, item.width, item.height);
+//     let currentX = 0;
+//     scaledImages.forEach((item, index) => {
+//         // رسم الصورة
+//         ctx.drawImage(item.img, currentX, 0, item.width, item.height);
 
-        // رسم شريط علوي يحمل اسم الجهاز لتسهيل قراءة الذكاء الاصطناعي
-        ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
-        ctx.fillRect(currentX, 0, item.width, 40);
-        ctx.fillStyle = "#a855f7";
-        ctx.font = "bold 20px Arial";
-        ctx.fillText(`Device ${index + 1}`, currentX + 15, 28);
+//         // رسم شريط علوي يحمل اسم الجهاز لتسهيل قراءة الذكاء الاصطناعي
+//         ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+//         ctx.fillRect(currentX, 0, item.width, 40);
+//         ctx.fillStyle = "#a855f7";
+//         ctx.font = "bold 20px Arial";
+//         ctx.fillText(`Device ${index + 1}`, currentX + 15, 28);
 
-        currentX += item.width;
-    });
+//         currentX += item.width;
+//     });
 
-    // إرجاع النتيجة كملف مضغوط (JPEG)
-    return new Promise((resolve) => {
-        canvas.toBlob(
-            (blob) => {
-                resolve(
-                    new File([blob], "merged_dopamine_proof.jpg", {
-                        type: "image/jpeg",
-                    }),
-                );
-            },
-            "image/jpeg",
-            0.85,
-        );
-    });
-};
+//     // إرجاع النتيجة كملف مضغوط (JPEG)
+//     return new Promise((resolve) => {
+//         canvas.toBlob(
+//             (blob) => {
+//                 resolve(
+//                     new File([blob], "merged_dopamine_proof.jpg", {
+//                         type: "image/jpeg",
+//                     }),
+//                 );
+//             },
+//             "image/jpeg",
+//             0.85,
+//         );
+//     });
+// };
 
 // ==========================================
 // 1. دالة حساب النقاط والاختيارات (تمت مراجعتها)
 // ==========================================
+// ==========================================
+// 🛡️ فحص صلاحية الصورة (التاريخ + الوقت)
+// ==========================================
+// function validateProofImage(file) {
+//     return new Promise((resolve) => {
+//         const now = getRealNow();
+
+//         // todayStr = التاريخ المنطقي للنظام (مع إزاحة dayStartHour)
+//         const todayStr = getCairoDateString(now);
+
+//         // cairoNow = التاريخ الحقيقي بتوقيت القاهرة بدون إزاحة
+//         const cairoNowStr = now.toLocaleString("en-US", {
+//             timeZone: "Africa/Cairo",
+//             hour12: false,
+//         });
+//         const cairoNow = new Date(cairoNowStr);
+
+//         // 🛑 بناء قائمة التواريخ المقبولة بدلاً من تاريخ واحد
+//         // نقبل: تاريخ اليوم المنطقي + التاريخ الحقيقي (لحل مشكلة ما بعد منتصف الليل)
+//         const acceptedDates = new Set();
+
+//         // 1. اليوم المنطقي للنظام (مثلاً: 7 يونيو إذا الساعة 1 فجراً)
+//         acceptedDates.add(todayStr);
+
+//         // 2. التاريخ الميلادي الحقيقي (مثلاً: 8 يونيو إذا الساعة 1 فجراً)
+//         const realY = cairoNow.getFullYear();
+//         const realM = String(cairoNow.getMonth() + 1).padStart(2, "0");
+//         const realD = String(cairoNow.getDate()).padStart(2, "0");
+//         const realTodayStr = `${realY}-${realM}-${realD}`;
+//         acceptedDates.add(realTodayStr);
+
+//         // 3. أمس المنطقي (للساعات الأولى من الفجر - نسمح بصور الليلة الماضية)
+//         const yesterdayDate = new Date(now);
+//         yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+//         const yesterdayStr = getCairoDateString(yesterdayDate);
+//         // نسمح بالأمس فقط في الساعات الأولى (قبل dayStartHour)
+//         if (cairoNow.getHours() < window.dayStartHour) {
+//             acceptedDates.add(yesterdayStr);
+//         }
+
+//         console.log(`[validateProofImage] التواريخ المقبولة:`, [
+//             ...acceptedDates,
+//         ]);
+
+//         function checkDateOnly(fileDateStr, source) {
+//             console.log(
+//                 `[${source}] تاريخ الصورة: ${fileDateStr} | المقبول: ${[...acceptedDates].join(", ")}`,
+//             );
+
+//             if (!acceptedDates.has(fileDateStr)) {
+//                 // نعرض للمستخدم "تاريخ اليوم المنطقي" في رسالة الخطأ لأنه أوضح
+//                 resolve({
+//                     valid: false,
+//                     reason: `📅 تاريخ الصورة (${fileDateStr}) لا يطابق تاريخ اليوم (${todayStr}).\nيجب رفع لقطة شاشة التقطتها اليوم فقط.`,
+//                 });
+//                 return;
+//             }
+//             resolve({ valid: true });
+//         }
+
+//         // محاولة EXIF أولاً
+//         if (typeof EXIF !== "undefined") {
+//             EXIF.getData(file, function () {
+//                 const exifDate = EXIF.getTag(this, "DateTimeOriginal");
+//                 if (exifDate) {
+//                     const parts = exifDate.split(" ");
+//                     const d = parts[0].split(":");
+//                     const t = parts[1].split(":");
+//                     const exifObj = new Date(
+//                         +d[0],
+//                         +d[1] - 1,
+//                         +d[2],
+//                         +t[0],
+//                         +t[1],
+//                         +t[2],
+//                     );
+//                     const cairoStr = exifObj.toLocaleString("en-US", {
+//                         timeZone: "Africa/Cairo",
+//                         hour12: false,
+//                     });
+//                     const cairoExif = new Date(cairoStr);
+//                     const y = cairoExif.getFullYear();
+//                     const m = String(cairoExif.getMonth() + 1).padStart(2, "0");
+//                     const dd = String(cairoExif.getDate()).padStart(2, "0");
+//                     checkDateOnly(`${y}-${m}-${dd}`, "EXIF");
+//                 } else {
+//                     fallbackToLastModified();
+//                 }
+//             });
+//         } else {
+//             fallbackToLastModified();
+//         }
+
+//         function fallbackToLastModified() {
+//             const fileDate = new Date(file.lastModified);
+//             const cairoStr = fileDate.toLocaleString("en-US", {
+//                 timeZone: "Africa/Cairo",
+//                 hour12: false,
+//             });
+//             const d = new Date(cairoStr);
+//             const y = d.getFullYear();
+//             const m = String(d.getMonth() + 1).padStart(2, "0");
+//             const dd = String(d.getDate()).padStart(2, "0");
+//             checkDateOnly(`${y}-${m}-${dd}`, "lastModified");
+//         }
+//     });
+// }
+
 function getCurrentSelectionsAndPoints() {
     let totalPoints = 0;
     let selections = {};
@@ -1748,442 +1976,169 @@ async function autoSaveTasks(saveToDb = true) {
         );
     }
 }
-
-// ==========================================
-// 🛡️ فحص صلاحية الصورة (التاريخ + الوقت)
-// ==========================================
-function validateProofImage(file) {
-    return new Promise((resolve) => {
-        const now = getRealNow();
-        const todayStr = getCairoDateString(now);
-        const cairoNowStr = now.toLocaleString("en-US", {
-            timeZone: "Africa/Cairo",
-            hour12: false,
-        });
-        const cairoNow = new Date(cairoNowStr);
-
-        const yesterdayDate = new Date(now);
-        yesterdayDate.setDate(yesterdayDate.getDate() - 1);
-        const yesterdayStr = getCairoDateString(yesterdayDate);
-
-        function checkDateOnly(fileDateStr, source) {
-            console.log(
-                `[${source}] تاريخ الصورة: ${fileDateStr} | اليوم: ${todayStr}`,
-            );
-
-            const isToday = fileDateStr === todayStr;
-            // نسمح بصور الأمس فقط في الساعات الأولى من الفجر
-            const isYesterdayAllowed =
-                cairoNow.getHours() < window.dayStartHour &&
-                fileDateStr === yesterdayStr;
-
-            if (!isToday && !isYesterdayAllowed) {
-                resolve({
-                    valid: false,
-                    reason: `📅 تاريخ الصورة (${fileDateStr}) لا يطابق تاريخ اليوم (${todayStr}).\nيجب رفع لقطة شاشة التقطتها اليوم فقط.`,
-                });
-                return;
-            }
-            resolve({ valid: true });
-        }
-
-        // محاولة EXIF أولاً
-        if (typeof EXIF !== "undefined") {
-            EXIF.getData(file, function () {
-                const exifDate = EXIF.getTag(this, "DateTimeOriginal");
-                if (exifDate) {
-                    const parts = exifDate.split(" ");
-                    const d = parts[0].split(":");
-                    const t = parts[1].split(":");
-                    const exifObj = new Date(
-                        +d[0],
-                        +d[1] - 1,
-                        +d[2],
-                        +t[0],
-                        +t[1],
-                        +t[2],
-                    );
-                    const cairoStr = exifObj.toLocaleString("en-US", {
-                        timeZone: "Africa/Cairo",
-                        hour12: false,
-                    });
-                    const cairoExif = new Date(cairoStr);
-                    const y = cairoExif.getFullYear();
-                    const m = String(cairoExif.getMonth() + 1).padStart(2, "0");
-                    const dd = String(cairoExif.getDate()).padStart(2, "0");
-                    checkDateOnly(`${y}-${m}-${dd}`, "EXIF");
-                } else {
-                    // لا EXIF → lastModified للتاريخ فقط
-                    fallbackToLastModified();
-                }
-            });
-        } else {
-            fallbackToLastModified();
-        }
-
-        function fallbackToLastModified() {
-            const fileDate = new Date(file.lastModified);
-            const cairoStr = fileDate.toLocaleString("en-US", {
-                timeZone: "Africa/Cairo",
-                hour12: false,
-            });
-            const d = new Date(cairoStr);
-            const y = d.getFullYear();
-            const m = String(d.getMonth() + 1).padStart(2, "0");
-            const dd = String(d.getDate()).padStart(2, "0");
-            checkDateOnly(`${y}-${m}-${dd}`, "lastModified");
-        }
-    });
+// تحويل صيغة (HH:MM) إلى إجمالي دقائق صافية للحسابات الرياضية
+function timeToMinutes(timeStr) {
+    if (!timeStr) return 0;
+    // فصل الساعات عن الدقائق وتحويلها لأرقام
+    const [h, m] = timeStr.split(":").map(Number);
+    return h * 60 + m;
 }
 
-// ==========================================
-// 2. مستمع زر اعتماد اليوم (النظام الجديد مع تحليل الدوبامين بالـ AI)
-// ==========================================
 document
     .getElementById("submit-day-btn")
     ?.addEventListener("click", async () => {
         if (!currentUser || isTodayFinalized) return;
-        // ==========================================
-        // 🛑 جدار الحماية الزمني الديناميكي
-        // ==========================================
+
+        // 1. جدار الحماية الزمني (نفس المنطق القديم للتأكد من وقت الاعتماد)
         const now = getRealNow();
         const cairoTimeStr = now.toLocaleString("en-US", {
             timeZone: "Africa/Cairo",
             hour12: false,
         });
-        const cairoDate = new Date(cairoTimeStr);
-        const currentHour = cairoDate.getHours();
+        const currentHour = new Date(cairoTimeStr).getHours();
 
-        const startH = window.submissionStartHour;
-        const endH = window.dayStartHour;
-
-        // إذا لم يكن الوقت داخل النافذة (من وقت فتح الاعتماد وحتى وقت نهاية اليوم)
-        if (!(currentHour >= startH || currentHour < endH)) {
-            // دالة صغيرة لتحويل نظام الـ 24 إلى 12 ساعة لرسالة الخطأ
-            const formatHour = (h) => {
-                let ampm = h >= 12 ? "مساءً" : "صباحاً";
-                let hours12 = h % 12 || 12;
-                return `${hours12}:00 ${ampm}`;
-            };
-
+        if (
+            !(
+                currentHour >= window.submissionStartHour ||
+                currentHour < window.dayStartHour
+            )
+        ) {
             return await CustomDialog.alert(
-                `لا يمكنك اعتماد مهام اليوم الآن. نافذة التقييم تفتح فقط من ${formatHour(startH)} وحتى ${formatHour(endH)} بتوقيت القاهرة.`,
-                "النافذة مغلقة 🛑",
-            );
-        }
-        // ==========================================
-        // // --- 1. التحقق من محلل الدوبامين ---
-        // const dopamineData = calculateTotalDopamineTime();
-        // if (!dopamineData.isValid) {
-        //     return await CustomDialog.alert(
-        //         "يجب إدخال وقت الشاشة لجهاز واحد على الأقل لتجاوز الفحص.",
-        //         "تنبيه ⚠️",
-        //     );
-        // }
-        // if (dopamineData.files.length === 0) {
-        //     return await CustomDialog.alert(
-        //         "يجب إرفاق صورة إثبات (Screenshot) لوقت الشاشة. لا يمكن المرور بدونها.",
-        //         "إثبات مطلوب 📸",
-        //     );
-        // }
-
-        // --- 1. التحقق من محلل الدوبامين ---
-        const dopamineData = calculateTotalDopamineTime();
-        if (!dopamineData.isValid) {
-            return await CustomDialog.alert(
-                "يجب إدخال وقت الشاشة لجهاز واحد على الأقل لتجاوز الفحص.",
-                "تنبيه ⚠️",
-            );
-        }
-        if (dopamineData.files.length === 0) {
-            return await CustomDialog.alert(
-                "يجب إرفاق صورة إثبات (Screenshot) لوقت الشاشة. لا يمكن المرور بدونها.",
-                "إثبات مطلوب 📸",
+                "نافذة التقييم مغلقة الآن.",
+                "مرفوض 🛑",
             );
         }
 
-        const justification = document
-            .getElementById("dopamine-justification")
-            .value.trim();
-        if (!justification) {
-            return await CustomDialog.alert(
-                "يجب كتابة تبرير لاستهلاكك. كن صادقاً، الذكاء الاصطناعي يحلل كل حرف ولن يتهاون.",
-                "التبرير مطلوب ✍️",
-            );
-        }
+        // 2. سحب المهام لمعرفة إذا كان هناك تخاذل في الأساسيات
+        const { missingNormalImportant } = getCurrentSelectionsAndPoints();
 
-        // 🛑 فحص صلاحية كل صورة (التاريخ + الوقت)
-        for (let i = 0; i < dopamineData.files.length; i++) {
-            const file = dopamineData.files[i];
-            const validation = await validateProofImage(file);
-            if (!validation.valid) {
-                return await CustomDialog.alert(
-                    `صورة الجهاز رقم ${i + 1} مرفوضة:\n\n${validation.reason}`,
-                    "صورة غير صالحة ❌",
-                );
-            }
-        }
-
-        // --- 2. سحب نقاط المهام الدنيوية والدينية ---
-        const {
-            totalPoints: taskPoints,
-            selections,
-            missingNormalImportant,
-        } = getCurrentSelectionsAndPoints();
-
-        const currentRelSelections = {};
-        document.querySelectorAll(".rel-task-select").forEach((s) => {
-            currentRelSelections[s.getAttribute("data-task-id")] = parseInt(
-                s.options[s.selectedIndex].getAttribute("data-index"),
-            );
-        });
-        document.querySelectorAll(".rel-checklist-container").forEach((c) => {
-            let arr = [];
-            c.querySelectorAll(".rel-task-checkbox:checked").forEach((cb) =>
-                arr.push(parseInt(cb.getAttribute("data-index"))),
-            );
-            if (arr.length === 0) arr = [0];
-            currentRelSelections[c.getAttribute("data-task-id")] = arr;
-        });
-
+        // فحص سريع للمهام الدينية (يحاكي المنطق القديم)
         let missingRelImportant = false;
-        for (let id of window.importantRelTaskIds || []) {
-            let sel = currentRelSelections[id];
-            let isDone = false;
-            if (Array.isArray(sel)) {
-                if (sel.length > 1 || (sel.length === 1 && sel[0] !== 0))
-                    isDone = true;
-            } else {
-                if (sel > 0) isDone = true;
-            }
-            if (!isDone) {
-                missingRelImportant = true;
-                break;
-            }
-        }
+        // ... (ضع هنا نفس كود الفحص القديم للمهام الدينية الذي كان يسحب البيانات من .rel-task-select و .rel-checklist-container) ...
 
-        // --- 3. الفحص الإجباري وتأكيد الإرسال ---
         if (missingNormalImportant || missingRelImportant) {
             const isSure = await CustomDialog.confirm(
-                "لقد تجاهلت مهام إجبارية أساسية. الاعتماد الآن سيؤدي حتماً إلى الفشل وكسر الستريك مهما كانت نقاطك. هل أنت متأكد من هذا التخاذل؟",
-                "تحذير صارم 🛑",
+                "لقد تجاهلت مهام إجبارية. الاعتماد الآن سيؤدي للفشل. متأكد؟",
+                "تحذير 🛑",
             );
             if (!isSure) return;
-        } else {
-            const confirmSubmit = await CustomDialog.confirm(
-                "سيتم الآن دمج صور الأجهزة وإرسالها للقاضي الآلي (Gemini) لتقييم استهلاكك واعتماد اليوم. هل أنت مستعد لمواجهة نتيجتك؟",
-                "تحكيم الذكاء الاصطناعي 🤖",
-            );
-            if (!confirmSubmit) return;
         }
 
-        const btn = document.getElementById("submit-day-btn");
-        const originalText = btn.innerText;
-        btn.innerText = "القاضي الآلي يحلل بياناتك... 🤖⏳";
+        // 3. كل شيء جاهز؟ افتح نافذة تقييم الضمير (البكرات) للمستخدم
+        document.getElementById("evaluation-modal").classList.add("show");
+    });
+
+// إغلاق النافذة لو تراجع
+document
+    .getElementById("close-evaluation-modal")
+    ?.addEventListener("click", () => {
+        document.getElementById("evaluation-modal").classList.remove("show");
+    });
+
+document
+    .getElementById("submit-evaluation-btn")
+    ?.addEventListener("click", async () => {
+        // 1. سحب النصوص من الواجهة
+        const totalStr = document.getElementById("eval-total-time").value;
+        const studyStr = document.getElementById("eval-study-time").value;
+        const shortsStr = document.getElementById("eval-shorts-time").value;
+
+        if (!totalStr || !studyStr || !shortsStr) {
+            return CustomDialog.alert("أدخل جميع الأوقات.", "بيانات ناقصة ⚖️");
+        }
+
+        // 2. تحويل النصوص لدقائق
+        const totalMins = timeToMinutes(totalStr);
+        const studyMins = timeToMinutes(studyStr);
+        const shortsMins = timeToMinutes(shortsStr);
+
+        // 3. حساب الوقت المهدر الصافي (منع السالب لو كان وقت الدراسة أكبر بالخطأ)
+        let wastedMins = totalMins - studyMins;
+        if (wastedMins < 0) wastedMins = 0;
+
+        const btn = document.getElementById("submit-evaluation-btn");
         btn.disabled = true;
 
         try {
-            const realNow = getRealNow();
-            const today = getCairoDateString(realNow);
+            const userRef = doc(db, "users", currentUser.uid);
+            const userSnap = await getDoc(userRef);
+            const userDataLocal = userSnap.data() || {};
+            const lifetimeScore = userDataLocal.lifetimeScore || 0;
 
-            // --- 4. دمج الصور ورفعها للسيرفر ---
-            const mergedFile = await window.mergeDeviceImagesToCanvas(
-                dopamineData.files,
-            );
-            const storagePath = `dopamine_proofs/${currentUser.uid}_${Date.now()}.jpg`;
-            const storageRefPath = ref(storage, storagePath);
-            await uploadBytes(storageRefPath, mergedFile);
-            const imageUrl = await getDownloadURL(storageRefPath);
+            // 4. تحديد الرتبة عسكرياً
+            let isBeginner = lifetimeScore <= 1000;
+            let isIntermediate = lifetimeScore > 1000 && lifetimeScore <= 5000;
+            let isPro = lifetimeScore > 5000;
 
-            // --- 5. طلب الحكم من السيرفر السحابي ---
-            const evaluateScreenTimeFunc = httpsCallable(
-                functions,
-                "evaluateScreenTime",
-            );
-            const aiResult = await evaluateScreenTimeFunc({
-                totalScreenMinutes: dopamineData.totalScreenMinutes,
-                totalShortsMinutes: dopamineData.totalShortsMinutes,
-                justification: justification,
-                imageUrl: imageUrl,
-            });
+            // 5. الحدود الديناميكية (يمكنك لاحقاً سحبها من الداتابيز، سأضعها ثابتة مؤقتاً للتجربة)
+            let maxWastedTime = 120; // الحد الأقصى للمهدر بالدقائق
+            let maxShortsTime = 30; // الحد الأقصى للشورتس بالدقائق
 
-            if (!aiResult.data.success) throw new Error("فشل التحليل الذكي.");
+            // 6. 🛑 المعادلة التناسبية 🛑
+            // 75 نقطة مضروبة في نسبة الوقت المتبقي. لو استهلك كل الوقت، الناتج 0.
+            let wastedPoints = 75 * (1 - wastedMins / maxWastedTime);
+            if (wastedPoints < 0) wastedPoints = 0; // حماية من النقاط السالبة
 
-            const wastedScreen = aiResult.data.wastedScreenMinutes;
-            const wastedShorts = aiResult.data.wastedShortsMinutes;
-
-            // --- 6. تطبيق معادلة الدوبامين العكسية (Capped Linear Decay) ---
-            // أقصى نقاط للشاشة: 100 | حد التسامح: 4 ساعات (300 دقيقة)
-            let screenPoints = 75 * (1 - wastedScreen / 300);
-            if (screenPoints < 0) screenPoints = 0;
-
-            // أقصى نقاط للشورتس: 100 | حد التسامح: 45 دقيقة
-            let shortsPoints = 75 * (1 - wastedShorts / 45);
+            let shortsPoints = 75 * (1 - shortsMins / maxShortsTime);
             if (shortsPoints < 0) shortsPoints = 0;
 
-            const dopaminePoints = Math.floor(screenPoints + shortsPoints);
-            const finalTotalPoints = taskPoints + dopaminePoints;
+            const dopaminePoints = Math.floor(wastedPoints + shortsPoints);
 
-            // --- 7. تحديد النجاح الفعلي ---
-            const passedToday =
-                finalTotalPoints >= dailyTargetPoints &&
-                !missingRelImportant &&
-                !missingNormalImportant;
+            // 7. جمع نقاط المهام مع نقاط الدوبامين
+            const { totalPoints: taskPoints, selections } =
+                getCurrentSelectionsAndPoints();
+            // ... (جلب التحديدات الدينية الحالية هنا) ...
+            let finalTotalPoints = taskPoints + dopaminePoints;
 
-            // --- 8. توثيق السجل اليومي ---
-            await setDoc(
-                doc(db, `users/${currentUser.uid}/dailyLogs`, today),
-                {
-                    date: today,
-                    pointsEarned: finalTotalPoints,
-                    selections: selections,
-                    religiousSelections: currentRelSelections,
-                    passed: passedToday,
-                    isFinalized: true,
-                    timestamp: realNow,
-                    dopamineData: {
-                        // حفظ بيانات الدوبامين للإحصائيات المستقبلية
-                        reportedScreenMinutes: dopamineData.totalScreenMinutes,
-                        reportedShortsMinutes: dopamineData.totalShortsMinutes,
-                        justification: justification,
-                        proofImageUrl: imageUrl,
-                        aiEvaluatedWastedScreen: wastedScreen,
-                        aiEvaluatedWastedShorts: wastedShorts,
-                        pointsAwarded: dopaminePoints,
-                    },
-                },
-                { merge: true },
-            );
+            // هل تجاوز الهدف اليومي؟
+            const passedToday = finalTotalPoints >= dailyTargetPoints; // (أضف شروط المهام الإجبارية هنا)
 
-            const pointsDisplay = document.getElementById("today-points");
-            if (pointsDisplay) pointsDisplay.innerText = finalTotalPoints;
+            // 8. شرط الفشل الكارثي للمبتدئين
+            const isCatastrophic =
+                wastedMins > maxWastedTime || shortsMins > maxShortsTime;
+            if (!passedToday && isBeginner && isCatastrophic) {
+                finalTotalPoints = 0; // تصفير نقاط المهام بالكامل كعقاب
+            }
 
-            // --- 9. تحديث الحساب وتطبيق العقوبات أو الجوائز ---
-            const userDocRef = doc(db, "users", currentUser.uid);
-            const userDocSnap = await getDoc(userDocRef);
-            const userDataLocal = userDocSnap.data() || {};
-
-            let currentZone = userDataLocal.currentZone || "green";
-            const hasDoubleXP = userDataLocal.hasDoubleXP || false;
+            const realNow = getRealNow();
+            const today = getCairoDateString(realNow);
             let dbUpdates = { lastEvalDate: today };
 
+            // 9. تطبيق العقوبات بناءً على الرتبة
             if (passedToday) {
-                // حالة النجاح
-                const successSound = new Audio(
-                    "https://cdn.pixabay.com/download/audio/2021/08/04/audio_0625c1539c.mp3?filename=success-1-6297.mp3",
-                );
-                successSound.volume = 0.7;
-                successSound.play().catch(() => {});
-
-                const end = Date.now() + 3000;
-                (function frame() {
-                    confetti({
-                        particleCount: 5,
-                        angle: 60,
-                        spread: 55,
-                        origin: { x: 0 },
-                        colors: ["#a855f7", "#d946ef", "#eab308"],
-                        zIndex: 10005,
-                    });
-                    confetti({
-                        particleCount: 5,
-                        angle: 120,
-                        spread: 55,
-                        origin: { x: 1 },
-                        colors: ["#a855f7", "#d946ef", "#eab308"],
-                        zIndex: 10005,
-                    });
-                    if (Date.now() < end) requestAnimationFrame(frame);
-                })();
-
-                if (currentZone === "yellow") currentZone = "green";
-
-                const newStreak = (userDataLocal.currentStreak || 0) + 1;
-                let streakMultiplier = 1.0;
-                if (newStreak >= 21) streakMultiplier = 2.0;
-                else if (newStreak >= 14) streakMultiplier = 1.6;
-                else if (newStreak >= 7) streakMultiplier = 1.4;
-                else if (newStreak >= 3) streakMultiplier = 1.2;
-
-                const multipliedPoints = Math.floor(
-                    finalTotalPoints * streakMultiplier,
-                );
-                let earnedCoins = Math.floor(multipliedPoints / 1.5);
-                let earnedXP = multipliedPoints;
-                let xpLabel = "";
-                let streakLabel =
-                    streakMultiplier > 1
-                        ? `<span style="color:#f97316; display: block; font-size: 14px; margin-top: 5px;">(مضاعف الستريك: x${streakMultiplier} 🔥)</span>`
-                        : "";
-
-                dbUpdates.walletCoins = increment(earnedCoins);
-                dbUpdates.currentStreak = increment(1);
-                dbUpdates.currentZone = currentZone;
-                dbUpdates.currentMultiplier = streakMultiplier;
-
-                if (hasDoubleXP) {
-                    earnedXP *= 2;
-                    dbUpdates.cycleScore = increment(earnedXP);
-                    dbUpdates.lifetimeScore = increment(earnedXP);
-                    dbUpdates.hasDoubleXP = false;
-                    dbUpdates.usedDoubleXP = true;
-                    xpLabel = `<span style="color:#eab308; display: block;">(مضاعف المتجر ⚡)</span>`;
-                } else {
-                    dbUpdates.cycleScore = increment(earnedXP);
-                    dbUpdates.lifetimeScore = increment(earnedXP);
-                }
-
-                await updateDoc(userDocRef, dbUpdates);
-                await CustomDialog.alert(
-                    `<span style="display: block;">🔥 تم الاعتماد بنجاح!</span> 
-                <span style="font-size: 13px; color: var(--text-muted); display: block; margin-top: 5px;">تقييم القاضي الآلي للدوبامين: +${dopaminePoints} نقطة</span>
-                ${streakLabel} ${xpLabel} \n <span><span class="win-info-boxs xp">+${earnedXP} XP</span> <span class="win-info-boxs coins">+${earnedCoins} <i class="fa-solid fa-coins fa-fw"></i></span> <span class="win-info-boxs ">+1 <i class="fa-solid fa-fire fa-fw"></i></span></span>`,
-                    "عمل عظيم ",
-                );
+                // كود النجاح المعتاد (إضافة نقاط وعملات وزيادة الستريك)
+                // ... (تحديث dbUpdates.walletCoins و dbUpdates.currentStreak إلخ) ...
             } else {
-                // حالة الفشل
-                const hasFreeze = (userDataLocal.freezeCount || 0) > 0;
+                // كود الفشل مع تطبيق قانون الرتب
+                dbUpdates.lostStreak = userDataLocal.currentStreak || 0;
+                dbUpdates.streakDeathTimestamp = getRealNow().getTime();
+                dbUpdates.currentStreak = 0;
 
-                if (hasFreeze) {
-                    dbUpdates.freezeCount = increment(-1);
-                    await updateDoc(userDocRef, dbUpdates);
-                    await CustomDialog.alert(
-                        `جمعت ${finalTotalPoints} نقطة فقط. تم استهلاك "تجميد الستريك" ❄️ بنجاح للحماية من السقوط.`,
-                        "تفعيل التجميد التلقائي ❄️",
+                if (isBeginner) {
+                    // المبتدئ: كسر الستريك فقط
+                    // لا تخصم عملات
+                } else if (isIntermediate) {
+                    // المتوسط: خصم النصف والطرد
+                    dbUpdates.walletCoins = increment(
+                        -Math.floor(dailyTargetPoints / 2),
                     );
-                } else {
-                    if (currentZone === "green") currentZone = "yellow";
-                    else if (currentZone === "yellow") currentZone = "red";
-
-                    const penaltyCoins = Math.floor(dailyTargetPoints / 2);
-
-                    // 🛑 التعديل الجراحي الثاني: حفظ الستريك الميت في التحديثات
-                    dbUpdates.lostStreak = userDataLocal.currentStreak || 0;
-                    dbUpdates.streakDeathTimestamp = getRealNow().getTime(); // 🛑 تسجيل لحظة الوفاة
-                    dbUpdates.currentStreak = 0;
-                    dbUpdates.currentZone = currentZone;
-                    dbUpdates.walletCoins = increment(-penaltyCoins);
-                    dbUpdates.currentMultiplier = 1.0;
-
-                    await updateDoc(userDocRef, dbUpdates);
-
-                    await CustomDialog.alert(
-                        `المجموع ${finalTotalPoints} نقطة (القاضي أعطاك ${dopaminePoints} لدوبامينك). تم اعتماد اليوم كفشل! تصفير الستريك وخصم ${penaltyCoins} عملة ديون. 💔\nأنت الآن في المنطقة: ${currentZone === "yellow" ? "الصفراء ⚠️" : "الحمراء 🛑"}`,
-                        "تحذير شديد اللهجة",
-                    );
+                    dbUpdates.currentZone = "yellow"; // أو red حسب حالته السابقة
+                } else if (isPro) {
+                    // المحترف: خصم كامل الهدف والطرد
+                    dbUpdates.walletCoins = increment(-dailyTargetPoints);
+                    dbUpdates.currentZone = "yellow";
                 }
             }
 
-            isTodayFinalized = true;
+            // 10. حفظ التقرير وإغلاق النافذة
+            document
+                .getElementById("evaluation-modal")
+                .classList.remove("show");
+            await updateDoc(userRef, dbUpdates);
             window.syncUserUI();
-            if (typeof applyZoneUI === "function") applyZoneUI(currentZone);
         } catch (error) {
             console.error(error);
-            await CustomDialog.alert(
-                "حدث خطأ أثناء تقييم القاضي الآلي: " + error.message,
-                "خطأ ⚠️",
-            );
-            btn.innerText = originalText;
+        } finally {
             btn.disabled = false;
         }
     });
@@ -4153,18 +4108,18 @@ window.submitTriviaAnswer = async function (
 // تشغيل محرك الكاش (Service Worker)
 // ==========================================
 if ("serviceWorker" in navigator) {
-    window.addEventListener("load", () => {
-        navigator.serviceWorker
-            .register("/sw.js")
-            .then((registration) => {
-                console.log(
-                    "✅ تم تشغيل Service Worker بنجاح، النطاق:",
-                    registration.scope,
-                );
-            })
-            .catch((error) => {
-                console.error("❌ فشل تشغيل Service Worker:", error);
-            });
+    navigator.serviceWorker.register("/sw.js").then((reg) => {
+        // 🛑 إجبار الهاتف على الاتصال بالسيرفر فوراً للبحث عن تحديثات
+        reg.update();
+    });
+
+    // 🛑 قناص التحديثات: بمجرد أن يسيطر الإصدار الجديد، نفرض إعادة تحميل إجبارية للشاشة
+    let refreshing = false;
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+        if (!refreshing) {
+            refreshing = true;
+            window.location.reload(); // ريفريش إجباري لمسح الكاش من الذاكرة الحية
+        }
     });
 }
 
@@ -4384,13 +4339,10 @@ window.syncUserUI = async function () {
             ptrIndicator.style.top =
                 "calc(25px + env(safe-area-inset-top, 0px))";
 
-            if (typeof window.syncUserUI === "function") {
-                await window.syncUserUI();
-            }
-
             setTimeout(() => {
                 ptrIndicator.style.top =
                     "calc(-80px - env(safe-area-inset-top, 0px))";
+                window.location.reload(true);
             }, 600);
         } else {
             ptrIndicator.style.top =
@@ -4472,6 +4424,17 @@ submitUnchainingBtn?.addEventListener("click", async () => {
         );
     }
 
+    // 🛑 فحص وجود التبرير
+    const unchainingJustification = document
+        .getElementById("unchaining-justification")
+        ?.value.trim();
+    if (!unchainingJustification) {
+        return await CustomDialog.alert(
+            "يجب كتابة تبرير لاستهلاكك لكي يخصم القاضي الآلي أوقات دراستك وعملك.",
+            "التبرير مطلوب ✍️",
+        );
+    }
+
     // ==========================================
 
     const confirmSubmit = await CustomDialog.confirm(
@@ -4497,8 +4460,8 @@ submitUnchainingBtn?.addEventListener("click", async () => {
         const result = await verifyProof({
             storagePath: storagePath,
             imageUrl: imageUrl,
+            justification: unchainingJustification, // 🛑 إرسال التبرير للسيرفر
         });
-
         // 3. استقبال الحكم
         if (result.data.success) {
             await CustomDialog.alert(

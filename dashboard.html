@@ -150,6 +150,15 @@
                         </p>
 
                         <input type="file" id="unchaining-proof-file" accept="image/*" style="display: none;">
+                        <div style="margin-bottom: 15px; text-align: right;">
+                            <label
+                                style="color: var(--text-muted); font-size: 13px; margin-bottom: 8px; display: block;">تبرير
+                                الاستهلاك (لخصم
+                                وقت الدراسة/العمل):</label>
+                            <textarea id="unchaining-justification" rows="3"
+                                placeholder="مثال: استهلكت 3 ساعات على تطبيق Anki، وساعة على تطبيق Notion للعمل..."
+                                style="width: 100%; padding: 12px; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); color: white; border-radius: 8px; resize: none; font-family: 'Cairo', sans-serif;"></textarea>
+                        </div>
                         <button id="upload-unchaining-btn" class="gold-btn"
                             style="background: transparent; border: 1px solid var(--danger); color: var(--danger); margin-bottom: 15px; width: 100%;">
                             <i class="fa-solid fa-image"></i> اختر صورة الإثبات
@@ -1067,7 +1076,7 @@
     </script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
     <script type="module" src="js/firebase-config.js"></script>
-    <script type="module" src="js/dashboard.js?v=60"></script>
+    <script type="module" src="js/dashboard.js?v=73"></script>
 </body>
 
 </html>
