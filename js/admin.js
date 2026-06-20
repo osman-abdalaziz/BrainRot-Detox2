@@ -138,6 +138,7 @@ onAuthStateChanged(auth, async (user) => {
             loadRedeemCodes(); // <--- أضف هذا السطر
             loadReligiousTasks(); // <--- أضف هذا السطر هنا
             loadWillpowerChallenges(); // <--- سحب بنك التحديات
+            loadLevelsSettings(); // <--- سحب إعدادات المستويات
         }
     } else {
         window.location.href = "index.html";
@@ -1412,7 +1413,7 @@ async function loadReligiousTasks() {
             '<ul style="list-style: none; padding: 0; margin: 0; font-size: 13px;">';
         if (data.options && data.options.length > 0) {
             data.options.forEach((opt) => {
-                optionsHtml += `<li style="margin-bottom: 5px;">- ${opt.name}</li>`;
+                optionsHtml += `<li style="margin-bottom: 5px;">- ${opt.name} <span style="color:var(--danger); font-size:11px; font-weight:bold;">(الوزن: ${opt.points || 0})</span></li>`;
             });
         }
         optionsHtml += "</ul>";
@@ -1441,7 +1442,8 @@ document
         const row = document.createElement("div");
         row.className = "option-row-wrapper";
         row.innerHTML = `
-        <div style="flex-grow: 1;"><input type="text" class="rel-opt-name admin-input" placeholder="اسم الخيار الإضافي" style="margin: 0;"></div>
+        <div style="flex-grow: 2;"><input type="text" class="rel-opt-name admin-input" placeholder="اسم الخيار الإضافي" style="margin: 0;"></div>
+        <div style="width: 120px;"><input type="number" class="rel-opt-points admin-input" placeholder="النقاط" style="margin: 0;"></div>
         <button class="remove-rel-opt-btn btn-icon" style="background: rgba(239, 68, 68, 0.15); color: var(--danger); border: 1px solid var(--danger);"><i class="fa-solid fa-trash"></i></button>
     `;
         container.appendChild(row);
@@ -1473,14 +1475,17 @@ document
 
         optionRows.forEach((row) => {
             const optName = row.querySelector(".rel-opt-name").value.trim();
-            if (optName)
-                options.push({ name: optName, points: 0 }); // Points always 0 for religious
+            const optPoints = parseInt(
+                row.querySelector(".rel-opt-points").value,
+            );
+            if (optName && !isNaN(optPoints))
+                options.push({ name: optName, points: optPoints });
             else hasError = true;
         });
 
         if (hasError || options.length === 0)
             return await CustomDialog.alert(
-                "يرجى تعبئة أسماء الخيارات (خيار واحد على الأقل).",
+                "يرجى تعبئة أسماء الخيارات والنقاط السرية بالكامل (خيار واحد على الأقل).",
             );
 
         const btn = document.getElementById("add-rel-task-btn");
@@ -1545,7 +1550,8 @@ window.editReligiousTask = async (taskId) => {
                 const row = document.createElement("div");
                 row.className = "option-row-wrapper";
                 row.innerHTML = `
-                    <div style="flex-grow: 1;"><input type="text" class="rel-opt-name admin-input" value="${opt.name}" style="margin: 0;"></div>
+                    <div style="flex-grow: 2;"><input type="text" class="rel-opt-name admin-input" value="${opt.name}" style="margin: 0;"></div>
+                    <div style="width: 120px;"><input type="number" class="rel-opt-points admin-input" placeholder="الوزن" value="${opt.points || 0}" style="margin: 0;"></div>
                     <button class="remove-rel-opt-btn btn-icon" style="background: rgba(239, 68, 68, 0.15); color: var(--danger); border: 1px solid var(--danger);"><i class="fa-solid fa-trash"></i></button>
                 `;
                 container.appendChild(row);
@@ -1591,7 +1597,8 @@ function cancelRelEditMode() {
     document.getElementById("rel-task-is-multi").checked = false;
     document.getElementById("rel-options-container").innerHTML = `
         <div class="option-row-wrapper">
-            <div style="flex-grow: 1;"><input type="text" class="rel-opt-name admin-input" placeholder="اسم الخيار" style="margin: 0;"></div>
+            <div style="flex-grow: 2;"><input type="text" class="rel-opt-name admin-input" placeholder="اسم الخيار" style="margin: 0;"></div>
+            <div style="width: 120px;"><input type="number" class="rel-opt-points admin-input" placeholder="النقاط (سرية)" style="margin: 0;"></div>
         </div>`;
 
     const btn = document.getElementById("add-rel-task-btn");
@@ -2074,3 +2081,97 @@ window.deleteWillpower = async (id) => {
         loadWillpowerChallenges();
     }
 };
+
+// ==========================================
+// ⚙️ إعدادات الرتب والدوبامين الديناميكية
+// ==========================================
+async function loadLevelsSettings() {
+    try {
+        const snap = await getDoc(doc(db, "systemSettings", "levels"));
+        if (snap.exists()) {
+            const data = snap.data();
+            if (data.beginner) {
+                document.getElementById("beginner-wasted").value =
+                    data.beginner.maxWastedTime ?? 120;
+                document.getElementById("beginner-shorts").value =
+                    data.beginner.maxShortsTime ?? 30;
+            }
+            if (data.intermediate) {
+                document.getElementById("intermediate-wasted").value =
+                    data.intermediate.maxWastedTime ?? 90;
+                document.getElementById("intermediate-shorts").value =
+                    data.intermediate.maxShortsTime ?? 20;
+            }
+            if (data.pro) {
+                document.getElementById("pro-wasted").value =
+                    data.pro.maxWastedTime ?? 60;
+                document.getElementById("pro-shorts").value =
+                    data.pro.maxShortsTime ?? 10;
+            }
+        }
+    } catch (error) {
+        console.error("Error loading levels settings:", error);
+    }
+}
+
+document
+    .getElementById("save-levels-settings-btn")
+    ?.addEventListener("click", async () => {
+        const btn = document.getElementById("save-levels-settings-btn");
+        const originalText = btn.innerHTML;
+        btn.innerHTML =
+            "<i class='fa-solid fa-spinner fa-spin'></i> جاري الحفظ...";
+        btn.disabled = true;
+
+        try {
+            const data = {
+                beginner: {
+                    maxWastedTime:
+                        parseInt(
+                            document.getElementById("beginner-wasted").value,
+                        ) || 0,
+                    maxShortsTime:
+                        parseInt(
+                            document.getElementById("beginner-shorts").value,
+                        ) || 0,
+                },
+                intermediate: {
+                    maxWastedTime:
+                        parseInt(
+                            document.getElementById("intermediate-wasted")
+                                .value,
+                        ) || 0,
+                    maxShortsTime:
+                        parseInt(
+                            document.getElementById("intermediate-shorts")
+                                .value,
+                        ) || 0,
+                },
+                pro: {
+                    maxWastedTime:
+                        parseInt(document.getElementById("pro-wasted").value) ||
+                        0,
+                    maxShortsTime:
+                        parseInt(document.getElementById("pro-shorts").value) ||
+                        0,
+                },
+            };
+
+            await setDoc(doc(db, "systemSettings", "levels"), data, {
+                merge: true,
+            });
+            await CustomDialog.alert(
+                "تم حفظ ضوابط الدوبامين بنجاح! سيتم تطبيقها فوراً على جميع المحاربين.",
+                "نجاح ✅",
+            );
+        } catch (error) {
+            console.error("Error saving levels settings:", error);
+            await CustomDialog.alert("حدث خطأ أثناء الحفظ.", "خطأ ❌");
+        } finally {
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        }
+    });
+
+// ابحث في admin.js عن دالة onAuthStateChanged وأضف بداخلها (بعد التأكد أن المستخدم أدمن):
+// loadLevelsSettings(); // لكي يتم استدعاء الأرقام عند فتح لوحة التحكم

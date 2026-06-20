@@ -176,37 +176,141 @@
                     </div>
                     <div class="tasks-list-class" id="tasks-list">
                     </div>
-                    <div class="glass-card" style="border-color: #f43f5e; margin-bottom: 25px; margin-top: 20px;"
-                        id="dopamine-analyzer-card">
-                        <h3
-                            style="color: #f43f5e; margin-bottom: 15px; border-bottom: 1px dashed #f43f5e; padding-bottom: 10px;">
-                            <i class="fa-solid fa-mobile-screen"></i> مُحلل استهلاك الدوبامين (إجباري)
-                        </h3>
-                        <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 15px; line-height: 1.5;">
-                            أدخل أوقات الاستهلاك
-                            الصافية لكل جهاز. الذكاء الاصطناعي سيقوم بخصم الأوقات الإنتاجية بناءً على تبريرك وصور
-                            الإثبات.</p>
 
-                        <div id="devices-container">
+                    <hr style="border: 1px dashed var(--gold-primary); margin: 25px auto; opacity: 0.5; width: 70%;">
+
+                    <div id="honor-evaluation-section" class="glass-card"
+                        style="border-color: var(--gold-primary);  padding: 25px 15px;">
+                        <h3 class="gold-text" style="margin-bottom: 15px; text-align: center;">محاكمة الضمير ⚖️</h3>
+                        <p
+                            style="color: var(--text-muted); font-size: 13px; margin-bottom: 20px; text-align: center; line-height: 1.5;">
+                            أدخل أوقاتك بدقة. الكذب هنا هزيمة لنفسك ولن يرحمك النظام.
+                        </p>
+                        <!-- 🤖 زر استخراج الذكاء الاصطناعي (الجديد) -->
+                        <div
+                            style="text-align: center; margin-bottom: 25px; border-bottom: 1px dashed rgba(168, 85, 247, 0.4); padding-bottom: 20px;">
+                            <button id="ai-extract-btn" class="gold-btn"
+                                style="background: rgba(168, 85, 247, 0.15); border: 1px dashed #a855f7; color: #d8b4fe; box-shadow: none; width: auto; font-size: 13px; padding: 10px 20px; display: inline-flex; align-items: center; justify-content: center; gap: 8px;">
+                                <i class="fa-solid fa-robot"></i> استخراج الأوقات بالذكاء الاصطناعي (اختياري)
+                            </button>
+                            <input type="file" id="ai-proof-file" accept="image/*" multiple style="display: none;">
+                            <p style="font-size: 11px; color: var(--text-muted); margin-top: 8px;">* يمكنك تحديد أكثر من
+                                لقطة شاشة وسيتم دمجها
+                                تلقائياً للمحاكمة.</p>
+                        </div>
+                        <!-- 🛑 شاشة العرض الديناميكية للنقاط -->
+                        <div id="dynamic-score-display"
+                            style="background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-radius: 8px; padding: 15px; margin-bottom: 25px; text-align: center;">
+                            <h4 style="color: var(--text-main); font-size: 14px; margin-bottom: 15px;"><i
+                                    class="fa-solid fa-calculator text-muted"></i> التقييم اللحظي المتوقع</h4>
+                            <div
+                                style="display: flex; justify-content: space-around; font-size: 13px; margin-bottom: 10px;">
+                                <div>
+                                    <span style="color: var(--gold-light); display:block; margin-bottom: 5px;">وقت
+                                        الشاشة</span>
+                                    <strong id="live-wasted-score"
+                                        style="font-size: 20px; color: var(--success);">100</strong> <span
+                                        style="color:var(--text-muted)">/ 100</span>
+                                </div>
+                                <div>
+                                    <span
+                                        style="color: var(--danger); display:block; margin-bottom: 5px;">الشورتس</span>
+                                    <strong id="live-shorts-score"
+                                        style="font-size: 20px; color: var(--success);">75</strong> <span
+                                        style="color:var(--text-muted)">/ 75</span>
+                                </div>
+                            </div>
+                            <div style="padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.05);">
+                                <span style="color: var(--text-muted); font-size: 13px;">إجمالي نقاط الضمير:</span>
+                                <strong id="live-total-score"
+                                    style="font-size: 18px; color: var(--gold-primary);">175</strong> <span
+                                    style="color:var(--text-muted); font-size: 12px;">نقطة</span>
+                            </div>
                         </div>
 
-                        <button id="add-device-btn" class="dialog-btn-cancel"
-                            style="width: 100%; margin-bottom: 20px; border-style: dashed; padding: 12px; color: var(--gold-light);">
-                            <i class="fa-solid fa-plus"></i> إضافة جهاز آخر (لابتوب، آيباد...)
+                        <!-- 🛑 التعديل الجذري: شبكة 2x2 ديناميكية -->
+                        <div
+                            style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; margin-bottom: 25px;">
+
+                            <div>
+                                <label
+                                    style="color: var(--gold-light); font-size: 13px; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+                                    <i class="fa-solid fa-mobile-screen"></i> إجمالي وقت الشاشة:
+                                    <i class="fa-solid fa-circle-info explain-btn" data-type="total"
+                                        style="cursor: pointer; color: var(--text-muted); margin-right: auto; font-size: 15px;"></i>
+                                </label>
+                                <div class="time-picker-wrapper">
+                                    <div class="picker-highlight"></div>
+                                    <div class="picker-column" id="picker-total-h" data-max="24" data-value="0"></div>
+                                    <span style="font-weight:bold; color:var(--text-muted); z-index:3;">ساعات</span>
+                                    <div class="picker-column" id="picker-total-m" data-max="59" data-value="0"></div>
+                                    <span
+                                        style="font-weight:bold; color:var(--text-muted); z-index:3; padding-left:10px;">دقائق</span>
+                                </div>
+                            </div>
+
+                            <div>
+                                <label
+                                    style="color: var(--success); font-size: 13px; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+                                    <i class="fa-solid fa-book-open"></i> وقت الدراسة / العمل:
+                                    <i class="fa-solid fa-circle-info explain-btn" data-type="study"
+                                        style="cursor: pointer; color: var(--text-muted); margin-right: auto; font-size: 15px;"></i>
+                                </label>
+                                <div class="time-picker-wrapper">
+                                    <div class="picker-highlight"></div>
+                                    <div class="picker-column" id="picker-study-h" data-max="24" data-value="0"></div>
+                                    <span style="font-weight:bold; color:var(--text-muted); z-index:3;">ساعات</span>
+                                    <div class="picker-column" id="picker-study-m" data-max="59" data-value="0"></div>
+                                    <span
+                                        style="font-weight:bold; color:var(--text-muted); z-index:3; padding-left:10px;">دقائق</span>
+                                </div>
+                            </div>
+
+                            <div>
+                                <label
+                                    style="color: #3b82f6; font-size: 13px; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+                                    <i class="fa-solid fa-comments"></i> استخدام عام (ChatGPT، تواصل):
+                                    <i class="fa-solid fa-circle-info explain-btn" data-type="others"
+                                        style="cursor: pointer; color: var(--text-muted); margin-right: auto; font-size: 15px;"></i>
+                                </label>
+                                <div class="time-picker-wrapper" style="border-color: rgba(59, 130, 246, 0.3);">
+                                    <div class="picker-highlight"
+                                        style="border-color: #3b82f6; background: rgba(59, 130, 246, 0.05);"></div>
+                                    <div class="picker-column" id="picker-others-h" data-max="24" data-value="0"></div>
+                                    <span style="font-weight:bold; color:var(--text-muted); z-index:3;">ساعات</span>
+                                    <div class="picker-column" id="picker-others-m" data-max="59" data-value="0"></div>
+                                    <span
+                                        style="font-weight:bold; color:var(--text-muted); z-index:3; padding-left:10px;">دقائق</span>
+                                </div>
+                            </div>
+
+                            <div>
+                                <label
+                                    style="color: var(--danger); font-size: 13px; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+                                    <i class="fa-brands fa-tiktok"></i> الشورتس / الريلز:
+                                    <i class="fa-solid fa-circle-info explain-btn" data-type="shorts"
+                                        style="cursor: pointer; color: var(--text-muted); margin-right: auto; font-size: 15px;"></i>
+                                </label>
+                                <div class="time-picker-wrapper" style="border-color: rgba(244,63,94,0.4);">
+                                    <div class="picker-highlight"
+                                        style="border-color: var(--danger); background: rgba(244,63,94,0.1);"></div>
+                                    <div class="picker-column" id="picker-shorts-h" data-max="24" data-value="0"></div>
+                                    <span style="font-weight:bold; color:var(--text-muted); z-index:3;">ساعات</span>
+                                    <div class="picker-column" id="picker-shorts-m" data-max="59" data-value="0"></div>
+                                    <span
+                                        style="font-weight:bold; color:var(--text-muted); z-index:3; padding-left:10px;">دقائق</span>
+                                </div>
+                            </div>
+
+                        </div>
+
+                        <button id="submit-day-btn" class="gold-btn"
+                            style="width: 100%; font-size: 16px; padding: 15px; margin-top: 10px;">
+                            <i class="fa-solid fa-gavel"></i> اعتماد اليوم وإصدار الحكم
                         </button>
-
-                        <div style="margin-top: 15px;">
-                            <label
-                                style="color: var(--text-muted); font-size: 13px; margin-bottom: 8px; display: block;">تبرير
-                                الاستهلاك
-                                الصادق (الكذب سيكسر ستريكك):</label>
-                            <textarea id="dopamine-justification" rows="3"
-                                placeholder="مثال: استهلكت 3 ساعات على اللابتوب في مشاهدة محاضرات الجراحة، وساعة على الهاتف في حل الفلاش كاردز..."
-                                style="width: 100%; padding: 12px; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); color: white; border-radius: 8px; resize: none; font-family: 'Cairo', sans-serif;"></textarea>
-                        </div>
                     </div>
-                    <button id="submit-day-btn" class="gold-btn" style="margin-top: 20px;">إنهاء اليوم وتسجيل
-                        النقاط</button>
+                    <!-- <button id="submit-day-btn" class="gold-btn" style="margin-top: 20px;">إنهاء اليوم وتسجيل
+                        النقاط</button> -->
                 </div>
             </section>
 
@@ -604,9 +708,8 @@
                         style="background: rgba(0,0,0,0.4); border: 1px solid var(--border-color); padding: 20px; border-radius: 12px; width: 100%;">
                         <h4 style="color: var(--text-muted); font-size: 13px; margin-bottom: 5px;">الرتبة العسكرية
                             الحالية</h4>
-                        <h2 id="profile-rank-title" class="gold-text" style="font-size: 28px; margin-bottom: 15px;">-
+                        <h2 id="profile-rank-title" class="gold-text" style="font-size: 28px;">-
                         </h2>
-
                         <div
                             style="display: flex; justify-content: space-between; align-items: center; font-size: 15px; margin-bottom: 8px;">
                             <span style="color: var(--text-main);">الـ XP التراكمي:</span>
@@ -630,7 +733,15 @@
                         </div>
                     </div>
                 </div>
-
+                <div class="glass-card" style="margin-top: 20px; padding: 20px;">
+                    <h3
+                        style="color: var(--text-main); font-size: 16px; margin-bottom: 15px; display: flex; align-items: center; gap: 8px;">
+                        <i class="fa-solid fa-gavel" style="color: var(--gold-primary);"></i> قانون العقوبات الحالي
+                    </h3>
+                    <div id="penalty-rank-container"
+                        style="background: rgba(0,0,0,0.3); border-radius: 12px; padding: 15px; border-right: 4px solid var(--text-muted);">
+                    </div>
+                </div>
                 <div class="glass-card" style="padding: 30px 20px;">
                     <h3 class="gold-text"
                         style="text-align: right; margin-bottom: 25px; font-size: 20px; border-bottom: 2px solid rgba(234, 179, 8, 0.2); padding-bottom: 10px;">
@@ -725,7 +836,8 @@
                                 (10,000 XP). ميز نفسك في
                                 قائمة المتصدرين بإطارات وألقاب خاصة.</p>
                             <button onclick="openVipModal()" class="gold-btn"
-                                style="padding: 8px 15px; font-size: 14px;">تخصيص الهوية
+                                style="padding: 8px 15px; font-size: 14px;">تخصيص
+                                الهوية
                                 🛡️</button>
                         </div>
                     </div>
@@ -991,7 +1103,31 @@
             </div>
         </div>
     </div>
+    <!-- 🤖 نافذة تصنيف التطبيقات الرمادية (المحايدة) -->
+    <div id="ai-sorting-modal" class="modal-overlay">
+        <div class="glass-card user-modal"
+            style="width: 95%; max-width: 500px; padding: 25px; max-height: 90vh; overflow-y: auto; text-align: right;">
+            <h3 style="color: #a855f7; margin-bottom: 10px; text-align: center;"><i
+                    class="fa-solid fa-scale-unbalanced"></i> تطبيقات قيد التحقيق ⚖️</h3>
+            <p
+                style="font-size: 13px; color: var(--text-muted); margin-bottom: 20px; text-align: center; line-height: 1.6;">
+                اكتشف القاضي الآلي تطبيقات "محايدة" يمكن استخدامها للخير أو للشر. أين قضيت هذا الوقت؟ (كن صادقاً، أنت
+                تراقب
+                نفسك).
+            </p>
 
+            <div id="neutral-apps-container"
+                style="display: flex; flex-direction: column; gap: 15px; margin-bottom: 25px;">
+                <!-- سيتم حقن التطبيقات الرمادية هنا بالـ JS -->
+            </div>
+
+            <div class="dialog-buttons">
+                <button id="cancel-ai-sorting" class="dialog-btn-cancel">إلغاء الإدخال</button>
+                <button id="confirm-ai-sorting" class="gold-btn dialog-btn-confirm"
+                    style="background: #a855f7; border-color: #a855f7;">توزيع الأوقات واعتمادها 🚀</button>
+            </div>
+        </div>
+    </div>
     <style>
         @keyframes epicDrop {
             0% {
@@ -1075,8 +1211,9 @@
         document.getElementById('trigger-upload-btn').addEventListener('click', () => document.getElementById('avatar-upload').click());
     </script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <script type="module" src="js/firebase-config.js"></script>
-    <script type="module" src="js/dashboard.js?v=73"></script>
+    <script type="module" src="js/dashboard.js?v=82"></script>
 </body>
 
 </html>

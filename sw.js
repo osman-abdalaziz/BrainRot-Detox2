@@ -1,5 +1,5 @@
 // sw.js
-const CACHE_VERSION = "v55"; // 🛑 تم رفع الإصدار لإجبار الأجهزة على حذف النسخة القديمة
+const CACHE_VERSION = "v63"; // 🛑 تم رفع الإصدار لإجبار الأجهزة على حذف النسخة القديمة
 const CACHE_NAME = `brainrot-cache-${CACHE_VERSION}`;
 
 const CORE_FILES = [

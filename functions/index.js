@@ -821,3 +821,163 @@ exports.evaluateScreenTime = onCall(
         }
     },
 );
+// ==========================================
+// 🤖 3. القاضي الآلي: استخراج جراحي مع نظام طوارئ (Fallback Models)
+// ==========================================
+exports.analyzeScreenTimeProof = onCall(
+    { secrets: [geminiApiKey] },
+    async (request) => {
+        if (!request.auth) {
+            throw new HttpsError("unauthenticated", "يجب تسجيل الدخول.");
+        }
+
+        const imageUrls = request.data.imageUrls;
+        if (!imageUrls || !Array.isArray(imageUrls) || imageUrls.length === 0) {
+            throw new HttpsError("invalid-argument", "لم يتم إرسال صور صالحة.");
+        }
+
+        try {
+            const genAI = new GoogleGenerativeAI(geminiApiKey.value());
+
+            // 🛑 مصفوفة الطوارئ: ترتيب الموديلات من الأساسي إلى الاحتياطي
+            const fallbackModels = [
+                "gemini-3.1-flash-lite",
+                "gemini-2.5-flash-lite",
+                "gemini-2.5-flash",
+                "gemini-3-flash",
+                "gemini-3.5-flash",
+            ];
+
+            const prompt = `
+You are an expert OCR engine. Analyze this screen time image.
+Extract EVERY SINGLE APP visible and its duration.
+
+RULES:
+1. Convert ALL times to total minutes (e.g., "1h 30m" = 90, "45m" = 45).
+2. Classify EVERY app into exactly one of these 3 arrays based ONLY on these whitelists:
+   - "study_apps": [@HOME, Matary, MedC, EasyMed, PDF Apps, Ecourses, Anki, Microsoft Teams].
+   - "shorts_apps": [Instagram, Tiktok].
+   - "neutral_apps": EVERY OTHER APP IN EXISTENCE (e.g., WhatsApp, YouTube, Chrome, Facebook, Telegram, ChatGPT, Phone, Settings, etc).
+
+3. DO NOT calculate any totals. Just return the arrays.
+4. MUST RETURN ONLY A VALID JSON OBJECT. NO markdown, NO code blocks.
+
+Expected JSON format:
+{
+  "study_apps": [],
+  "shorts_apps": [],
+  "neutral_apps": [{ "name": "WhatsApp", "minutes": 45 }]
+}
+`;
+
+            let total_minutes = 0;
+            let explicit_study = 0;
+            let explicit_shorts = 0;
+            let combinedNeutralApps = [];
+            const seenNeutralKeys = new Set();
+
+            for (const url of imageUrls) {
+                const imageResponse = await fetch(url);
+                if (!imageResponse.ok) continue;
+
+                const arrayBuffer = await imageResponse.arrayBuffer();
+                const buffer = Buffer.from(arrayBuffer);
+                const base64Image = buffer.toString("base64");
+                const mimeType =
+                    imageResponse.headers.get("content-type") || "image/jpeg";
+
+                let result = null;
+                let lastError = null;
+
+                // 🛑 محرك التبديل التلقائي (Model Rotation Loop)
+                for (const modelName of fallbackModels) {
+                    try {
+                        const model = genAI.getGenerativeModel({
+                            model: modelName,
+                        });
+                        result = await model.generateContent([
+                            prompt,
+                            {
+                                inlineData: {
+                                    data: base64Image,
+                                    mimeType: mimeType,
+                                },
+                            },
+                        ]);
+                        // إذا نجح الموديل، نكسر الحلقة ونتوقف عن المحاولة
+                        break;
+                    } catch (error) {
+                        console.warn(
+                            `فشل الموديل [${modelName}]. جاري تجربة الموديل التالي... السبب:`,
+                            error.message,
+                        );
+                        lastError = error;
+                    }
+                }
+
+                // إذا فشلت جميع الموديلات في المصفوفة، نرمي الخطأ الأخير
+                if (!result) {
+                    throw (
+                        lastError ||
+                        new Error(
+                            "جميع موديلات الذكاء الاصطناعي فشلت في الاستجابة.",
+                        )
+                    );
+                }
+
+                let responseText = result.response.text();
+                responseText = responseText
+                    .replace(/```json/g, "")
+                    .replace(/```/g, "")
+                    .trim();
+
+                const parsedData = JSON.parse(responseText);
+
+                const studyApps = (parsedData.study_apps || []).filter(
+                    (app) => app.minutes > 0,
+                );
+                studyApps.forEach((app) => {
+                    explicit_study += app.minutes;
+                    total_minutes += app.minutes;
+                });
+
+                const shortsApps = (parsedData.shorts_apps || []).filter(
+                    (app) => app.minutes > 0,
+                );
+                shortsApps.forEach((app) => {
+                    explicit_shorts += app.minutes;
+                    total_minutes += app.minutes;
+                });
+
+                const neutralApps = (parsedData.neutral_apps || []).filter(
+                    (app) => app.minutes > 0,
+                );
+                neutralApps.forEach((app) => {
+                    const uniqueKey = `${app.name}_${app.minutes}`;
+                    if (!seenNeutralKeys.has(uniqueKey)) {
+                        seenNeutralKeys.add(uniqueKey);
+                        combinedNeutralApps.push(app);
+                        total_minutes += app.minutes;
+                    }
+                });
+            }
+
+            return {
+                success: true,
+                result: {
+                    total_minutes: total_minutes,
+                    explicit_study: explicit_study,
+                    explicit_others: 0,
+                    explicit_shorts: explicit_shorts,
+                    neutral_apps: combinedNeutralApps,
+                },
+            };
+        } catch (error) {
+            console.error("Server AI Detailed Analysis Error:", error);
+            throw new HttpsError(
+                "internal",
+                "فشل التحليل البرمجي المشترك: " + error.message,
+            );
+        }
+    },
+);

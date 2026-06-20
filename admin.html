@@ -177,6 +177,8 @@
                 <li data-target="challenges-page"><i class="fa-solid fa-trophy fa-fw"></i> إدارة التحدي </li>
                 <li data-target="willpower-page"><i class="fa-solid fa-fire-flame-curved fa-fw"></i> تحديات الإرادة</li>
                 <li data-target="radar-page"> <i class="fa-solid fa-eye fa-fw"></i> رادار المراقبة </li>
+                <li data-target="levels-settings-page"><i class="fa-solid fa-scale-balanced"></i> ضوابط الدوبامين والرتب
+                </li>
                 <li data-target="users-page"> <i class="fa-solid fa-users fa-fw"></i> إدارة الأعضاء</li>
                 <li data-target="redeem-codes-page"> <i class="fa-solid fa-gift fa-fw"></i> أكواد الهدايا</li>
                 <li data-target="dashboard-page"> <i class="fa-solid fa-home fa-fw"></i>الرئيسية</li>
@@ -491,9 +493,13 @@
 
                         <div id="rel-options-container">
                             <div class="option-row-wrapper">
-                                <div style="flex-grow: 1;">
+                                <div style="flex-grow: 2;">
                                     <input type="text" class="rel-opt-name admin-input"
                                         placeholder="اسم الخيار (مثال: في المسجد)" style="margin: 0;">
+                                </div>
+                                <div style="width: 120px;">
+                                    <input type="number" class="rel-opt-points admin-input" placeholder="النقاط (سرية)"
+                                        style="margin: 0;">
                                 </div>
                             </div>
                         </div>
@@ -640,6 +646,66 @@
                         <tbody id="redeem-table-body">
                         </tbody>
                     </table>
+                </div>
+            </section>
+
+            <section id="levels-settings-page" class="page-section">
+                <div class="header-flex" style="margin-bottom: 20px;">
+                    <h2><i class="fa-solid fa-scale-balanced"></i> ضوابط الدوبامين والرتب</h2>
+                    <button id="save-levels-settings-btn" class="gold-btn"><i class="fa-solid fa-save"></i> حفظ
+                        التعديلات</button>
+                </div>
+
+                <p style="color: var(--text-muted); margin-bottom: 20px; font-size: 14px;">
+                    حدد الحد الأقصى للوقت المهدر والشورتس (بالدقائق) لكل رتبة. سيتم تطبيق هذه المعايير ديناميكياً على
+                    "محاكمة
+                    الضمير" عند جميع المستخدمين.
+                </p>
+
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px;">
+                    <div class="glass-card" style="border-color: #34d399; padding: 20px;">
+                        <h3 style="color: #34d399; margin-bottom: 15px;"><i class="fa-solid fa-shield-halved"></i> رتبة
+                            المبتدئ</h3>
+                        <div class="input-group">
+                            <label>الحد الأقصى للوقت المهدر (دقائق)</label>
+                            <input type="number" id="beginner-wasted" class="dialog-input" min="0"
+                                placeholder="مثال: 120">
+                        </div>
+                        <div class="input-group" style="margin-top: 15px;">
+                            <label>الحد الأقصى للشورتس (دقائق)</label>
+                            <input type="number" id="beginner-shorts" class="dialog-input" min="0"
+                                placeholder="مثال: 30">
+                        </div>
+                    </div>
+
+                    <div class="glass-card" style="border-color: #fbbf24; padding: 20px;">
+                        <h3 style="color: #fbbf24; margin-bottom: 15px;"><i class="fa-solid fa-scale-balanced"></i> رتبة
+                            المتوسط
+                        </h3>
+                        <div class="input-group">
+                            <label>الحد الأقصى للوقت المهدر (دقائق)</label>
+                            <input type="number" id="intermediate-wasted" class="dialog-input" min="0"
+                                placeholder="مثال: 90">
+                        </div>
+                        <div class="input-group" style="margin-top: 15px;">
+                            <label>الحد الأقصى للشورتس (دقائق)</label>
+                            <input type="number" id="intermediate-shorts" class="dialog-input" min="0"
+                                placeholder="مثال: 20">
+                        </div>
+                    </div>
+
+                    <div class="glass-card" style="border-color: #f43f5e; padding: 20px;">
+                        <h3 style="color: #f43f5e; margin-bottom: 15px;"><i class="fa-solid fa-skull"></i> رتبة المحترف
+                        </h3>
+                        <div class="input-group">
+                            <label>الحد الأقصى للوقت المهدر (دقائق)</label>
+                            <input type="number" id="pro-wasted" class="dialog-input" min="0" placeholder="مثال: 60">
+                        </div>
+                        <div class="input-group" style="margin-top: 15px;">
+                            <label>الحد الأقصى للشورتس (دقائق)</label>
+                            <input type="number" id="pro-shorts" class="dialog-input" min="0" placeholder="مثال: 10">
+                        </div>
+                    </div>
                 </div>
             </section>
         </main>

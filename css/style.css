@@ -431,7 +431,7 @@ button.gold-btn {
         transform 0.2s,
         box-shadow 0.2s;
     width: 100%;
-    margin-top: 10px;
+    /* margin-top: 10px; */
     font-size: 12px;
 }
 
@@ -1217,6 +1217,7 @@ select:focus {
     display: flex;
     gap: 15px;
     justify-content: center;
+    margin-top: 15px;
 }
 
 .dialog-btn-cancel {
@@ -1238,8 +1239,7 @@ select:focus {
 }
 
 .dialog-btn-confirm {
-    flex: 2;
-    margin: 10px 0 0 0 !important; /* لفك التعارض مع gold-btn */
+    flex: 1;
 }
 
 /* ==========================================
@@ -1371,6 +1371,20 @@ select:focus {
     position: relative;
 }
 
+.fa-spinner {
+    animation: spining 1s linear infinite !important;
+    -webkit-animation: spining 1s linear infinite !important;
+}
+
+@keyframes spining {
+    0% {
+        transform: rotate(0deg);
+    }
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
 .spinner::before {
     content: "";
     position: absolute;
@@ -1414,6 +1428,7 @@ select:focus {
     border-radius: 50%;
     transform: rotateX(70deg);
     animation: 1s spin linear infinite;
+    -webkit-animation: 1s spin linear infinite;
 }
 .loader:after {
     color: var(--gold-primary);
@@ -1506,7 +1521,8 @@ select:focus {
 }
 
 /* تخصيص شكل الـ Checkbox ليلائم الهوية */
-.todo-checkbox {
+.todo-checkbox,
+.compare-cb {
     appearance: none;
     -webkit-appearance: none;
     width: 20px;
@@ -1520,12 +1536,14 @@ select:focus {
     margin: 0;
 }
 
-.todo-checkbox:checked {
+.todo-checkbox:checked,
+.compare-cb:checked {
     background-color: var(--gold-primary);
     border-color: var(--gold-primary);
 }
 
-.todo-checkbox:checked::after {
+.todo-checkbox:checked::after,
+.compare-cb:checked::after {
     content: "✔";
     position: absolute;
     color: #000;
@@ -2444,10 +2462,46 @@ input[type="number"] {
 /* 🛑 محرك المناطق (Zone Engine UI Friction) */
 /* ========================================= */
 
-/* عقوبة المنطقة الحمراء: سحب الألوان بالكامل */
+/* ========================================= */
+/* 🛑 محرك المناطق (Zone Engine UI Friction) */
+/* ========================================= */
+
+/* 1. إخفاء محاكمة الضمير نهائياً في المنطقة الحمراء */
+body.red-zone #honor-evaluation-section {
+    display: none !important;
+}
+
+/* 2. إلغاء الفلتر الرمادي القديم */
 body.red-zone {
-    filter: grayscale(100%);
-    transition: filter 0.5s ease-in-out;
+    filter: none;
+}
+
+/* 3. التأثير الأحمر المرعب (Danger Overlay) */
+body.red-zone::after {
+    content: "";
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    /* طبقة دموية شفافة مع ظل داخلي مكثف على الأطراف (Vignette) */
+    background: rgba(220, 38, 38, 0.05);
+    box-shadow: inset 0 0 120px rgba(220, 38, 38, 0.5);
+    pointer-events: none; /* خطير جداً: بدونه لن يضغط المستخدم على أي شيء */
+    z-index: 99998; /* يطفو فوق كل شيء ما عدا النوافذ المنبثقة */
+    animation: dangerPulse 2.5s infinite alternate ease-in-out;
+}
+
+/* نبض الخطر */
+@keyframes dangerPulse {
+    from {
+        box-shadow: inset 0 0 100px rgba(220, 38, 38, 0.4);
+        background: rgba(220, 38, 38, 0.05);
+    }
+    to {
+        box-shadow: inset 0 0 200px rgba(220, 38, 38, 0.85);
+        background: rgba(220, 38, 38, 0.12);
+    }
 }
 
 /* حظر الوصول للمتصدرين والمتجر في المنطقة الحمراء */
@@ -2671,6 +2725,138 @@ body.red-zone [data-target="store-page"] {
 #profile-rank-title span {
     background: none !important;
     font-size: 28px !important;
-    margin-bottom: 15px !important;
     display: inline-block !important;
+}
+
+/* ==========================================
+   ستايل بكرات الوقت المخصصة (Time Picker)
+   ========================================== */
+.time-picker-wrapper {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 120px; /* يعرض 3 أرقام في نفس الوقت (الرقم ارتفاعه 40) */
+    position: relative;
+    background: #090514;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+#picker-shorts-h .time-picker-wrapper,
+#picker-shorts-m .time-picker-wrapper {
+    background: #140505;
+    border: 1px solid rgba(247, 85, 85, 0.25);
+}
+
+#picker-others-h .time-picker-wrapper,
+#picker-others-m .time-picker-wrapper {
+    background: #3b82f6;
+    border: 1px solid #3b82f6;
+}
+
+/* تظليل علوي وسفلي لإعطاء تأثير الأسطوانة */
+.time-picker-wrapper::before,
+.time-picker-wrapper::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 40px;
+    pointer-events: none;
+    z-index: 2;
+}
+.time-picker-wrapper::before {
+    top: 0;
+    background: linear-gradient(to bottom, #090514 20%, transparent);
+}
+.time-picker-wrapper::after {
+    bottom: 0;
+    background: linear-gradient(to top, #090514 20%, transparent);
+}
+
+/* خط التحديد الذهبي في المنتصف */
+.picker-highlight {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    height: 40px;
+    transform: translateY(-50%);
+    border-top: 1px solid var(--gold-primary);
+    border-bottom: 1px solid var(--gold-primary);
+    background: rgba(168, 85, 247, 0.1);
+    pointer-events: none;
+    z-index: 1;
+}
+
+/* العمود القابل للسحب */
+.picker-column {
+    flex: 1;
+    height: 100%;
+    overflow-y: scroll;
+    scroll-snap-type: y mandatory; /* السحر هنا: توقف مغناطيسي إجباري */
+    scrollbar-width: none; /* إخفاء شريط التمرير في فايرفوكس */
+    padding: 40px 0; /* مساحة فارغة فوق وتحت للسماح للرقم الأول والأخير بالوصول للمنتصف */
+    position: relative;
+    z-index: 3;
+}
+.picker-column::-webkit-scrollbar {
+    display: none; /* إخفاء شريط التمرير في كروم وسفاري */
+}
+
+/* الأرقام داخل البكرة */
+.picker-item {
+    height: 40px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    scroll-snap-align: center; /* توقف الرقم في المنتصف بالضبط */
+    font-size: 17px;
+    color: var(--text-muted);
+    font-family: monospace;
+    transition: 0.2s ease;
+    user-select: none;
+    margin: 0 10px;
+}
+/* تنسيق الرقم النشط (سيتم تحديثه بالجافاسكربت) */
+.picker-item.active {
+    color: var(--gold-primary);
+    font-size: 22px;
+    font-weight: bold;
+}
+
+#picker-shorts-h .picker-item.active,
+#picker-shorts-m .picker-item.active {
+    color: rgba(247, 85, 85, 1) !important;
+}
+
+#picker-others-h .picker-item.active,
+#picker-others-m .picker-item.active {
+    color: rgba(59, 130, 246, 1) !important;
+}
+
+.picker-item:active,
+.picker-item:focus {
+    border: none !important;
+    outline: none !important;
+    border-radius: 0 !important;
+    -webkit-border-radius: 0 !important;
+    -moz-border-radius: 0 !important;
+    -ms-border-radius: 0 !important;
+    -o-border-radius: 0 !important;
+}
+
+#picker-shorts-h .picker-item:active,
+#picker-shorts-h .picker-item:focus,
+#picker-shorts-m .picker-item:active,
+#picker-shorts-m .picker-item:focus {
+    background: rgba(247, 85, 85, 0.25) !important;
+}
+
+#picker-others-h .picker-item:active,
+#picker-others-h .picker-item:focus,
+#picker-others-m .picker-item:active,
+#picker-others-m .picker-item:focus {
+    background: rgba(59, 130, 246, 0.25) !important;
 }
